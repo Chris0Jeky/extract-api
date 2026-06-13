@@ -6,7 +6,7 @@ schema layer can map onto it freely.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from schemas.registry import UnknownSchema
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     validation_failed = "validation_failed"
     low_confidence = "low_confidence"
     unsupported_doc_type = "unsupported_doc_type"

@@ -8,21 +8,21 @@ provably cannot enforce, so it lives here and runs after parse.
 from __future__ import annotations
 
 from datetime import date
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, model_validator
 
 from schemas._common import STRICT_CONFIG, CurrencyCode
 
 
-class RemotePolicy(str, Enum):
+class RemotePolicy(StrEnum):
     onsite = "onsite"
     hybrid = "hybrid"
     remote = "remote"
     unspecified = "unspecified"
 
 
-class SalaryPeriod(str, Enum):
+class SalaryPeriod(StrEnum):
     year = "year"
     month = "month"
     day = "day"
@@ -30,7 +30,7 @@ class SalaryPeriod(str, Enum):
     unspecified = "unspecified"
 
 
-class EmploymentType(str, Enum):
+class EmploymentType(StrEnum):
     full_time = "full_time"
     part_time = "part_time"
     contract = "contract"
@@ -39,7 +39,7 @@ class EmploymentType(str, Enum):
     unspecified = "unspecified"
 
 
-class Seniority(str, Enum):
+class Seniority(StrEnum):
     intern = "intern"
     junior = "junior"
     mid = "mid"
@@ -52,7 +52,7 @@ class Seniority(str, Enum):
     unspecified = "unspecified"
 
 
-class VisaSponsorship(str, Enum):
+class VisaSponsorship(StrEnum):
     offered = "offered"
     not_offered = "not_offered"
     unspecified = "unspecified"
