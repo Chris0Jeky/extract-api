@@ -1,0 +1,21 @@
+{
+  "fixture_id": "invoice_0003",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "content": "RECHNUNG\nVerkaeufer: Alpine GmbH\nRechnungsnummer: AG-7781\nRechnungsdatum: 2026-02-20\nKaeufer: Meridian Retail\nZwischensumme: EUR 800,00\nMwSt 19%: EUR 152,00\nGesamt: EUR 952,00",
+  "expected": {
+    "invoice_number": "AG-7781",
+    "issue_date": "2026-02-20",
+    "due_date": null,
+    "currency": "EUR",
+    "subtotal_minor": 80000,
+    "tax_minor": 15200,
+    "total_minor": 95200,
+    "vendor_name": "Alpine GmbH",
+    "vendor_tax_id": null,
+    "buyer_name": "Meridian Retail",
+    "line_items": null
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "fixture_id": "invoice_0007",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "content": "Invoice\nVendor: Crestline Services Ltd\nBill to: Hartwell Group\nInvoice number: CS-4412\nIssue date: 2026-03-18\nDue date: 2026-04-01\nTotal: GBP 750.00",
+  "expected": {
+    "invoice_number": "CS-4412",
+    "issue_date": "2026-03-18",
+    "due_date": "2026-04-01",
+    "currency": "GBP",
+    "subtotal_minor": 75000,
+    "tax_minor": null,
+    "total_minor": 75000,
+    "vendor_name": "Crestline Services Ltd",
+    "vendor_tax_id": null,
+    "buyer_name": "Hartwell Group",
+    "line_items": null
+  }
+}
