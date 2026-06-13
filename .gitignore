@@ -1,0 +1,49 @@
+# --- Local-only build briefing: never commit/push (carries private framing) ---
+/_handover/
+
+# --- Secrets: env refs only, never values ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+*.crt
+secrets.json
+*credentials*
+*.secret
+
+# --- Claude Code: track shared settings.json, ignore local/private bits ---
+.claude/settings.local.json
+.claude/local/
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Local data stores (e.g. SQLite idempotency store) ---
+*.sqlite
+*.sqlite3
+*.db
+
+# --- OS / editor noise ---
+.DS_Store
+Thumbs.db
+*.log
+*.swp
+.idea/
+.vscode/
