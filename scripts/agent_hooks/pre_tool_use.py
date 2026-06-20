@@ -15,8 +15,9 @@ _RM = re.compile(r"\brm\b", re.IGNORECASE)
 _RM_FLAG = re.compile(r"(?:^|\s)-\w*[rf]|--recursive|--force", re.IGNORECASE)
 # Match a catastrophic delete target, tolerating optional surrounding quotes and a
 # trailing slash so `rm -rf "/"`, `rm -rf '$HOME'`, and `rm -rf $HOME/` cannot slip
-# past the boundary anchors. `/?` lets `~` cover `~/` and `$HOME` cover `$HOME/`.
-_RM_TARGET = re.compile(r"""(?:^|\s)['"]?(?:/|~|/\*|\$HOME)/?['"]?(?:\s|$)""")
+# past the boundary anchors. `/?` lets `~` cover `~/` and `$HOME` cover `$HOME/`;
+# `\$\{?HOME\}?` covers both `$HOME` and the braced `${HOME}` expansion.
+_RM_TARGET = re.compile(r"""(?:^|\s)['"]?(?:/|~|/\*|\$\{?HOME\}?)/?['"]?(?:\s|$)""")
 
 _DENY_PATTERNS = [
     (
@@ -31,7 +32,11 @@ _DENY_PATTERNS = [
     ),
     (re.compile(r"\bsudo\b", re.IGNORECASE), "sudo is blocked."),
     (
-        re.compile(r"\b(?:curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:ba)?sh\b", re.IGNORECASE),
+        # `(?:\S*/)?` lets an absolute path to the shell (| /bin/sh, | /usr/bin/bash)
+        # be caught too, not only a bare `sh`/`bash`.
+        re.compile(
+            r"\b(?:curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:\S*/)?(?:ba)?sh\b", re.IGNORECASE
+        ),
         "Piping a remote download into a shell is blocked.",
     ),
 ]
