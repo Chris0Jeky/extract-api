@@ -1,19 +1,17 @@
 # gitleaks configuration for extract-api.
 #
-# Extends the default ruleset (so every built-in secret rule still runs) and adds
-# a single narrow allowlist: the hook-redaction test. That test's whole purpose is
-# to feed key-shaped strings through the redaction guard and assert they are
-# scrubbed, so realistic-looking fixtures are expected there by design. The
-# fixtures are additionally assembled by concatenation (no contiguous secret
-# literal is committed), so this allowlist only suppresses path-matched findings in
-# that one test file, not anywhere else in the repo.
+# Extends the default ruleset (every built-in secret rule still runs). The only
+# customization is a COMMIT-scoped allowlist for one historical commit (e327e0e),
+# whose revision of tests/test_agent_hooks.py carried key-shaped redaction-test
+# fixtures. That commit was superseded by ad3c140, which assembles the fixtures by
+# concatenation so no contiguous secret literal is committed. Scoping the allowlist
+# to that single commit (not the file path) means a real secret added to that test
+# file in any NEW commit is still caught.
 title = "extract-api gitleaks config"
 
 [extend]
 useDefault = true
 
 [allowlist]
-description = "Hook-redaction test fixtures are intentionally key-shaped and fake."
-paths = [
-    '''tests/test_agent_hooks\.py''',
-]
+description = "One historical commit's pre-concatenation redaction-test fixtures (fake keys)."
+commits = ["e327e0ef86770dad3e1ac77f0a4ed1ef739508dc"]
