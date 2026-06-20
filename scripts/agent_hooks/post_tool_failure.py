@@ -13,7 +13,16 @@ import re
 import sys
 from pathlib import Path
 
-_SECRET = re.compile(r"sk-[A-Za-z0-9]{16,}|-----BEGIN[A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16}")
+# Cover the project's own key formats (OPENAI_API_KEY sk-proj-..., ANTHROPIC_API_KEY
+# sk-ant-...) plus GitHub tokens and AWS keys. The legacy `sk-[A-Za-z0-9]{16,}` run
+# stopped at the first hyphen, leaking modern hyphenated/prefixed keys verbatim.
+_SECRET = re.compile(
+    r"sk-[A-Za-z0-9_-]{16,}"  # OpenAI legacy/sk-proj- and Anthropic sk-ant-
+    r"|gh[pousr]_[A-Za-z0-9]{36,}"  # GitHub ghp_/gho_/ghu_/ghs_/ghr_ tokens
+    r"|github_pat_[A-Za-z0-9_]{40,}"  # GitHub fine-grained PAT
+    r"|AKIA[0-9A-Z]{16}"  # AWS access key id
+    r"|-----BEGIN[A-Z ]*PRIVATE KEY-----"
+)
 
 
 def _redact(text: str) -> str:

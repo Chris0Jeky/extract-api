@@ -34,8 +34,14 @@ _DENY_PATTERNS = [
     ),
 ]
 
+# Match the project's own key formats (sk-proj-, sk-ant-) plus GitHub/AWS keys and
+# private-key headers. Kept in sync with post_tool_failure._SECRET.
 _SECRET_VALUE = re.compile(
-    r"sk-[A-Za-z0-9]{16,}|-----BEGIN[A-Z ]*PRIVATE KEY-----|AKIA[0-9A-Z]{16}"
+    r"sk-[A-Za-z0-9_-]{16,}"
+    r"|gh[pousr]_[A-Za-z0-9]{36,}"
+    r"|github_pat_[A-Za-z0-9_]{40,}"
+    r"|AKIA[0-9A-Z]{16}"
+    r"|-----BEGIN[A-Z ]*PRIVATE KEY-----"
 )
 _WRITE_INTENT = re.compile(r">>?|\btee\b|\bset-content\b|\bout-file\b", re.IGNORECASE)
 
