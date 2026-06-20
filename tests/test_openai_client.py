@@ -163,3 +163,11 @@ def test_request_timeout_and_retries_are_wired(monkeypatch):
     OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
     assert captured["timeout"] == 12.5
     assert captured["max_retries"] == 1
+
+
+def test_missing_price_env_fails_loud(monkeypatch):
+    # Prices are required and explicit (no silent default that mis-bills other models).
+    monkeypatch.delenv("OPENAI_PRICE_IN_PER_M", raising=False)
+    monkeypatch.delenv("OPENAI_PRICE_OUT_PER_M", raising=False)
+    with pytest.raises(ValueError, match="OPENAI_PRICE"):
+        OpenAIClient()

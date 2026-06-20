@@ -65,6 +65,16 @@ def _float_env(name: str, default: str) -> float:
         raise ValueError(f"env {name}={raw!r} is not a valid float") from exc
 
 
+def _float_env_required(name: str) -> float:
+    raw = os.environ.get(name)
+    if not raw:
+        raise ValueError(f"env {name} is required: set the per-model price explicitly")
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise ValueError(f"env {name}={raw!r} is not a valid float") from exc
+
+
 def _int_env(name: str, default: str) -> int:
     raw = os.environ.get(name, default)
     try:
@@ -100,10 +110,11 @@ class OpenAIClient:
         self.base_url = _env("LLM_BASE_URL")
         self.api_key = _env("LLM_API_KEY")
         self.model = os.environ.get("OPENAI_MODEL", "")
-        # Per-million-token prices (USD). Defaults track gpt-4o-mini list pricing;
-        # override per deployment. Malformed values fail loud at construction.
-        self.price_in_per_m = _float_env("OPENAI_PRICE_IN_PER_M", "0.15")
-        self.price_out_per_m = _float_env("OPENAI_PRICE_OUT_PER_M", "0.60")
+        # Per-million-token prices (USD). REQUIRED and explicit: defaulting would bill
+        # every model at one model's rate, silently producing wrong cost_usd. The
+        # operator must set the prices for their OPENAI_MODEL. Fails loud if unset.
+        self.price_in_per_m = _float_env_required("OPENAI_PRICE_IN_PER_M")
+        self.price_out_per_m = _float_env_required("OPENAI_PRICE_OUT_PER_M")
         # Bound the synchronous call so a slow provider cannot pin a worker for the
         # SDK default (~600s). max_retries bounds the multiplier on transient errors.
         self.timeout_s = _float_env("LLM_REQUEST_TIMEOUT_S", "60")
