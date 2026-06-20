@@ -25,11 +25,14 @@ STRICT_CONFIG = ConfigDict(strict=True, extra="forbid")
 def _validate_iso4217(value: str) -> str:
     """Format-level ISO-4217 check.
 
-    v1 enforces the 3-letter uppercase shape; full code-set membership is
-    tightened in T01 against a committed ISO-4217 table.
+    v1 enforces the 3-letter uppercase ASCII shape; full code-set membership is
+    tightened in T01 against a committed ISO-4217 table. The ASCII guard matters:
+    `str.isalpha`/`str.isupper` are unicode-aware, so without it Cyrillic/Greek/
+    fullwidth look-alikes (e.g. U+0410U+0411U+0412) would pass and a homoglyph
+    currency would slip through instead of failing loudly.
     """
-    if len(value) != 3 or not value.isalpha() or not value.isupper():
-        raise ValueError("currency must be a 3-letter uppercase ISO-4217 code")
+    if len(value) != 3 or not value.isascii() or not value.isalpha() or not value.isupper():
+        raise ValueError("currency must be a 3-letter uppercase ASCII ISO-4217 code")
     return value
 
 

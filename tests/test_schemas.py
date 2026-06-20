@@ -68,6 +68,16 @@ def test_invoice_rejects_bad_currency():
         InvoiceV1.model_validate_json(json.dumps(payload))
 
 
+def test_invoice_rejects_non_ascii_currency_lookalikes():
+    # Unicode look-alikes must fail the ASCII format gate: Cyrillic ABV,
+    # Greek GBD, fullwidth-Latin GBP. isalpha()/isupper() alone would pass them.
+    for bogus in ("АБВ", "ΓΒΔ", "ＧＢＰ"):
+        payload = dict(VALID_INVOICE)
+        payload["currency"] = bogus
+        with pytest.raises(ValidationError):
+            InvoiceV1.model_validate_json(json.dumps(payload))
+
+
 def test_invoice_extra_field_forbidden():
     payload = dict(VALID_INVOICE)
     payload["mystery"] = "x"
