@@ -12,7 +12,7 @@ dependencies = [
     "fastapi[standard]>=0.136,<0.137",
     "pydantic>=2.13,<3",
     "openai>=2.41,<3",
-    "anthropic>=0.109,<0.110",
+    "anthropic>=0.109,<0.112",
     "PyMuPDF==1.27.2.3",
 ]
 
