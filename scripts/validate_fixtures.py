@@ -46,9 +46,10 @@ def validate_file(path: Path) -> list[str]:
         return [f"{path.name}: missing keys {sorted(missing)}"]
 
     errs: list[str] = []
-    if data["source"] not in VALID_SOURCES:
+    # isinstance guards first: a non-str (e.g. list) would raise TypeError on `in`.
+    if not isinstance(data["source"], str) or data["source"] not in VALID_SOURCES:
         errs.append(f"{path.name}: source must be one of {sorted(VALID_SOURCES)}")
-    if data["label_status"] not in VALID_STATUS:
+    if not isinstance(data["label_status"], str) or data["label_status"] not in VALID_STATUS:
         errs.append(f"{path.name}: label_status must be one of {sorted(VALID_STATUS)}")
     # content is the raw document text the accuracy harness scores against; a present
     # but null/numeric/blank value must fail loudly rather than count as a valid fixture.

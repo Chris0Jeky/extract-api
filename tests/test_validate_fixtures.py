@@ -81,3 +81,12 @@ def test_valid_fixture_passes(tmp_path):
     path = tmp_path / "ok.json"
     path.write_text(json.dumps(_fixture()), encoding="utf-8")
     assert validate_fixtures.validate_file(path) == []
+
+
+def test_non_string_metadata_reported_not_crashed(tmp_path):
+    # A non-string source/label_status must report an error, not raise TypeError on `in`.
+    path = tmp_path / "bad_meta.json"
+    path.write_text(json.dumps(_fixture(source=[1, 2], label_status={})), encoding="utf-8")
+    errs = validate_fixtures.validate_file(path)
+    assert any("source must be one of" in e for e in errs)
+    assert any("label_status must be one of" in e for e in errs)
