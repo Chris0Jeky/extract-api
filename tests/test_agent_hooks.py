@@ -49,6 +49,16 @@ def test_redact_leaves_innocuous_text():
     assert post._redact("just a normal log line") == "just a normal log line"
 
 
+def test_redact_scrubs_whole_pem_block():
+    # The key body, not just the header, must be redacted.
+    body = "MIIBVgIBADANBgkqh" + "k" * 40
+    pem = "-----BEGIN RSA PRIVATE KEY-----\n" + body + "\n-----END RSA PRIVATE KEY-----"
+    redacted = post._redact(f"crash dump: {pem} done")
+    assert body not in redacted
+    assert "PRIVATE KEY" not in redacted
+    assert "[REDACTED]" in redacted
+
+
 def test_pre_decide_denies_modern_key_write():
     decision, _ = pre.decide("echo sk-proj-" + "A" * 24 + " > keys.txt")
     assert decision == "deny"

@@ -1,0 +1,27 @@
+# Keep secrets, VCS history, and local cruft out of the Docker build context so they
+# cannot be copied into an image layer.
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+.github
+
+# Python / tooling caches and virtualenvs
+.venv
+venv
+__pycache__/
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+*.egg-info
+htmlcov
+.coverage
+coverage.xml
+
+# Local databases and agent state
+*.sqlite
+.claude/local
+evals/reports/*
+!evals/reports/.gitkeep

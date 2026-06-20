@@ -15,13 +15,16 @@ _RM = re.compile(r"\brm\b", re.IGNORECASE)
 _RM_FLAG = re.compile(r"(?:^|\s)-\w*[rf]|--recursive|--force", re.IGNORECASE)
 # Match a catastrophic delete target, tolerating optional surrounding quotes and a
 # trailing slash so `rm -rf "/"`, `rm -rf '$HOME'`, and `rm -rf $HOME/` cannot slip
-# past the boundary anchors. `/?` lets `~` cover `~/` and `$HOME` cover `$HOME/`.
-_RM_TARGET = re.compile(r"""(?:^|\s)['"]?(?:/|~|/\*|\$HOME)/?['"]?(?:\s|$)""")
+# past the boundary anchors. `/?` lets `~` cover `~/` and `$HOME` cover `$HOME/`;
+# `\$\{?HOME\}?` covers both `$HOME` and the braced `${HOME}` expansion.
+_RM_TARGET = re.compile(r"""(?:^|\s)['"]?(?:/|~|/\*|\$\{?HOME\}?)/?['"]?(?:\s|$)""")
 
 _DENY_PATTERNS = [
     (
-        re.compile(r"\bgit\s+push\b.*(?:--force\b(?!-with-lease)|\s-f\b)", re.IGNORECASE),
-        "Bare force-push is blocked; use --force-with-lease.",
+        # `\s\+\S` catches a leading-+ refspec (git push origin +main / +HEAD:main),
+        # which forces just like --force; a + mid-token (branch feature/c++) is safe.
+        re.compile(r"\bgit\s+push\b.*(?:--force\b(?!-with-lease)|\s-f\b|\s\+\S)", re.IGNORECASE),
+        "Bare force-push is blocked (including +refspec); use --force-with-lease.",
     ),
     (
         re.compile(r"\bgit\s+reset\s+--hard\b", re.IGNORECASE),
@@ -29,7 +32,11 @@ _DENY_PATTERNS = [
     ),
     (re.compile(r"\bsudo\b", re.IGNORECASE), "sudo is blocked."),
     (
-        re.compile(r"\b(?:curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:ba)?sh\b", re.IGNORECASE),
+        # `(?:\S*/)?` lets an absolute path to the shell (| /bin/sh, | /usr/bin/bash)
+        # be caught too, not only a bare `sh`/`bash`; sudo|env covers env-launched shells.
+        re.compile(
+            r"\b(?:curl|wget)\b[^|]*\|\s*(?:(?:sudo|env)\s+)?(?:\S*/)?(?:ba)?sh\b", re.IGNORECASE
+        ),
         "Piping a remote download into a shell is blocked.",
     ),
 ]
@@ -41,7 +48,7 @@ _SECRET_VALUE = re.compile(
     r"|gh[pousr]_[A-Za-z0-9]{36,}"
     r"|github_pat_[A-Za-z0-9_]{40,}"
     r"|AKIA[0-9A-Z]{16}"
-    r"|-----BEGIN[A-Z ]*PRIVATE KEY-----"
+    r"|-----BEGIN[A-Z ]*PRIVATE KEY-----(?:[\s\S]*?-----END[A-Z ]*PRIVATE KEY-----)?"
 )
 _WRITE_INTENT = re.compile(r">>?|\btee\b|\bset-content\b|\bout-file\b", re.IGNORECASE)
 

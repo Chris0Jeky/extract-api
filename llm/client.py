@@ -1,10 +1,10 @@
 """The one provider seam. NO other module may import a provider SDK.
 
-Routing is env-only. Today the seam reads LLM_PROVIDER_MODE (the fixture
-short-circuit) and LLM_DEFAULT_PROVIDER (default resolution). LLM_BASE_URL and
-LLM_API_KEY are captured into client config here but only take effect in the
-real-call paths (T02/T09), and GATEWAY_BYPASS is reserved for that same milestone;
-keeping them env-driven means the week-10 gateway migration stays an env change,
+Routing is env-only. The seam reads LLM_PROVIDER_MODE (the fixture short-circuit) and
+LLM_DEFAULT_PROVIDER (default resolution). OpenAIClient (T02) routes via LLM_BASE_URL +
+LLM_API_KEY, except under GATEWAY_BYPASS=1, where it talks to OpenAI directly with
+OPENAI_API_KEY and no gateway base URL. The Anthropic real-call path lands in T09.
+Keeping it all env-driven means the week-10 gateway migration stays an env change,
 not a code change. Provider SDKs are imported lazily inside complete() so importing
 this module never needs credentials. cost_usd is carried on every result from day
 one (ADR 0002).
@@ -107,8 +107,16 @@ class OpenAIClient:
     provider = "openai"
 
     def __init__(self) -> None:
-        self.base_url = _env("LLM_BASE_URL")
-        self.api_key = _env("LLM_API_KEY")
+        # GATEWAY_BYPASS=1: talk to OpenAI directly with the provider-specific key and
+        # no gateway base URL. Otherwise route through the gateway's LLM_* config so the
+        # week-10 migration is an env flip. (.env.example documents OPENAI_API_KEY as the
+        # direct, not-through-the-gateway credential.)
+        if os.environ.get("GATEWAY_BYPASS") == "1":
+            self.base_url = None
+            self.api_key = _env("OPENAI_API_KEY") or _env("LLM_API_KEY")
+        else:
+            self.base_url = _env("LLM_BASE_URL")
+            self.api_key = _env("LLM_API_KEY")
         self.model = os.environ.get("OPENAI_MODEL", "")
         # Per-million-token prices (USD). REQUIRED and explicit: defaulting would bill
         # every model at one model's rate, silently producing wrong cost_usd. The
@@ -132,12 +140,6 @@ class OpenAIClient:
         import openai
         from openai import OpenAI
 
-        client = OpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url,
-            timeout=self.timeout_s,
-            max_retries=self.max_retries,
-        )
         text_format = {
             "format": {
                 "type": "json_schema",
@@ -148,6 +150,14 @@ class OpenAIClient:
         }
         start = time.perf_counter()
         try:
+            # Construction can also raise (e.g. a missing/invalid api_key -> OpenAIError),
+            # so it is inside the try and mapped to the taxonomy like the call itself.
+            client = OpenAI(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                timeout=self.timeout_s,
+                max_retries=self.max_retries,
+            )
             response = client.responses.create(
                 model=self.model,
                 instructions=system,
@@ -158,6 +168,9 @@ class OpenAIClient:
         except openai.APITimeoutError as exc:
             raise ProviderTimeout(provider=self.provider, detail=str(exc)) from exc
         except openai.APIError as exc:
+            raise ProviderError(provider=self.provider, detail=str(exc)) from exc
+        except openai.OpenAIError as exc:
+            # Base SDK error (e.g. construction/config failures) that is not an APIError.
             raise ProviderError(provider=self.provider, detail=str(exc)) from exc
         latency_ms = (time.perf_counter() - start) * 1000.0
 
