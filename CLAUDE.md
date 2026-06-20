@@ -43,9 +43,9 @@ On Windows pass the venv interpreter, e.g. `make PYTHON=.venv/Scripts/python tes
 
 - Two doc types only: `invoice`, `uk_job_posting`. Versioned schemas
   (`invoice.v1`, `job_posting.v1`); version travels in request and response.
-- Pydantic v2 strict models. Validation-retry loop, max 2 retries; attempt 2
-  appends the exact failure list; second failure returns 422 with the full trail.
-  Never silently coerce. Log every retry with its error class.
+- Pydantic v2 strict models. Validation-retry loop, max 1 retry (2 attempts
+  total); attempt 2 appends the exact failure list; second failure returns 422 with
+  the full trail. Never silently coerce. Log every retry with its error class.
 - Error taxonomy enum, exactly one per non-200: `validation_failed`,
   `low_confidence`, `unsupported_doc_type`, `provider_error`, `provider_timeout`,
   `budget_exceeded`, `idempotency_conflict`.
