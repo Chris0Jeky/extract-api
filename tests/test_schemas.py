@@ -117,6 +117,17 @@ def test_invoice_tax_null_means_total_equals_subtotal():
     InvoiceV1.model_validate_json(json.dumps(payload))  # must not raise
 
 
+def test_invoice_tax_null_allows_total_above_subtotal():
+    # Null tax is unknown, not zero: a document may show subtotal and total without
+    # itemising tax, so total != subtotal must still validate when tax is null.
+    payload = dict(VALID_INVOICE)
+    payload["tax_minor"] = None
+    payload["line_items"] = None  # avoid the line-item sum check
+    payload["subtotal_minor"] = 10000
+    payload["total_minor"] = 12000  # 2000 of unstated tax
+    InvoiceV1.model_validate_json(json.dumps(payload))  # must not raise
+
+
 def test_invoice_line_items_must_sum_to_subtotal():
     payload = dict(VALID_INVOICE)
     # subtotal stays 10000 but the single line now sums to 9000

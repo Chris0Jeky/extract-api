@@ -47,13 +47,14 @@ class InvoiceV1(BaseModel):
 
     @model_validator(mode="after")
     def _check_totals(self) -> InvoiceV1:
-        # total = subtotal + tax. tax may be genuinely absent (null) -> treat as 0.
-        tax = self.tax_minor if self.tax_minor is not None else 0
-        expected_total = self.subtotal_minor + tax
-        if self.total_minor != expected_total:
+        # When tax is stated, the total must reconcile to subtotal + tax. When
+        # tax_minor is null it is genuinely unknown (explicit-null contract), so we
+        # do NOT assume zero: we skip reconciliation rather than guess, which also
+        # allows a document that shows subtotal and total without itemising tax.
+        if self.tax_minor is not None and self.total_minor != self.subtotal_minor + self.tax_minor:
             raise ValueError(
                 f"total_minor ({self.total_minor}) must equal subtotal_minor "
-                f"({self.subtotal_minor}) + tax_minor ({tax})"
+                f"({self.subtotal_minor}) + tax_minor ({self.tax_minor})"
             )
         # Line items, when present, must be a non-empty itemization that sums to the
         # subtotal. An empty list is rejected: under the explicit-null contract a
