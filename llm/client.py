@@ -17,8 +17,12 @@ messages.parse); the FixtureClient (T04b) gives an offline deterministic path fo
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 from typing import Protocol
+
+from llm.errors import ProviderError, ProviderRefusal, ProviderTimeout, ProviderTruncation
+from llm.schema_utils import sanitize_for_provider
 
 
 @dataclass(frozen=True)
@@ -28,6 +32,7 @@ class CompletionResult:
     tokens_in: int
     tokens_out: int
     cost_usd: float
+    latency_ms: float
     stop_reason: str
 
 
@@ -49,8 +54,26 @@ def _env(name: str) -> str | None:
     return value or None
 
 
+def _first_refusal(response: object) -> str | None:
+    """Return the first refusal string in the response output, or None.
+
+    A refusal is a content part of type "refusal" on an output message; scanning
+    defensively (getattr) keeps this robust to SDK shape drift.
+    """
+    for item in getattr(response, "output", None) or []:
+        for part in getattr(item, "content", None) or []:
+            if getattr(part, "type", None) == "refusal":
+                return str(getattr(part, "refusal", "") or "")
+    return None
+
+
 class OpenAIClient:
-    """OpenAI structured-output client. Real call lands in T02."""
+    """OpenAI structured-output client (Responses API with strict json_schema).
+
+    Returns raw JSON text (ADR 0002): the seam is text-based and the validation-retry
+    loop re-validates. cost_usd uses env-configured per-million-token prices so there
+    is no committed price table to drift; a gateway may later supply cost directly.
+    """
 
     provider = "openai"
 
@@ -58,6 +81,10 @@ class OpenAIClient:
         self.base_url = _env("LLM_BASE_URL")
         self.api_key = _env("LLM_API_KEY")
         self.model = os.environ.get("OPENAI_MODEL", "")
+        # Per-million-token prices (USD). Defaults track gpt-4o-mini list pricing;
+        # override per deployment. Malformed values fail loud at construction.
+        self.price_in_per_m = float(os.environ.get("OPENAI_PRICE_IN_PER_M", "0.15"))
+        self.price_out_per_m = float(os.environ.get("OPENAI_PRICE_OUT_PER_M", "0.60"))
 
     def complete(
         self,
@@ -67,8 +94,67 @@ class OpenAIClient:
         json_schema: dict[str, object],
         max_tokens: int = 4096,
     ) -> CompletionResult:
-        # from openai import OpenAI  # lazy import lands with the real call (T02)
-        raise NotImplementedError("OpenAI responses.parse path lands in T02")
+        # Lazy, and the ONLY place a provider SDK is imported (gateway-seam rule).
+        import openai
+        from openai import OpenAI
+
+        client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        text_format = {
+            "format": {
+                "type": "json_schema",
+                "name": "extraction",
+                "schema": sanitize_for_provider(json_schema),
+                "strict": True,
+            }
+        }
+        start = time.perf_counter()
+        try:
+            # The Responses text-format TypedDict is hard to satisfy with a dynamic
+            # json_schema dict; the call is correct, so the overload check is waived.
+            response = client.responses.create(  # type: ignore[call-overload]
+                model=self.model,
+                instructions=system,
+                input=prompt,
+                text=text_format,
+                max_output_tokens=max_tokens,
+            )
+        except openai.APITimeoutError as exc:
+            raise ProviderTimeout(provider=self.provider, detail=str(exc)) from exc
+        except openai.APIError as exc:
+            raise ProviderError(provider=self.provider, detail=str(exc)) from exc
+        latency_ms = (time.perf_counter() - start) * 1000.0
+
+        refusal = _first_refusal(response)
+        if refusal is not None:
+            raise ProviderRefusal(provider=self.provider, reason=refusal)
+        if getattr(response, "status", None) == "incomplete":
+            details = getattr(response, "incomplete_details", None)
+            reason = getattr(details, "reason", None) or "unknown"
+            raise ProviderTruncation(provider=self.provider, reason=str(reason))
+
+        usage = getattr(response, "usage", None)
+        tokens_in = int(getattr(usage, "input_tokens", 0) or 0)
+        tokens_out = int(getattr(usage, "output_tokens", 0) or 0)
+        return CompletionResult(
+            text=str(getattr(response, "output_text", "") or ""),
+            model=getattr(response, "model", None) or self.model,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            cost_usd=self._cost_usd(response, tokens_in, tokens_out),
+            latency_ms=latency_ms,
+            stop_reason=str(getattr(response, "status", None) or "completed"),
+        )
+
+    def _cost_usd(self, response: object, tokens_in: int, tokens_out: int) -> float:
+        gateway = self._parse_gateway_cost(response)
+        if gateway is not None:
+            return gateway
+        return (tokens_in * self.price_in_per_m + tokens_out * self.price_out_per_m) / 1_000_000.0
+
+    @staticmethod
+    def _parse_gateway_cost(_response: object) -> float | None:
+        # Gateway forward-compat: a future gateway may return cost directly. None today.
+        return None
 
 
 class AnthropicClient:
