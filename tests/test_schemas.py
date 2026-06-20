@@ -150,6 +150,28 @@ def test_invoice_omitting_nullable_key_fails():
         InvoiceV1.model_validate_json(json.dumps(payload))
 
 
+def test_invoice_empty_line_items_list_rejected():
+    # Explicit-null contract: an absent itemization must be null, never [].
+    payload = dict(VALID_INVOICE)
+    payload["line_items"] = []
+    with pytest.raises(ValidationError):
+        InvoiceV1.model_validate_json(json.dumps(payload))
+
+
+def test_invoice_schema_marks_every_field_required():
+    # Issue #3 acceptance: explicit-null means the JSON schema requires every key.
+    schema = InvoiceV1.model_json_schema()
+    assert set(schema["required"]) == set(schema["properties"])
+
+
+def test_invoice_tax_null_with_line_items_validates():
+    # The tax-null AND line-items-present combination must validate when consistent.
+    payload = dict(VALID_INVOICE)
+    payload["tax_minor"] = None
+    payload["total_minor"] = payload["subtotal_minor"]  # line items already sum to it
+    InvoiceV1.model_validate_json(json.dumps(payload))  # must not raise
+
+
 def test_job_valid_from_json():
     job = JobPostingV1.model_validate_json(json.dumps(VALID_JOB))
     assert job.remote_policy.value == "hybrid"

@@ -55,11 +55,14 @@ class InvoiceV1(BaseModel):
                 f"total_minor ({self.total_minor}) must equal subtotal_minor "
                 f"({self.subtotal_minor}) + tax_minor ({tax})"
             )
-        # When line items are present, they must sum to the subtotal. Per-line
-        # amount vs quantity*unit_price is deliberately NOT enforced: legitimate
-        # per-line discounts and rounding make it unsafe in v1 (there is no discount
-        # field), and amount_minor is the authoritative per-line value. See issue #2.
+        # Line items, when present, must be a non-empty itemization that sums to the
+        # subtotal. An empty list is rejected: under the explicit-null contract a
+        # provider with no itemization emits null, not []. Per-line amount vs
+        # quantity*unit_price is deliberately NOT enforced (legitimate per-line
+        # discounts and rounding; amount_minor is the authoritative value; issue #2).
         if self.line_items is not None:
+            if not self.line_items:
+                raise ValueError("line_items must be null when absent, not an empty list")
             line_sum = sum(item.amount_minor for item in self.line_items)
             if self.subtotal_minor != line_sum:
                 raise ValueError(
