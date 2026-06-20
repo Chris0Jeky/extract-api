@@ -171,3 +171,23 @@ def test_missing_price_env_fails_loud(monkeypatch):
     monkeypatch.delenv("OPENAI_PRICE_OUT_PER_M", raising=False)
     with pytest.raises(ValueError, match="OPENAI_PRICE"):
         OpenAIClient()
+
+
+def test_sdk_construction_error_maps_to_provider_error(monkeypatch):
+    def boom(**kwargs):
+        raise openai.OpenAIError("the api_key client option must be set")
+
+    monkeypatch.setattr(openai, "OpenAI", boom)
+    with pytest.raises(ProviderError):
+        OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+
+
+def test_gateway_bypass_uses_direct_openai_credentials(monkeypatch):
+    captured = _install(monkeypatch, response=_response())
+    monkeypatch.setenv("GATEWAY_BYPASS", "1")
+    monkeypatch.setenv("OPENAI_API_KEY", "direct-openai-key")
+    monkeypatch.setenv("LLM_API_KEY", "gateway-key")
+    monkeypatch.setenv("LLM_BASE_URL", "https://gateway.example")
+    OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+    assert captured["api_key"] == "direct-openai-key"  # not the gateway key
+    assert captured["base_url"] is None  # direct to OpenAI, not the gateway URL
