@@ -5,12 +5,19 @@ from schemas.iso4217 import ISO_4217_ALPHA
 
 def test_count_snapshot():
     # Snapshot size guards against accidental edits; bump deliberately when the
-    # active code set changes (e.g. the ANG -> XCG transition noted in the module).
-    assert len(ISO_4217_ALPHA) == 156
+    # accepted code set changes.
+    assert len(ISO_4217_ALPHA) == 160
 
 
 def test_includes_common_and_supranational_currencies():
     for code in ("GBP", "USD", "EUR", "JPY", "INR", "CNY", "BRL", "XOF", "XAF", "XCD", "XDR"):
+        assert code in ISO_4217_ALPHA
+
+
+def test_includes_transitioning_and_wir_codes():
+    # Extraction accepts codes mid active<->historic transition plus WIR codes, so a
+    # recently-issued or slightly-historical document is not falsely rejected.
+    for code in ("XCG", "ANG", "VED", "VES", "BGN", "CHE", "CHW"):
         assert code in ISO_4217_ALPHA
 
 

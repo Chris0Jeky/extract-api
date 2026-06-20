@@ -1,16 +1,23 @@
-"""ISO-4217 active alphabetic currency codes (authority: ISO 4217 / SIX maintenance
-agency); static snapshot dated 2026-06-20.
+"""ISO-4217 alphabetic currency codes accepted on extracted documents (authority:
+ISO 4217 / SIX maintenance agency); static snapshot dated 2026-06-20.
 
-Membership backs the currency validator in `_common.py`. Deliberately excluded
-(not transactable invoice currencies): precious metals XAU/XAG/XPT/XPD, the test
-code XTS, the no-currency code XXX, and fund/special codes (XUA, XSU, XBA-XBD).
-Superseded codes are omitted in favour of their current replacement (e.g. VEF->VES,
-MRO->MRU, STD->STN, BYR->BYN, SLL->SLE, ZWL->ZWG). The real supranational
-currencies that appear on invoices (XOF, XAF, XPF, XCD, XDR) are included.
+Membership backs the currency validator in `_common.py`. Because extraction reads
+real-world documents (not just the current instant), the set is the active codes
+PLUS codes mid-transition between active and historic, so a recently-issued or
+slightly-historical invoice is not falsely rejected:
+- ANG and XCG (Netherlands Antillean guilder -> Caribbean guilder, 2025) both kept.
+- VES and VED (Venezuela) both kept (both on SIX List One).
+- BGN kept though Bulgaria is adopting EUR (pre-transition invoices still carry it).
+- CHE and CHW (WIR Euro / WIR Franc) included: real List One codes used on Swiss B2B
+  invoices, alongside CHF.
 
-Watch row: ANG (Netherlands Antillean guilder) is retained because it was still the
-active circulating code at the snapshot date; it is slated to be replaced by the
-Caribbean guilder XCG and should be reviewed next.
+Deliberately excluded (not transactable document currencies): precious metals
+XAU/XAG/XPT/XPD, the test code XTS, the no-currency code XXX, and fund/special codes
+(XUA, XSU, XBA-XBD). Long-superseded codes are omitted in favour of their current
+replacement (e.g. VEF->VES, MRO->MRU, STD->STN, BYR->BYN, SLL->SLE, ZWL->ZWG). The
+real supranational currencies (XOF, XAF, XPF, XCD, XDR) are included.
+
+This is a dated snapshot; a periodic ISO-4217 refresh is tracked as follow-up.
 """
 
 from __future__ import annotations
@@ -44,7 +51,9 @@ ISO_4217_ALPHA: frozenset[str] = frozenset(
         "BZD",
         "CAD",
         "CDF",
+        "CHE",
         "CHF",
+        "CHW",
         "CLP",
         "CNY",
         "COP",
@@ -160,12 +169,14 @@ ISO_4217_ALPHA: frozenset[str] = frozenset(
         "USD",
         "UYU",
         "UZS",
+        "VED",
         "VES",
         "VND",
         "VUV",
         "WST",
         "XAF",
         "XCD",
+        "XCG",
         "XDR",
         "XOF",
         "XPF",
