@@ -21,7 +21,9 @@ _SECRET = re.compile(
     r"|gh[pousr]_[A-Za-z0-9]{36,}"  # GitHub ghp_/gho_/ghu_/ghs_/ghr_ tokens
     r"|github_pat_[A-Za-z0-9_]{40,}"  # GitHub fine-grained PAT
     r"|AKIA[0-9A-Z]{16}"  # AWS access key id
-    r"|-----BEGIN[A-Z ]*PRIVATE KEY-----"
+    # Whole PEM block (header + body + footer), falling back to the header alone if the
+    # block is truncated; otherwise only the header was scrubbed and the key body leaked.
+    r"|-----BEGIN[A-Z ]*PRIVATE KEY-----(?:[\s\S]*?-----END[A-Z ]*PRIVATE KEY-----)?"
 )
 
 
