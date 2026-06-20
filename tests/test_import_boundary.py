@@ -8,7 +8,9 @@ PROVIDER_IMPORT = re.compile(r"^\s*(?:import|from)\s+(?:openai|anthropic)\b", re
 
 
 def _modules_outside_client():
-    for pkg in ("api", "schemas", "harness", "llm"):
+    # scripts/ is in scope too: hooks and harness scripts must not import a
+    # provider SDK either (only llm/client.py may).
+    for pkg in ("api", "schemas", "harness", "llm", "scripts"):
         for path in (ROOT / pkg).rglob("*.py"):
             if path.name == "client.py" and path.parent.name == "llm":
                 continue
