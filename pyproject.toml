@@ -9,7 +9,7 @@ authors = [{ name = "Chris0Jeky" }]
 
 # Versions verified live against PyPI on 2026-06-13 (see docs/adr/0001-dependency-versions.md).
 dependencies = [
-    "fastapi[standard]>=0.136,<0.137",
+    "fastapi[standard]>=0.136,<0.139",
     "pydantic>=2.13,<3",
     "openai>=2.41,<3",
     "anthropic>=0.109,<0.112",
