@@ -36,8 +36,10 @@ truncation to the taxonomy or a retry. Construct each client purely from
 
 ## Design consequences (already in the code)
 
-1. **Optionals are null-unions** (`X | None`): the strict schema marks every
-   field required, the value may be explicit `null`. Never omit a field.
+1. **Optionals are required-but-nullable null-unions** (`X | None`, no default):
+   the strict schema marks every field required and the value may be explicit
+   `null`; never omit a field. invoice.v1 implements this as of T01; job_posting.v1
+   still carries `= None` defaults and is brought into line in T08 (issue #8).
 2. **Constraints live in Pydantic, after parse:** `salary_max >= salary_min`,
    ISO dates, integer minor units, ISO-4217 currency. A failure here is what
    triggers retry attempt 2. The salary cross-field check is the canonical

@@ -86,6 +86,103 @@ def test_invoice_extra_field_forbidden():
         InvoiceV1.model_validate_json(json.dumps(payload))
 
 
+def test_invoice_rejects_well_shaped_but_unknown_currency():
+    # Correct shape, but not a real ISO-4217 code -> membership failure.
+    for bogus in ("ZZZ", "ABC", "QQQ"):
+        payload = dict(VALID_INVOICE)
+        payload["currency"] = bogus
+        with pytest.raises(ValidationError):
+            InvoiceV1.model_validate_json(json.dumps(payload))
+
+
+def test_invoice_accepts_each_fixture_currency():
+    for code in ("GBP", "USD", "EUR", "JPY"):
+        payload = dict(VALID_INVOICE)
+        payload["currency"] = code
+        InvoiceV1.model_validate_json(json.dumps(payload))  # must not raise
+
+
+def test_invoice_total_must_equal_subtotal_plus_tax():
+    payload = dict(VALID_INVOICE)
+    payload["total_minor"] = 99999  # != subtotal (10000) + tax (2000)
+    with pytest.raises(ValidationError):
+        InvoiceV1.model_validate_json(json.dumps(payload))
+
+
+def test_invoice_tax_null_means_total_equals_subtotal():
+    payload = dict(VALID_INVOICE)
+    payload["tax_minor"] = None
+    payload["total_minor"] = payload["subtotal_minor"]
+    payload["line_items"] = None  # isolate the totals check from the line-item sum
+    InvoiceV1.model_validate_json(json.dumps(payload))  # must not raise
+
+
+def test_invoice_tax_null_allows_total_above_subtotal():
+    # Null tax is unknown, not zero: a document may show subtotal and total without
+    # itemising tax, so total != subtotal must still validate when tax is null.
+    payload = dict(VALID_INVOICE)
+    payload["tax_minor"] = None
+    payload["line_items"] = None  # avoid the line-item sum check
+    payload["subtotal_minor"] = 10000
+    payload["total_minor"] = 12000  # 2000 of unstated tax
+    InvoiceV1.model_validate_json(json.dumps(payload))  # must not raise
+
+
+def test_invoice_line_items_must_sum_to_subtotal():
+    payload = dict(VALID_INVOICE)
+    # subtotal stays 10000 but the single line now sums to 9000
+    payload["line_items"] = [
+        {"description": "Widget", "quantity": 1, "unit_price_minor": 9000, "amount_minor": 9000}
+    ]
+    with pytest.raises(ValidationError):
+        InvoiceV1.model_validate_json(json.dumps(payload))
+
+
+def test_invoice_line_item_wrong_type_fails():
+    payload = dict(VALID_INVOICE)
+    payload["line_items"] = [
+        {
+            "description": "Widget",
+            "quantity": "two",
+            "unit_price_minor": 5000,
+            "amount_minor": 10000,
+        }
+    ]
+    with pytest.raises(ValidationError):
+        InvoiceV1.model_validate_json(json.dumps(payload))
+
+
+def test_invoice_omitting_nullable_key_fails():
+    # due_date is required-but-nullable: the key must be present (explicit null),
+    # so omitting it entirely must fail (ADR 0002 explicit-null contract).
+    payload = dict(VALID_INVOICE)
+    del payload["due_date"]
+    with pytest.raises(ValidationError):
+        InvoiceV1.model_validate_json(json.dumps(payload))
+
+
+def test_invoice_empty_line_items_list_rejected():
+    # Explicit-null contract: an absent itemization must be null, never [].
+    payload = dict(VALID_INVOICE)
+    payload["line_items"] = []
+    with pytest.raises(ValidationError):
+        InvoiceV1.model_validate_json(json.dumps(payload))
+
+
+def test_invoice_schema_marks_every_field_required():
+    # Issue #3 acceptance: explicit-null means the JSON schema requires every key.
+    schema = InvoiceV1.model_json_schema()
+    assert set(schema["required"]) == set(schema["properties"])
+
+
+def test_invoice_tax_null_with_line_items_validates():
+    # The tax-null AND line-items-present combination must validate when consistent.
+    payload = dict(VALID_INVOICE)
+    payload["tax_minor"] = None
+    payload["total_minor"] = payload["subtotal_minor"]  # line items already sum to it
+    InvoiceV1.model_validate_json(json.dumps(payload))  # must not raise
+
+
 def test_job_valid_from_json():
     job = JobPostingV1.model_validate_json(json.dumps(VALID_JOB))
     assert job.remote_policy.value == "hybrid"
