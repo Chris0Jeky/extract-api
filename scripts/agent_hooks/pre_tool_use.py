@@ -33,8 +33,10 @@ _DENY_PATTERNS = [
     (re.compile(r"\bsudo\b", re.IGNORECASE), "sudo is blocked."),
     (
         # `(?:\S*/)?` lets an absolute path to the shell (| /bin/sh, | /usr/bin/bash)
-        # be caught too, not only a bare `sh`/`bash`.
-        re.compile(r"\b(?:curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:\S*/)?(?:ba)?sh\b", re.IGNORECASE),
+        # be caught too, not only a bare `sh`/`bash`; sudo|env covers env-launched shells.
+        re.compile(
+            r"\b(?:curl|wget)\b[^|]*\|\s*(?:(?:sudo|env)\s+)?(?:\S*/)?(?:ba)?sh\b", re.IGNORECASE
+        ),
         "Piping a remote download into a shell is blocked.",
     ),
 ]
@@ -46,7 +48,7 @@ _SECRET_VALUE = re.compile(
     r"|gh[pousr]_[A-Za-z0-9]{36,}"
     r"|github_pat_[A-Za-z0-9_]{40,}"
     r"|AKIA[0-9A-Z]{16}"
-    r"|-----BEGIN[A-Z ]*PRIVATE KEY-----"
+    r"|-----BEGIN[A-Z ]*PRIVATE KEY-----(?:[\s\S]*?-----END[A-Z ]*PRIVATE KEY-----)?"
 )
 _WRITE_INTENT = re.compile(r">>?|\btee\b|\bset-content\b|\bout-file\b", re.IGNORECASE)
 
