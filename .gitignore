@@ -1,6 +1,9 @@
 # --- Local-only build briefing: never commit/push (carries private framing) ---
 /_handover/
 
+# --- Local-only kickoff readiness pack: pre-kickoff drafts, not product code ---
+/_prep/
+
 # --- Secrets: env refs only, never values ---
 .env
 .env.*

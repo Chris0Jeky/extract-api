@@ -1,0 +1,54 @@
+# The required, no-opt-out merge gate. Fast, deterministic, no paid model calls.
+# Action refs use version tags for now; pin to commit SHAs before the repo goes
+# public (see docs/ops/HUMAN_OPERATIONS.md).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: lint + types + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Lint (ruff)
+        run: |
+          ruff check .
+          ruff format --check .
+      - name: Typecheck (mypy strict)
+        run: mypy
+      - name: Tests (pytest + coverage ratchet)
+        run: pytest
+      - name: Fixtures validate
+        run: python scripts/validate_fixtures.py
+
+  secret-scan:
+    name: secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

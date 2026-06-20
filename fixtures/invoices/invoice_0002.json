@@ -1,0 +1,21 @@
+{
+  "fixture_id": "invoice_0002",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "content": "Invoice\nBlue Harbor Consulting\nInvoice #: BH-2048\nDate: 2026-03-02\nConsulting services\nAmount: USD 1,250.00\nTotal: USD 1,250.00\nThank you for your business.",
+  "expected": {
+    "invoice_number": "BH-2048",
+    "issue_date": "2026-03-02",
+    "due_date": null,
+    "currency": "USD",
+    "subtotal_minor": 125000,
+    "tax_minor": null,
+    "total_minor": 125000,
+    "vendor_name": "Blue Harbor Consulting",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": null
+  }
+}

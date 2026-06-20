@@ -1,0 +1,23 @@
+{
+  "fixture_id": "invoice_0004",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "content": "INVOICE\nSakura Trading K.K.\nInvoice No: ST-3310\nDate: 2026-04-10\nDisplay units x2 at JPY 45,000\nSubtotal: JPY 90,000\nConsumption tax (10%): JPY 9,000\nTotal: JPY 99,000",
+  "expected": {
+    "invoice_number": "ST-3310",
+    "issue_date": "2026-04-10",
+    "due_date": null,
+    "currency": "JPY",
+    "subtotal_minor": 90000,
+    "tax_minor": 9000,
+    "total_minor": 99000,
+    "vendor_name": "Sakura Trading K.K.",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": [
+      {"description": "Display units", "quantity": 2, "unit_price_minor": 45000, "amount_minor": 90000}
+    ]
+  }
+}

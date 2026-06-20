@@ -1,0 +1,21 @@
+# New service on the Hetzner box (M4). Provider routing is env-only, so the
+# week-10 gateway migration is a change to .env, not to this file.
+services:
+  extract-api:
+    build: .
+    image: extract-api:0.1.0
+    container_name: extract-api
+    ports:
+      - "8200:8200"
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8200/healthz').status==200 else 1)
+      interval: 30s
+      timeout: 3s
+      retries: 3

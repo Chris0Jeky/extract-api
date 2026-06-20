@@ -1,0 +1,21 @@
+{
+  "fixture_id": "invoice_0008",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "content": "Factuur\nLeverancier: Lowlands Media BV\nFactuurnummer: LM-9001\nDatum: 2026-02-09\nTotaal: EUR 430,00",
+  "expected": {
+    "invoice_number": "LM-9001",
+    "issue_date": "2026-02-09",
+    "due_date": null,
+    "currency": "EUR",
+    "subtotal_minor": 43000,
+    "tax_minor": null,
+    "total_minor": 43000,
+    "vendor_name": "Lowlands Media BV",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": null
+  }
+}

@@ -1,0 +1,8 @@
+# Solo repo: the owner reviews everything. The explicit high-blast-radius paths
+# below keep mandatory review routing in place if collaborators are added later.
+*                         @Chris0Jeky
+
+/.github/workflows/       @Chris0Jeky
+/llm/client.py            @Chris0Jeky
+/schemas/                 @Chris0Jeky
+/api/errors.py            @Chris0Jeky

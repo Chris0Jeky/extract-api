@@ -1,74 +1,91 @@
-# CLAUDE.md - extract-api (pre-kickoff bootstrap)
+# CLAUDE.md - extract-api
 
-Status: PRE-KICKOFF. The M0 kickoff session has not run yet. This file is a
-bootstrap that orients you to run it. The kickoff session will replace this
-with the real product CLAUDE.md (build / test / typecheck commands plus the
-session protocol).
-
-## What this repo is
-
-extract-api: a strict-schema LLM extraction service that turns documents into
+extract-api is a strict-schema LLM extraction service that turns documents into
 validated structured data and reports per-field accuracy across two providers
 (OpenAI and Anthropic). It fails loudly instead of silently coercing.
 
-Positioning line for every README / title: "I make LLM systems cheap,
-reliable, and provably valuable in production." Lead with measured numbers;
-until they exist, carry the block "Numbers pending: measured, not promised."
+Positioning line for every README / title / CV line: "I make LLM systems cheap,
+reliable, and provably valuable in production." Lead with measured numbers; until
+they exist, carry "Numbers pending: measured, not promised."
 
-## How to start (run the M0 kickoff)
+`AGENTS.md` is the rulebook (Review Policy, Definition of Done, the 5-part merge
+gate). This file is orientation, commands, and locked decisions. Read both before
+changing code.
 
-1. Read `_handover/KICKOFF_PROMPT.md` and run it as the kickoff. It is
-   self-contained: every locked decision and schema field list is inlined.
-2. `_handover/HANDOVER.md` is the long-form briefing (rationale, repo facts,
-   ADR proposals, milestones, the gateway hook). Read it for context.
-3. `_handover/` is LOCAL ONLY (gitignored). Never commit or push its contents.
-   It is the private build briefing; treat it as read-only reference.
+## Commands
 
-PHASE 0 note: the kickoff prompt says "confirm the repo is empty." That check
-is satisfied. The only pre-existing files are harness scaffolding (`.claude/`,
-`.gitignore`, this bootstrap `CLAUDE.md`) and the gitignored `_handover/`
-briefing. There is no product code. Proceed to verify dependency versions
-against official docs, report your plan in 15 lines or fewer, and STOP for
-approval before writing product files.
+```
+uv venv --python 3.13 && uv pip install -e ".[dev]"   # setup (fallback: python3 -m venv .venv)
+make help          # list targets
+make dev           # run the API (uvicorn on :8200; /docs for OpenAPI)
+make test          # pytest + coverage (ratchet floor in pyproject)
+make typecheck     # mypy strict
+make lint          # ruff check + format check
+make ci-quick      # lint + typecheck + test (pre-push gate)
+make smoke         # deterministic offline smoke (no paid model calls)
+make fixtures-validate   # validate fixtures against their schema + labels
+make accuracy-run        # accuracy harness (pending M3)
+make test-hooks    # self-test the agent safety hooks
+```
 
-## Locked decisions (do not re-litigate; full detail in _handover/HANDOVER.md)
+On Windows pass the venv interpreter, e.g. `make PYTHON=.venv/Scripts/python test`.
 
-- Two doc types only: invoice and uk_job_posting. Versioned schemas
-  (invoice.v1, job_posting.v1); version travels in request and response.
+## Session protocol
+
+1. Read this file, `AGENTS.md`, and `tasks/BACKLOG.md`.
+2. State the next unblocked task and wait for the go.
+3. Work one safe slice (`.claude/skills/safe-slice`); small conventional commits
+   (`<area>: <imperative summary>`); behavior changes ship with tests.
+4. End every session with a report: done / decisions needed / next unblocked
+   tasks (use `.claude/skills/verify-and-sync`).
+
+## Locked decisions (do not re-litigate; full detail in docs/plan/PLAN.md)
+
+- Two doc types only: `invoice`, `uk_job_posting`. Versioned schemas
+  (`invoice.v1`, `job_posting.v1`); version travels in request and response.
 - Pydantic v2 strict models. Validation-retry loop, max 2 retries; attempt 2
-  appends the exact failure list to the prompt; the second failure returns 422
-  with the full failure trail. Never silently coerce. Log every retry with its
-  error class.
-- Error taxonomy enum, exactly one per non-200: validation_failed,
-  low_confidence, unsupported_doc_type, provider_error, provider_timeout,
-  budget_exceeded, idempotency_conflict.
-- Idempotency: Idempotency-Key + sha256(payload) stored with the response;
-  same key + same hash replays (no model call, replayed:true in meta); same
-  key + different hash returns 409; TTL 24h.
+  appends the exact failure list; second failure returns 422 with the full trail.
+  Never silently coerce. Log every retry with its error class.
+- Error taxonomy enum, exactly one per non-200: `validation_failed`,
+  `low_confidence`, `unsupported_doc_type`, `provider_error`, `provider_timeout`,
+  `budget_exceeded`, `idempotency_conflict`.
+- Idempotency: `Idempotency-Key` + `sha256(payload)`; same key+hash replays
+  (`replayed:true`, no model call); same key+different hash returns 409; TTL 24h.
+  SQLite store (ADR 0004).
 - Synchronous API only (async job queue is a non-goal).
-- Both providers behind one thin `llm/client.py` seam that reads LLM_BASE_URL
-  and LLM_API_KEY from env. No other module imports a provider SDK.
+- Both providers behind one `llm/client.py` seam reading `LLM_BASE_URL` +
+  `LLM_API_KEY` (+ `GATEWAY_BYPASS`). No other module imports a provider SDK.
+- Structured outputs guarantee SHAPE, not SEMANTICS (ADR 0002): optionals are
+  null-unions; cross-field / normalization / value constraints are Pydantic
+  validators after parse; that is what the retry loop catches.
 - Deterministic accuracy harness; NO LLM judges anywhere. OCR is a non-goal
-  (text and pre-extracted PDF text only, via pymupdf).
-- Normalization: dates to ISO 8601; money to integer minor units plus ISO-4217
-  currency; a genuinely-absent field is null, never a guessed value.
+  (text and pre-extracted PDF text only, via PyMuPDF).
+- Normalization: dates to ISO 8601; money to integer minor units + ISO-4217
+  currency; a genuinely-absent field is `null`, never a guessed value.
+- Emit `cost_usd` per request from day one (gateway forward-compat).
 
-## Gateway forward-compat (do not skip)
+## Build state
 
-- `llm/client.py` routes purely on `LLM_BASE_URL` + `LLM_API_KEY`, plus a
-  `GATEWAY_BYPASS=1` escape hatch. In week 10 the gateway migration is just
-  flipping those two env values onto the gateway with a virtual key (full
-  rationale in `_handover/HANDOVER.md` section 12). Keeping this seam clean now
-  is the whole reason extract-api is built before the gateway.
-- Emit `cost_usd` per request from day one; the gateway later surfaces "cost
-  per accepted extraction" as a dashboard view.
+M0 kickoff is complete: project config + pinned deps (ADR 0001), strict schemas +
+registry, the FastAPI app with `/healthz` (the extract pipeline and idempotency
+store are stubs), the provider seam (real calls stubbed, FixtureClient for smoke),
+the harness stubs, CI + governance + the `.claude` harness, and 10 DRAFT invoice
+fixtures. Next milestone is M1 (invoice path end-to-end with validation-retry).
+See `tasks/BACKLOG.md`.
 
-## Hard rules
+## NEVER DO
 
-- No secrets in any file. Env references only; ship `.env.example`.
-- No em dashes anywhere in the repo.
-- Conventional commits. Kickoff work goes on branch `chore/kickoff`.
-- No push without explicit approval. No GitHub remote is set yet.
-- Never commit or push anything under `_handover/`.
-- End every working session with a report: done / decisions needed / next
-  unblocked tasks.
+- Silently coerce, or guess a value for an absent field (return `null` or fail
+  loudly).
+- Import a provider SDK outside `llm/client.py`.
+- Use an LLM judge in the accuracy harness.
+- Add a doc type beyond `invoice` + `uk_job_posting` in v1.
+- Commit secrets (env refs only; document in `.env.example`).
+- Put an em dash anywhere in the repo.
+- Push without explicit approval, or self-merge a PR.
+
+## Repo facts
+
+- Remote: `github.com/Chris0Jeky/extract-api` exists and is authed (an earlier
+  bootstrap note said no remote was set; corrected here).
+- Kickoff work is on branch `chore/kickoff`. Conventional commits.

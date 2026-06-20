@@ -1,0 +1,24 @@
+{
+  "fixture_id": "invoice_0005",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "content": "INVOICE\nGreenfield Print Co\nVAT Reg: GB123456789\nInvoice number: GP-5567\nIssue date: 2026-01-28\nBusiness cards x500: GBP 45.00\nFlyers x1000: GBP 120.00\nSubtotal: GBP 165.00\nVAT (20%): GBP 33.00\nTotal: GBP 198.00",
+  "expected": {
+    "invoice_number": "GP-5567",
+    "issue_date": "2026-01-28",
+    "due_date": null,
+    "currency": "GBP",
+    "subtotal_minor": 16500,
+    "tax_minor": 3300,
+    "total_minor": 19800,
+    "vendor_name": "Greenfield Print Co",
+    "vendor_tax_id": "GB123456789",
+    "buyer_name": null,
+    "line_items": [
+      {"description": "Business cards", "quantity": 500, "unit_price_minor": 9, "amount_minor": 4500},
+      {"description": "Flyers", "quantity": 1000, "unit_price_minor": 12, "amount_minor": 12000}
+    ]
+  }
+}

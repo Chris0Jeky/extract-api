@@ -1,0 +1,24 @@
+{
+  "fixture_id": "invoice_0010",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "content": "Invoice\nMontgomery Lab Supplies\nInvoice #: ML-6634\nDate: 2026-05-19\nDue: 2026-06-18\nReagent A: 2.5 units x USD 80.00 = USD 200.00\nReagent B: 3 units x USD 50.00 = USD 150.00\nSubtotal: USD 350.00\nTax (8%): USD 28.00\nTotal: USD 378.00",
+  "expected": {
+    "invoice_number": "ML-6634",
+    "issue_date": "2026-05-19",
+    "due_date": "2026-06-18",
+    "currency": "USD",
+    "subtotal_minor": 35000,
+    "tax_minor": 2800,
+    "total_minor": 37800,
+    "vendor_name": "Montgomery Lab Supplies",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": [
+      {"description": "Reagent A", "quantity": 2.5, "unit_price_minor": 8000, "amount_minor": 20000},
+      {"description": "Reagent B", "quantity": 3, "unit_price_minor": 5000, "amount_minor": 15000}
+    ]
+  }
+}

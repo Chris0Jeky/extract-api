@@ -1,0 +1,42 @@
+# Auto-merge only patch/minor dev + transitive Dependabot bumps. Majors and
+# direct-production bumps are left for manual review. This relies on branch
+# protection requiring the ci checks (see docs/ops/HUMAN_OPERATIONS.md): GitHub
+# only completes the merge once required checks are green, so this never merges a
+# red PR.
+name: dependabot-auto-merge
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+
+      - name: Approve and enable auto-merge (patch/minor dev + transitive)
+        if: |
+          contains(fromJSON('["version-update:semver-patch", "version-update:semver-minor"]'), steps.meta.outputs.update-type)
+          && contains(fromJSON('["direct:development", "indirect"]'), steps.meta.outputs.dependency-type)
+        run: |
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Leave majors / direct-production for manual review
+        if: |
+          steps.meta.outputs.update-type == 'version-update:semver-major'
+          || steps.meta.outputs.dependency-type == 'direct:production'
+        run: |
+          gh pr comment "$PR_URL" --body "Major or direct-production bump; leaving for manual review per the dependency policy."
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
