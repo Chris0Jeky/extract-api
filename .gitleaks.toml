@@ -1,0 +1,19 @@
+# gitleaks configuration for extract-api.
+#
+# Extends the default ruleset (so every built-in secret rule still runs) and adds
+# a single narrow allowlist: the hook-redaction test. That test's whole purpose is
+# to feed key-shaped strings through the redaction guard and assert they are
+# scrubbed, so realistic-looking fixtures are expected there by design. The
+# fixtures are additionally assembled by concatenation (no contiguous secret
+# literal is committed), so this allowlist only suppresses path-matched findings in
+# that one test file, not anywhere else in the repo.
+title = "extract-api gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Hook-redaction test fixtures are intentionally key-shaped and fake."
+paths = [
+    '''tests/test_agent_hooks\.py''',
+]
