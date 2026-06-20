@@ -32,12 +32,21 @@ UNSUPPORTED_KEYWORDS: frozenset[str] = frozenset(
     }
 )
 
+# Keys whose value is a mapping of NAME -> subschema. The inner keys are property /
+# definition names (which may legitimately equal a constraint keyword, e.g. a field
+# literally named "format"), so they must be kept; only the subschema values are
+# sanitized. Stripping by name at any depth would wrongly delete such a property.
+_SCHEMA_MAP_KEYS: frozenset[str] = frozenset(
+    {"properties", "$defs", "definitions", "patternProperties", "dependentSchemas"}
+)
+
 
 def sanitize_for_provider(schema: dict[str, object]) -> dict[str, object]:
     """Return a deep copy of `schema` with unsupported keywords removed at every depth.
 
-    Never mutates the input. Recurses through dicts and lists so nested object,
-    array-item, and $defs schemas are all sanitized.
+    Never mutates the input. Stripping is keyword-position-aware: an unsupported
+    keyword is dropped only where it is a schema keyword, not where it is a property
+    or definition name (see `_SCHEMA_MAP_KEYS`).
     """
     # The top-level schema is always an object; _strip preserves that shape.
     return cast("dict[str, object]", _strip(copy.deepcopy(schema)))
@@ -45,9 +54,16 @@ def sanitize_for_provider(schema: dict[str, object]) -> dict[str, object]:
 
 def _strip(node: object) -> object:
     if isinstance(node, dict):
-        return {
-            key: _strip(value) for key, value in node.items() if key not in UNSUPPORTED_KEYWORDS
-        }
+        result: dict[str, object] = {}
+        for key, value in node.items():
+            if key in UNSUPPORTED_KEYWORDS:
+                continue  # drop the unsupported constraint keyword at this schema node
+            if key in _SCHEMA_MAP_KEYS and isinstance(value, dict):
+                # value maps names to subschemas: keep the names, sanitize the values.
+                result[key] = {name: _strip(sub) for name, sub in value.items()}
+            else:
+                result[key] = _strip(value)
+        return result
     if isinstance(node, list):
         return [_strip(item) for item in node]
     return node
