@@ -15,10 +15,11 @@ fails loudly instead of silently coercing.
 1. **Two doc types only:** `invoice`, `uk_job_posting`. Versioned schemas
    `invoice.v1`, `job_posting.v1`; the version travels in request and response.
 2. **Pydantic v2 strict models.** No silent coercion anywhere.
-3. **Validation-retry loop, max 2 retries.** Attempt 1: provider structured
-   output then strict Pydantic validate. On `ValidationError`, attempt 2 appends
-   the exact failure list (from `err.errors()`) to the prompt. Second failure
-   returns 422 with the full failure trail. Log every retry with its error class.
+3. **Validation-retry loop, max 1 retry (2 attempts total).** Attempt 1: provider
+   structured output then strict Pydantic validate. On `ValidationError`, attempt 2
+   appends the exact failure list (from `err.errors()`) plus the previous response
+   to the prompt. Second failure returns 422 with the full failure trail. Log every
+   retry with its error class.
 4. **Error taxonomy enum, exactly one per non-200:** `validation_failed`,
    `low_confidence`, `unsupported_doc_type`, `provider_error`,
    `provider_timeout`, `budget_exceeded`, `idempotency_conflict`.
