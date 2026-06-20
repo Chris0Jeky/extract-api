@@ -85,10 +85,18 @@ def run_extraction(
     schema = model_cls.model_json_schema()
     prompt = content
     trail: list[ErrorSummary] = []
+    # Every attempt is a billed provider call, so cost/tokens/latency accumulate across
+    # the loop; the returned result reflects the TOTAL spend, not just the last call.
+    tokens_in = tokens_out = 0
+    cost_usd = latency_ms = 0.0
     for attempt in range(1, MAX_ATTEMPTS + 1):
         result = client.complete(
             system=system, prompt=prompt, json_schema=schema, max_tokens=max_tokens
         )
+        tokens_in += result.tokens_in
+        tokens_out += result.tokens_out
+        cost_usd += result.cost_usd
+        latency_ms += result.latency_ms
         try:
             model = model_cls.model_validate_json(result.text)
         except ValidationError as exc:
@@ -105,5 +113,14 @@ def run_extraction(
             )
             prompt = _retry_prompt(content, result.text, summary)
             continue
-        return model, result, attempt
+        aggregated = CompletionResult(
+            text=result.text,
+            model=result.model,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            cost_usd=cost_usd,
+            latency_ms=latency_ms,
+            stop_reason=result.stop_reason,
+        )
+        return model, aggregated, attempt
     raise ExtractionFailed(attempts=len(trail), trail=trail)

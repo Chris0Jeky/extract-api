@@ -73,9 +73,10 @@ def test_first_pass_success():
 def test_fail_then_pass_includes_previous_response_and_errors(caplog):
     client = _ScriptedClient([INVALID_JSON, VALID_JSON])
     with caplog.at_level(logging.WARNING, logger="extract.pipeline"):
-        model, _result, attempts = run_extraction(client, InvoiceV1, system="sys", content="doc")
+        model, result, attempts = run_extraction(client, InvoiceV1, system="sys", content="doc")
     assert isinstance(model, InvoiceV1)
     assert attempts == 2
+    assert result.tokens_in == 2  # usage summed across both billed attempts (1 + 1)
     retry_prompt = client.prompts[1]
     assert "Your previous response was:" in retry_prompt
     assert INVALID_JSON in retry_prompt  # the model sees its own prior output
