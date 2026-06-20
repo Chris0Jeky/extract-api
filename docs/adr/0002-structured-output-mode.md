@@ -34,6 +34,14 @@ strict tool use (`tool_choice` forced + `strict:true`).
 truncation to the taxonomy or a retry. Construct each client purely from
 `LLM_BASE_URL` + `LLM_API_KEY` so the gateway migration is an env flip.
 
+**Seam note (T02):** the `LLMClient` seam is text-based: `complete()` takes a
+`json_schema` dict and returns raw JSON text, and the validation-retry loop
+re-validates. So `OpenAIClient` calls `responses.create` with `text.format` =
+`json_schema` (`strict:true`) and returns `output_text`, rather than `parse` with a
+bound Pydantic model. Same wire guarantee (constrained decoding); keeping the seam
+text-based keeps it provider-agnostic and is the natural input for the retry loop.
+The model-derived schema is sanitized to the provider subset first (`llm.schema_utils`).
+
 ## Design consequences (already in the code)
 
 1. **Optionals are required-but-nullable null-unions** (`X | None`, no default):
