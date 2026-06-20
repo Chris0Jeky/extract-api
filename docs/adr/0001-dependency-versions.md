@@ -13,7 +13,9 @@ resolved install.
 
 ## Decision
 
-Pin the following (pyproject ranges; the lockfile carries exact resolved versions):
+Pin the following. The pyproject version ranges plus this verified resolved-version
+table are the reproducibility record today; committing a `uv.lock` is planned
+hardening (issue #6):
 
 | Package | Pin | Verified |
 | --- | --- | --- |
@@ -27,15 +29,18 @@ Pin the following (pyproject ranges; the lockfile carries exact resolved version
 | `mypy` | `==2.1.0` | 2.1.0 (2026-05-11) |
 
 `fastapi[standard]` pulls Starlette and Uvicorn; `pydantic-core` rides with
-pydantic. The lockfile is the reproducibility guarantee; pyproject ranges are the
-human-readable intent.
+pydantic. No `uv.lock` is committed yet, so the pyproject ranges plus the
+resolved-version table above are the reproducibility record, and CI installs from
+pyproject (`pip install -e ".[dev]"`). Committing a lockfile and switching CI to a
+frozen install is tracked as follow-up hardening (issue #6).
 
 **Runtime:** `requires-python = ">=3.12,<3.14"`; the dev venv is built on Python
 3.13. The `<3.14` ceiling avoids C-extension wheel lag (PyMuPDF, pydantic-core)
 until 3.14 wheels are confirmed.
 
-**Package manager:** uv (`uv venv`, `uv pip`, `uv.lock`). Plain `venv` + pip is
-the documented fallback and is what the current dev box uses.
+**Package manager:** uv (`uv venv`, `uv pip`; a `uv.lock` is planned, issue #6).
+Plain `venv` + pip is the documented fallback and is what CI and the current dev
+box use.
 
 ## Consequences
 
