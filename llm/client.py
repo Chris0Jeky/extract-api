@@ -1,9 +1,13 @@
 """The one provider seam. NO other module may import a provider SDK.
 
-Routing is env-only (LLM_BASE_URL, LLM_API_KEY, GATEWAY_BYPASS, LLM_PROVIDER_MODE)
-so the week-10 gateway migration is an env change, not a code change. Provider
-SDKs are imported lazily inside complete() so importing this module never needs
-credentials. cost_usd is carried on every result from day one (ADR 0002).
+Routing is env-only. Today the seam reads LLM_PROVIDER_MODE (the fixture
+short-circuit) and LLM_DEFAULT_PROVIDER (default resolution). LLM_BASE_URL and
+LLM_API_KEY are captured into client config here but only take effect in the
+real-call paths (T02/T09), and GATEWAY_BYPASS is reserved for that same milestone;
+keeping them env-driven means the week-10 gateway migration stays an env change,
+not a code change. Provider SDKs are imported lazily inside complete() so importing
+this module never needs credentials. cost_usd is carried on every result from day
+one (ADR 0002).
 
 Real call paths land in T02 (OpenAI responses.parse) and T09 (Anthropic
 messages.parse); the FixtureClient (T04b) gives an offline deterministic path for
