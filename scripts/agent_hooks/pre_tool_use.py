@@ -20,8 +20,10 @@ _RM_TARGET = re.compile(r"""(?:^|\s)['"]?(?:/|~|/\*|\$HOME)/?['"]?(?:\s|$)""")
 
 _DENY_PATTERNS = [
     (
-        re.compile(r"\bgit\s+push\b.*(?:--force\b(?!-with-lease)|\s-f\b)", re.IGNORECASE),
-        "Bare force-push is blocked; use --force-with-lease.",
+        # `\s\+\S` catches a leading-+ refspec (git push origin +main / +HEAD:main),
+        # which forces just like --force; a + mid-token (branch feature/c++) is safe.
+        re.compile(r"\bgit\s+push\b.*(?:--force\b(?!-with-lease)|\s-f\b|\s\+\S)", re.IGNORECASE),
+        "Bare force-push is blocked (including +refspec); use --force-with-lease.",
     ),
     (
         re.compile(r"\bgit\s+reset\s+--hard\b", re.IGNORECASE),
