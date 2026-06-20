@@ -66,12 +66,20 @@ On Windows pass the venv interpreter, e.g. `make PYTHON=.venv/Scripts/python tes
 
 ## Build state
 
-M0 kickoff is complete: project config + pinned deps (ADR 0001), strict schemas +
-registry, the FastAPI app with `/healthz` (the extract pipeline and idempotency
-store are stubs), the provider seam (real calls stubbed, FixtureClient for smoke),
-the harness stubs, CI + governance + the `.claude` harness, and 10 DRAFT invoice
-fixtures. Next milestone is M1 (invoice path end-to-end with validation-retry).
-See `tasks/BACKLOG.md`.
+M0 + M1's T01-T03 are merged to `main` (see `docs/STATUS.md` for the full handoff):
+
+- M0 kickoff: config + pinned deps (ADR 0001), CI + governance + `.claude` harness,
+  10 DRAFT invoice fixtures.
+- T01: invoice schema completeness (committed ISO-4217 membership, cross-field
+  total/subtotal validators, explicit-null required-but-nullable keys).
+- T02: the `llm/client.py` OpenAI path (Responses API + strict json_schema,
+  `llm/errors.py`, `llm/schema_utils.py` sanitization, fail-loud, env-priced cost).
+- T03: the validation-retry pipeline (`llm/pipeline.py:run_extraction`, 1 retry).
+
+So the invoice pipeline is built end-to-end EXCEPT the HTTP wiring. NEXT: T04
+(`POST /v1/extract` happy path) + T04b (FixtureClient + offline smoke), then T05
+(taxonomy wiring) and T06 (normalize) to finish M1. See `tasks/BACKLOG.md` and the
+open issues (#4-#13) for the tracked follow-ups.
 
 ## NEVER DO
 
