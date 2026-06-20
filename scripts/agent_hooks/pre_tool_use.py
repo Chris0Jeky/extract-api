@@ -13,7 +13,10 @@ import sys
 
 _RM = re.compile(r"\brm\b", re.IGNORECASE)
 _RM_FLAG = re.compile(r"(?:^|\s)-\w*[rf]|--recursive|--force", re.IGNORECASE)
-_RM_TARGET = re.compile(r"(?:^|\s)(?:/|~|~/|/\*|\$HOME)(?:\s|$)")
+# Match a catastrophic delete target, tolerating optional surrounding quotes and a
+# trailing slash so `rm -rf "/"`, `rm -rf '$HOME'`, and `rm -rf $HOME/` cannot slip
+# past the boundary anchors. `/?` lets `~` cover `~/` and `$HOME` cover `$HOME/`.
+_RM_TARGET = re.compile(r"""(?:^|\s)['"]?(?:/|~|/\*|\$HOME)/?['"]?(?:\s|$)""")
 
 _DENY_PATTERNS = [
     (
@@ -59,9 +62,15 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
         return 0
+    if not isinstance(payload, dict):
+        # A non-object payload carries no Bash command to inspect; fail open quietly.
+        return 0
     command = ""
     if payload.get("tool_name") == "Bash":
-        command = payload.get("tool_input", {}).get("command", "")
+        tool_input = payload.get("tool_input")
+        if isinstance(tool_input, dict):
+            raw = tool_input.get("command", "")
+            command = raw if isinstance(raw, str) else ""
     decision, reason = decide(command) if command else ("allow", "")
     if decision == "deny":
         print(
