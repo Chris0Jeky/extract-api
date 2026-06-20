@@ -69,9 +69,10 @@ def test_invoice_rejects_bad_currency():
 
 
 def test_invoice_rejects_non_ascii_currency_lookalikes():
-    # Unicode look-alikes must fail the ASCII format gate: Cyrillic ABV,
-    # Greek GBD, fullwidth-Latin GBP. isalpha()/isupper() alone would pass them.
-    for bogus in ("АБВ", "ΓΒΔ", "ＧＢＰ"):
+    # Unicode look-alikes must fail the ASCII format gate. Written as escapes so the
+    # literals are unambiguous: Cyrillic ABV, Greek look-alikes, fullwidth-Latin GBP.
+    # isalpha()/isupper() alone would pass all three.
+    for bogus in ("\u0410\u0411\u0412", "\u0393\u0392\u0394", "\uff27\uff22\uff30"):
         payload = dict(VALID_INVOICE)
         payload["currency"] = bogus
         with pytest.raises(ValidationError):
