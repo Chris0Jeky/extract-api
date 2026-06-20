@@ -28,6 +28,19 @@ def test_extract_error_body_carries_one_code():
     assert body["attempts"] == 2
 
 
+def test_extra_cannot_override_taxonomy_code():
+    # A caller-supplied extra dict must never clobber the authoritative code/detail.
+    err = ExtractError(
+        ErrorCode.validation_failed,
+        detail="real detail",
+        extra={"error": "totally_wrong", "detail": "clobbered", "attempts": 2},
+    )
+    body = err.to_body()
+    assert body["error"] == "validation_failed"
+    assert body["detail"] == "real detail"
+    assert body["attempts"] == 2
+
+
 def test_error_response_status():
     resp = error_response(ErrorCode.provider_timeout, {"error": "provider_timeout"})
     assert resp.status_code == 504

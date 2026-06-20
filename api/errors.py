@@ -52,10 +52,15 @@ class ExtractError(Exception):
         self.extra = extra or {}
 
     def to_body(self) -> dict[str, object]:
-        body: dict[str, object] = {"error": self.code.value}
+        # `extra` is supplementary context only. The taxonomy code (and detail) are
+        # authoritative and must always win, so strip any reserved keys from extra
+        # before stamping them: every non-200 carries exactly one correct ErrorCode.
+        body: dict[str, object] = {
+            k: v for k, v in self.extra.items() if k not in {"error", "detail"}
+        }
+        body["error"] = self.code.value
         if self.detail:
             body["detail"] = self.detail
-        body.update(self.extra)
         return body
 
 
