@@ -22,16 +22,19 @@ resolved, green CI, aged, with a newer PR above it. Small conventional commits.
 
 ## M1 - invoice path end-to-end (10 fixtures passing)
 
-- **T01 Invoice schema completeness + tests.** DoD: full ISO-4217 membership
-  validator; edge-case unit tests (wrong type, missing required, bad currency,
-  line-item shapes). Base model already exists from M0.
-- **T02 `llm/client.py` OpenAI structured-output path.** DoD: `responses.parse`
-  returns a parsed object; refusal and `finish_reason=='length'` mapped to the
-  taxonomy; `cost_usd` + `latency_ms` computed; unit test with a mocked SDK.
-- **T03 Validation-retry loop.** DoD: attempt 1 validate; on `ValidationError`
-  attempt 2 appends `err.errors()` to the prompt; second failure raises the
-  internal error mapped to 422; every retry logged with its class; tests for
-  first-fail-then-pass and both-fail.
+- [x] **T01 Invoice schema completeness + tests.** (PR #7) Committed ISO-4217
+  membership set + ASCII gate, cross-field total/subtotal validators, explicit-null
+  required-but-nullable keys, empty-`[]` rejection; edge-case tests.
+- [x] **T02 `llm/client.py` OpenAI structured-output path.** (PR #11) `responses.create`
+  with strict json_schema; refusal/truncation/failed/empty mapped to `llm.errors.*`;
+  `cost_usd` (env-priced) + `latency_ms`; schema sanitization (`llm/schema_utils`);
+  mocked-SDK tests. NOTE: the seam stays text-based (returns JSON text), so it uses
+  `responses.create`, not `parse` (ADR 0002 note).
+- [x] **T03 Validation-retry loop.** (PR #12) `llm/pipeline.py:run_extraction`: attempt
+  1 validate; on `ValidationError` attempt 2 appends the failure list + the previous
+  response; second failure -> `ExtractionFailed` (JSON-safe trail) for the 422; usage
+  accumulated across attempts; every retry logged with its kinds; first-fail-then-pass
+  + both-fail + provider-error-passthrough tested. (1 retry / 2 attempts.)
 - **T04 `POST /v1/extract` happy path (invoice, OpenAI).** DoD: endpoint returns
   200 with `data` + full `meta`; integration test against a stubbed client.
 - **T04b Fixture/mock provider + `make smoke` extraction.** DoD: FixtureClient
