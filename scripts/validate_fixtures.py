@@ -38,6 +38,9 @@ def validate_file(path: Path) -> list[str]:
     except json.JSONDecodeError as exc:
         return [f"{path.name}: invalid JSON: {exc}"]
 
+    if not isinstance(data, dict):
+        return [f"{path.name}: fixture must be a JSON object, got {type(data).__name__}"]
+
     missing = REQUIRED_KEYS - data.keys()
     if missing:
         return [f"{path.name}: missing keys {sorted(missing)}"]
