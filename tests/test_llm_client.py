@@ -28,8 +28,10 @@ def test_get_client_unknown_provider_raises(monkeypatch):
         get_client("telepathy")
 
 
-def test_complete_paths_are_stubbed():
+def test_remaining_provider_paths_are_stubbed():
+    # OpenAI is implemented in T02 (see test_openai_client). Anthropic (T09) and the
+    # FixtureClient (T04b) are still stubs that fail loud until their tasks land.
     schema: dict[str, object] = {}
-    for client in (OpenAIClient(), AnthropicClient(), FixtureClient()):
+    for client in (AnthropicClient(), FixtureClient()):
         with pytest.raises(NotImplementedError):
             client.complete(system="s", prompt="p", json_schema=schema)
