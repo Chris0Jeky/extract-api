@@ -34,9 +34,7 @@ _DENY_PATTERNS = [
     (
         # `(?:\S*/)?` lets an absolute path to the shell (| /bin/sh, | /usr/bin/bash)
         # be caught too, not only a bare `sh`/`bash`.
-        re.compile(
-            r"\b(?:curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:\S*/)?(?:ba)?sh\b", re.IGNORECASE
-        ),
+        re.compile(r"\b(?:curl|wget)\b[^|]*\|\s*(?:sudo\s+)?(?:\S*/)?(?:ba)?sh\b", re.IGNORECASE),
         "Piping a remote download into a shell is blocked.",
     ),
 ]
