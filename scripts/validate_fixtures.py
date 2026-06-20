@@ -50,6 +50,13 @@ def validate_file(path: Path) -> list[str]:
         errs.append(f"{path.name}: source must be one of {sorted(VALID_SOURCES)}")
     if data["label_status"] not in VALID_STATUS:
         errs.append(f"{path.name}: label_status must be one of {sorted(VALID_STATUS)}")
+    # content is the raw document text the accuracy harness scores against; a present
+    # but null/numeric/blank value must fail loudly rather than count as a valid fixture.
+    if not isinstance(data["content"], str) or not data["content"].strip():
+        errs.append(f"{path.name}: content must be a non-empty string")
+    if not isinstance(data["expected"], dict):
+        errs.append(f"{path.name}: expected must be a JSON object")
+        return errs
 
     try:
         model = resolve(data["doc_type"], data["schema_version"])
