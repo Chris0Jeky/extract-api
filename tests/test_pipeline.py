@@ -37,21 +37,21 @@ INVALID_JSON = _json(total_minor=99999)
 
 
 class _ScriptedClient:
-    """Returns canned completion texts in order, or raises a preset error."""
+    """Plays a script of steps in order: a str step is returned as text, an Exception is raised."""
 
     provider = "fake"
 
-    def __init__(self, texts=None, raises=None):
-        self._texts = list(texts or [])
-        self._raises = raises
+    def __init__(self, steps):
+        self._steps = list(steps)
         self.prompts: list[str] = []
 
     def complete(self, *, system, prompt, json_schema, max_tokens=4096):
         self.prompts.append(prompt)
-        if self._raises is not None:
-            raise self._raises
+        step = self._steps.pop(0)
+        if isinstance(step, Exception):
+            raise step
         return CompletionResult(
-            text=self._texts.pop(0),
+            text=step,
             model="fake",
             tokens_in=1,
             tokens_out=1,
@@ -62,7 +62,7 @@ class _ScriptedClient:
 
 
 def test_first_pass_success():
-    client = _ScriptedClient(texts=[VALID_JSON])
+    client = _ScriptedClient([VALID_JSON])
     model, result, attempts = run_extraction(client, InvoiceV1, system="sys", content="doc")
     assert isinstance(model, InvoiceV1)
     assert attempts == 1
@@ -70,27 +70,40 @@ def test_first_pass_success():
     assert client.prompts == ["doc"]  # no feedback appended
 
 
-def test_fail_then_pass_appends_error_feedback(caplog):
-    client = _ScriptedClient(texts=[INVALID_JSON, VALID_JSON])
+def test_fail_then_pass_includes_previous_response_and_errors(caplog):
+    client = _ScriptedClient([INVALID_JSON, VALID_JSON])
     with caplog.at_level(logging.WARNING, logger="extract.pipeline"):
         model, _result, attempts = run_extraction(client, InvoiceV1, system="sys", content="doc")
     assert isinstance(model, InvoiceV1)
     assert attempts == 2
-    # second attempt's prompt carries the failure list as feedback
-    assert client.prompts[0] == "doc"
-    assert "failed strict validation" in client.prompts[1]
+    retry_prompt = client.prompts[1]
+    assert "Your previous response was:" in retry_prompt
+    assert INVALID_JSON in retry_prompt  # the model sees its own prior output
+    assert "failed strict validation" in retry_prompt
+    assert "kinds=" in caplog.text  # error categories logged
     assert "ValidationError" in caplog.text  # retry logged with its error class
 
 
-def test_both_fail_raises_with_full_trail():
-    client = _ScriptedClient(texts=[INVALID_JSON, INVALID_JSON])
+def test_both_fail_raises_with_json_safe_trail():
+    client = _ScriptedClient([INVALID_JSON, INVALID_JSON])
     with pytest.raises(ExtractionFailed) as excinfo:
         run_extraction(client, InvoiceV1, system="sys", content="doc")
     assert excinfo.value.attempts == 2
-    assert len(excinfo.value.trail) == 2  # one error list per attempt
+    assert len(excinfo.value.trail) == 2  # one error summary per attempt
+    json.dumps(excinfo.value.trail)  # JSON-safe by construction; must not raise
+    assert all(
+        {"loc", "type", "msg"} <= set(err) for attempt in excinfo.value.trail for err in attempt
+    )
 
 
-def test_provider_error_propagates_unchanged():
-    client = _ScriptedClient(raises=ProviderTimeout(provider="fake", detail="slow"))
+def test_provider_error_on_first_attempt_propagates():
+    client = _ScriptedClient([ProviderTimeout(provider="fake", detail="slow")])
+    with pytest.raises(ProviderTimeout):
+        run_extraction(client, InvoiceV1, system="sys", content="doc")
+
+
+def test_provider_error_on_second_attempt_propagates():
+    # A provider failure on the retry (after a first validation miss) must propagate too.
+    client = _ScriptedClient([INVALID_JSON, ProviderTimeout(provider="fake", detail="slow")])
     with pytest.raises(ProviderTimeout):
         run_extraction(client, InvoiceV1, system="sys", content="doc")
