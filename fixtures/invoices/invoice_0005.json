@@ -3,7 +3,7 @@
   "doc_type": "invoice",
   "schema_version": "v1",
   "source": "synthetic",
-  "label_status": "DRAFT",
+  "label_status": "REVIEWED",
   "content": "INVOICE\nGreenfield Print Co\nVAT Reg: GB123456789\nInvoice number: GP-5567\nIssue date: 2026-01-28\nBusiness cards x500: GBP 45.00\nFlyers x1000: GBP 120.00\nSubtotal: GBP 165.00\nVAT (20%): GBP 33.00\nTotal: GBP 198.00",
   "expected": {
     "invoice_number": "GP-5567",

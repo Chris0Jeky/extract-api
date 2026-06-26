@@ -3,7 +3,7 @@
   "doc_type": "invoice",
   "schema_version": "v1",
   "source": "synthetic",
-  "label_status": "DRAFT",
+  "label_status": "REVIEWED",
   "content": "Harbor Freight Solutions\nInvoice: HF-8890\nDate: 2026-05-05\nDue: 2026-06-04\nLogistics audit\nAmount: USD 3,400.00\nTax: USD 0.00\nTotal: USD 3,400.00",
   "expected": {
     "invoice_number": "HF-8890",
