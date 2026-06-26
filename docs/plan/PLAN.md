@@ -20,9 +20,12 @@ fails loudly instead of silently coercing.
    appends the exact failure list (from `err.errors()`) plus the previous response
    to the prompt. Second failure returns 422 with the full failure trail. Log every
    retry with its error class.
-4. **Error taxonomy enum, exactly one per non-200:** `validation_failed`,
-   `low_confidence`, `unsupported_doc_type`, `provider_error`,
-   `provider_timeout`, `budget_exceeded`, `idempotency_conflict`.
+4. **Error taxonomy: exactly one ErrorCode per non-200.** The enum in `api/errors.py` is
+   the single source of truth; new members require owner approval and the locked invariant
+   is one-code-per-non-200, not a frozen count. Current members: `validation_failed`,
+   `low_confidence`, `unsupported_doc_type`, `provider_error`, `provider_timeout`,
+   `budget_exceeded`, `idempotency_conflict`, `internal_error` (T05),
+   `not_found` (issue #28), `method_not_allowed` (issue #28).
 5. **Idempotency:** `Idempotency-Key` + `sha256(payload)` stored with the
    response. Same key + same hash replays (no model call, `replayed:true`); same
    key + different hash returns 409; TTL 24h. SQLite store (ADR 0004).

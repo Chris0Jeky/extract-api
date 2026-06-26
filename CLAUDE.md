@@ -46,9 +46,12 @@ On Windows pass the venv interpreter, e.g. `make PYTHON=.venv/Scripts/python tes
 - Pydantic v2 strict models. Validation-retry loop, max 1 retry (2 attempts
   total); attempt 2 appends the exact failure list; second failure returns 422 with
   the full trail. Never silently coerce. Log every retry with its error class.
-- Error taxonomy enum, exactly one per non-200: `validation_failed`,
-  `low_confidence`, `unsupported_doc_type`, `provider_error`, `provider_timeout`,
-  `budget_exceeded`, `idempotency_conflict`.
+- Error taxonomy: exactly one ErrorCode per non-200. The enum in `api/errors.py` is the
+  single source of truth; new members require owner approval (do not add casually). What
+  is locked is the one-code-per-non-200 invariant, not a frozen count. Current members:
+  `validation_failed`, `low_confidence`, `unsupported_doc_type`, `provider_error`,
+  `provider_timeout`, `budget_exceeded`, `idempotency_conflict`, `internal_error` (T05),
+  `not_found` (issue #28), `method_not_allowed` (issue #28).
 - Idempotency: `Idempotency-Key` + `sha256(payload)`; same key+hash replays
   (`replayed:true`, no model call); same key+different hash returns 409; TTL 24h.
   SQLite store (ADR 0004).
