@@ -2,6 +2,7 @@
 
 from llm.schema_utils import UNSUPPORTED_KEYWORDS, sanitize_for_provider
 from schemas.invoice_v1 import InvoiceV1
+from schemas.job_posting_v1 import JobPostingV1
 
 
 def test_sanitize_strips_nested_unsupported_keywords():
@@ -87,3 +88,18 @@ def test_real_invoice_schema_survives_sanitize_and_is_provider_strict():
     # the date `format` keyword was stripped everywhere; no unsupported keyword remains
     assert "format" not in san["properties"]["issue_date"]
     assert not _has_unsupported_keyword(san)
+
+
+def test_real_job_posting_schema_survives_sanitize_and_is_provider_strict():
+    # Parity with invoice (issue #8 / ADR 0002): job_posting.v1 must be OpenAI-strict too.
+    san = sanitize_for_provider(JobPostingV1.model_json_schema())
+    assert san["additionalProperties"] is False
+    assert set(san["required"]) == set(san["properties"])
+    # the date `format` here is nested inside posted_date's null-union (anyOf), a deeper
+    # case than invoice's top-level date; it and every other unsupported keyword are gone.
+    assert not _has_unsupported_keyword(san)
+    # enum $defs survive sanitization (providers support enum); each is a string enum.
+    enum_defs = [sub for sub in san.get("$defs", {}).values() if "enum" in sub]
+    assert enum_defs  # the job schema has enum fields (remote_policy, etc.)
+    for sub in enum_defs:
+        assert sub.get("type") == "string"

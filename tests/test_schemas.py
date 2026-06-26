@@ -239,6 +239,16 @@ def test_job_salary_min_only_requires_currency():
         JobPostingV1.model_validate_json(json.dumps(payload))
 
 
+def test_job_salary_max_only_requires_currency():
+    # Symmetric to min-only: a lone salary_max with no currency must also fail, so the
+    # max side of the has-salary guard cannot silently regress.
+    payload = dict(VALID_JOB)
+    payload["salary_min"] = None
+    payload["salary_currency"] = None
+    with pytest.raises(ValidationError):
+        JobPostingV1.model_validate_json(json.dumps(payload))
+
+
 def test_job_omitting_nullable_key_fails():
     # company is required-but-nullable (issue #8): the key must be present (explicit
     # null), so omitting it entirely must fail (ADR 0002 explicit-null contract).
