@@ -5,6 +5,7 @@ provider path still pending (Anthropic, T09)."""
 from fastapi.testclient import TestClient
 
 from api.main import create_app
+from llm.client import AnthropicClient, get_client
 
 
 def test_healthz_ok():
@@ -14,9 +15,14 @@ def test_healthz_ok():
     assert resp.json() == {"status": "ok"}
 
 
-def test_anthropic_path_not_implemented_yet_fails_loudly():
+def test_anthropic_path_not_implemented_yet_fails_loudly(monkeypatch):
     # The endpoint is wired, but the Anthropic real-call client still raises
     # NotImplementedError until T09; it surfaces as a 500, not a silent success.
+    # Pin routing: get_client short-circuits to FixtureClient when LLM_PROVIDER_MODE
+    # is set, which would make this 500 for the wrong reason. Delete it and assert the
+    # request actually routes to AnthropicClient so the cause is unambiguous.
+    monkeypatch.delenv("LLM_PROVIDER_MODE", raising=False)
+    assert isinstance(get_client("anthropic"), AnthropicClient)
     client = TestClient(create_app(), raise_server_exceptions=False)
     resp = client.post(
         "/v1/extract",

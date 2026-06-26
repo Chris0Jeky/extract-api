@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from api.main import create_app
 from llm.client import CompletionResult
-from llm.errors import ProviderError, ProviderRefusal, ProviderTimeout
+from llm.errors import ProviderError, ProviderRefusal, ProviderTimeout, ProviderTruncation
 
 _VALID = {
     "invoice_number": "INV-1",
@@ -131,7 +131,12 @@ def test_validation_recovers_on_retry_returns_200(monkeypatch):
     fake = _FakeClient([INVALID_JSON, VALID_JSON])
     resp = _post(_client_with(monkeypatch, fake))
     assert resp.status_code == 200
-    assert resp.json()["meta"]["attempts"] == 2
+    meta = resp.json()["meta"]
+    assert meta["attempts"] == 2
+    # cost/latency are accumulated across BOTH billed attempts (2x the per-call
+    # 0.0012 / 12.5), so meta reflects the total request spend, not the last call.
+    assert meta["cost_usd"] == pytest.approx(0.0024)
+    assert meta["latency_ms"] == pytest.approx(25.0)
     assert fake.calls == 2
 
 
@@ -146,6 +151,7 @@ def test_provider_timeout_maps_to_504(monkeypatch):
     "exc",
     [
         ProviderRefusal(provider="fake", reason="policy"),
+        ProviderTruncation(provider="fake", reason="max_output_tokens"),
         ProviderError(provider="fake", detail="boom"),
     ],
 )
