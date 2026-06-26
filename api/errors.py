@@ -86,8 +86,10 @@ class ExtractError(Exception):
         return body
 
 
-def error_response(code: ErrorCode, body: dict[str, object]) -> JSONResponse:
-    return JSONResponse(status_code=STATUS_BY_CODE[code], content=body)
+def error_response(
+    code: ErrorCode, body: dict[str, object], *, headers: dict[str, str] | None = None
+) -> JSONResponse:
+    return JSONResponse(status_code=STATUS_BY_CODE[code], content=body, headers=headers)
 
 
 def install_error_handlers(app: FastAPI) -> None:
@@ -136,10 +138,23 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def _handle_http_exception(_: Request, exc: StarletteHTTPException) -> JSONResponse:
         # Framework routing errors (404 unknown route, 405 wrong method) carry a taxonomy
-        # code too (issue #28), so every non-200 has exactly one code. An HTTPException at
-        # any other status (this app raises none directly) degrades to internal_error (500).
-        code = _CODE_BY_HTTP_STATUS.get(exc.status_code, ErrorCode.internal_error)
-        return error_response(code, {"error": code.value, "detail": str(exc.detail)})
+        # code too (issue #28), so every non-200 has exactly one code.
+        code = _CODE_BY_HTTP_STATUS.get(exc.status_code)
+        if code is None:
+            # An HTTPException at any other status (this app raises none directly) is an
+            # unexpected condition: log it and degrade to a sanitized internal_error, like
+            # the catch-all, rather than leaking exc.detail or inventing a code.
+            logger.exception("unmapped HTTPException status %s", exc.status_code)
+            return error_response(
+                ErrorCode.internal_error,
+                {"error": ErrorCode.internal_error.value, "detail": "internal error"},
+            )
+        # Forward the original headers so a 405's RFC-required Allow header survives.
+        return error_response(
+            code,
+            {"error": code.value, "detail": str(exc.detail)},
+            headers=getattr(exc, "headers", None),
+        )
 
     @app.exception_handler(Exception)
     async def _handle_unexpected(_: Request, exc: Exception) -> JSONResponse:

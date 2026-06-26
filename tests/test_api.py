@@ -24,11 +24,13 @@ def test_unknown_route_renders_not_found():
 
 
 def test_wrong_method_renders_method_not_allowed():
-    # GET on the POST-only extract route: a routing 405 carries the taxonomy code.
+    # GET on the POST-only extract route: a routing 405 carries the taxonomy code AND the
+    # RFC-required Allow header (which the taxonomy handler must forward, not drop).
     client = TestClient(create_app(), raise_server_exceptions=False)
     resp = client.get("/v1/extract")
     assert resp.status_code == 405
     assert resp.json()["error"] == "method_not_allowed"
+    assert "POST" in resp.headers.get("allow", "")
 
 
 def test_anthropic_path_not_implemented_yet_fails_loudly(monkeypatch):
