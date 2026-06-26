@@ -101,7 +101,15 @@ def install_error_handlers(app: FastAPI) -> None:
         # over any coexisting field error.
         code = ErrorCode.validation_failed
         for err in exc.errors():
-            if err.get("loc", ())[-1:] == ("doc_type",) and err.get("type") == "literal_error":
+            # Defensive: pydantic always emits loc as a tuple, but guard the subscript so a
+            # malformed/None loc cannot raise inside the handler.
+            loc = err.get("loc")
+            if (
+                loc
+                and isinstance(loc, (tuple, list))
+                and loc[-1] == "doc_type"
+                and err.get("type") == "literal_error"
+            ):
                 code = ErrorCode.unsupported_doc_type
                 break
         detail = (
