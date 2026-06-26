@@ -93,11 +93,15 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _handle_request_validation(_: Request, exc: RequestValidationError) -> JSONResponse:
         # Render request-shape errors through the taxonomy instead of FastAPI's default
-        # 422 body (closes #5). An out-of-Literal doc_type is unsupported_doc_type; any
-        # other malformed body (missing/extra/typed-wrong field) is validation_failed.
+        # 422 body (closes #5). Only a genuinely out-of-Literal doc_type VALUE is
+        # unsupported_doc_type; a missing/empty/otherwise-malformed body (including an
+        # omitted doc_type) is validation_failed. Gate on the literal-mismatch kind so a
+        # forgotten doc_type is not mislabeled as "unsupported", and anchor on the field
+        # position so only an error ON doc_type qualifies. doc_type classification wins
+        # over any coexisting field error.
         code = ErrorCode.validation_failed
         for err in exc.errors():
-            if "doc_type" in err.get("loc", ()):
+            if err.get("loc", ())[-1:] == ("doc_type",) and err.get("type") == "literal_error":
                 code = ErrorCode.unsupported_doc_type
                 break
         detail = (

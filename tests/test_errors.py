@@ -1,5 +1,7 @@
 """Error taxonomy: one status per code, and handlers render the taxonomy body."""
 
+import json
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -23,10 +25,12 @@ def test_every_code_has_exactly_one_status():
 
 
 @pytest.mark.parametrize("code", list(ErrorCode))
-def test_every_code_renders_its_status(code):
-    # Each taxonomy member renders to its one HTTP status with its code in the body.
-    resp = error_response(code, {"error": code.value})
+def test_every_code_renders_its_status_and_body(code):
+    # Each taxonomy member renders to its one HTTP status WITH its code in the body
+    # (covers low_confidence and idempotency_conflict, which no live path raises yet).
+    resp = error_response(code, {"error": code.value, "detail": "x"})
     assert resp.status_code == STATUS_BY_CODE[code]
+    assert json.loads(resp.body)["error"] == code.value
 
 
 def test_extract_error_body_carries_one_code():
