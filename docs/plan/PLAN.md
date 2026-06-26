@@ -24,8 +24,8 @@ fails loudly instead of silently coercing.
    the single source of truth; new members require owner approval and the locked invariant
    is one-code-per-non-200, not a frozen count. Current members: `validation_failed`,
    `low_confidence`, `unsupported_doc_type`, `provider_error`, `provider_timeout`,
-   `budget_exceeded`, `idempotency_conflict`, `internal_error` (T05), `not_found`,
-   `method_not_allowed` (issue #28).
+   `budget_exceeded`, `idempotency_conflict`, `internal_error` (T05),
+   `not_found` (issue #28), `method_not_allowed` (issue #28).
 5. **Idempotency:** `Idempotency-Key` + `sha256(payload)` stored with the
    response. Same key + same hash replays (no model call, `replayed:true`); same
    key + different hash returns 409; TTL 24h. SQLite store (ADR 0004).

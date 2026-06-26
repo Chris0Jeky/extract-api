@@ -51,7 +51,7 @@ On Windows pass the venv interpreter, e.g. `make PYTHON=.venv/Scripts/python tes
   is locked is the one-code-per-non-200 invariant, not a frozen count. Current members:
   `validation_failed`, `low_confidence`, `unsupported_doc_type`, `provider_error`,
   `provider_timeout`, `budget_exceeded`, `idempotency_conflict`, `internal_error` (T05),
-  `not_found`, `method_not_allowed` (issue #28).
+  `not_found` (issue #28), `method_not_allowed` (issue #28).
 - Idempotency: `Idempotency-Key` + `sha256(payload)`; same key+hash replays
   (`replayed:true`, no model call); same key+different hash returns 409; TTL 24h.
   SQLite store (ADR 0004).
