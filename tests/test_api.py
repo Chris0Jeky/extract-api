@@ -1,4 +1,6 @@
-"""App boots: /healthz is live; /v1/extract is a stub until M1."""
+"""App boots: /healthz is live; /v1/extract is wired (happy + error paths in
+test_extract_endpoint.py). Here: liveness, the request boundary, and the one
+provider path still pending (Anthropic, T09)."""
 
 from fastapi.testclient import TestClient
 
@@ -12,13 +14,19 @@ def test_healthz_ok():
     assert resp.json() == {"status": "ok"}
 
 
-def test_extract_is_stub_until_m1():
+def test_anthropic_path_not_implemented_yet_fails_loudly():
+    # The endpoint is wired, but the Anthropic real-call client still raises
+    # NotImplementedError until T09; it surfaces as a 500, not a silent success.
     client = TestClient(create_app(), raise_server_exceptions=False)
     resp = client.post(
         "/v1/extract",
-        json={"doc_type": "invoice", "schema_version": "v1", "content": "x", "provider": "default"},
+        json={
+            "doc_type": "invoice",
+            "schema_version": "v1",
+            "content": "x",
+            "provider": "anthropic",
+        },
     )
-    # The pipeline is a NotImplementedError stub; it surfaces as a 500 for now.
     assert resp.status_code == 500
 
 
