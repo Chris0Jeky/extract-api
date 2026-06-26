@@ -12,6 +12,7 @@ from enum import StrEnum
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from schemas.registry import UnknownSchema
 
@@ -29,6 +30,10 @@ class ErrorCode(StrEnum):
     # Catch-all for any otherwise-unmapped exception, so every non-200 still carries
     # exactly one code (the only 500 in the taxonomy). Added in T05.
     internal_error = "internal_error"
+    # Framework routing errors render through the taxonomy too (issue #28), so no non-200
+    # escapes with a code-less body.
+    not_found = "not_found"
+    method_not_allowed = "method_not_allowed"
 
 
 # Exactly one HTTP status per taxonomy member.
@@ -41,6 +46,15 @@ STATUS_BY_CODE: dict[ErrorCode, int] = {
     ErrorCode.budget_exceeded: 402,
     ErrorCode.idempotency_conflict: 409,
     ErrorCode.internal_error: 500,
+    ErrorCode.not_found: 404,
+    ErrorCode.method_not_allowed: 405,
+}
+
+# Framework HTTPException statuses we render with a dedicated code; any other status this
+# app never raises directly degrades to internal_error.
+_CODE_BY_HTTP_STATUS: dict[int, ErrorCode] = {
+    404: ErrorCode.not_found,
+    405: ErrorCode.method_not_allowed,
 }
 
 
@@ -72,8 +86,10 @@ class ExtractError(Exception):
         return body
 
 
-def error_response(code: ErrorCode, body: dict[str, object]) -> JSONResponse:
-    return JSONResponse(status_code=STATUS_BY_CODE[code], content=body)
+def error_response(
+    code: ErrorCode, body: dict[str, object], *, headers: dict[str, str] | None = None
+) -> JSONResponse:
+    return JSONResponse(status_code=STATUS_BY_CODE[code], content=body, headers=headers)
 
 
 def install_error_handlers(app: FastAPI) -> None:
@@ -118,6 +134,31 @@ def install_error_handlers(app: FastAPI) -> None:
             else "request validation failed"
         )
         return error_response(code, {"error": code.value, "detail": detail})
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _handle_http_exception(_: Request, exc: StarletteHTTPException) -> JSONResponse:
+        # Framework routing errors (404 unknown route, 405 wrong method) carry a taxonomy
+        # code too (issue #28), so every non-200 has exactly one code.
+        code = _CODE_BY_HTTP_STATUS.get(exc.status_code)
+        if code is None:
+            # Unreachable today: this app only ever raises framework 404/405 (a wrong
+            # Content-Type is a 422 RequestValidationError, not a 415). If a future path
+            # raises another HTTPException, log it and degrade to a sanitized internal_error
+            # rather than leaking exc.detail or inventing a code. Tracked: when such a path
+            # is added, preserve its client status and add the code (issue #32).
+            logger.exception("unmapped HTTPException status %s", exc.status_code)
+            return error_response(
+                ErrorCode.internal_error,
+                {"error": ErrorCode.internal_error.value, "detail": "internal error"},
+            )
+        # Forward the original headers so a 405's RFC-required Allow header survives. Pass
+        # exc.detail through (not str()) so a structured detail keeps its JSON shape; the
+        # reachable 404/405 details are plain strings.
+        return error_response(
+            code,
+            {"error": code.value, "detail": exc.detail},
+            headers=getattr(exc, "headers", None),
+        )
 
     @app.exception_handler(Exception)
     async def _handle_unexpected(_: Request, exc: Exception) -> JSONResponse:

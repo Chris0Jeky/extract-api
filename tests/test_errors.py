@@ -5,6 +5,7 @@ import json
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.errors import (
     STATUS_BY_CODE,
@@ -77,6 +78,12 @@ def test_handlers_render_taxonomy():
         # bare 500. The catch-all also logs the real error server-side (not asserted here).
         raise RuntimeError("unexpected boom")
 
+    @app.get("/teapot")
+    async def teapot() -> dict[str, str]:
+        # An HTTPException at a status the taxonomy has no code for (not 404/405) degrades
+        # to internal_error WITHOUT leaking exc.detail.
+        raise StarletteHTTPException(status_code=403, detail="forbidden token=SECRET")
+
     client = TestClient(app, raise_server_exceptions=False)
 
     r1 = client.get("/boom")
@@ -91,3 +98,8 @@ def test_handlers_render_taxonomy():
     assert r3.status_code == 500
     assert r3.json()["error"] == "internal_error"
     assert r3.json()["detail"] == "internal error"  # generic; no internal leak
+
+    r4 = client.get("/teapot")
+    assert r4.status_code == 500
+    assert r4.json()["error"] == "internal_error"
+    assert "SECRET" not in r4.text  # the original HTTPException detail is not echoed
