@@ -209,3 +209,47 @@ def test_job_unknown_enum_value_fails():
     payload["remote_policy"] = "telepathic"
     with pytest.raises(ValidationError):
         JobPostingV1.model_validate_json(json.dumps(payload))
+
+
+def test_job_salary_without_currency_fails():
+    # Issue #4: a salary figure without a currency is ambiguous and must fail loud.
+    payload = dict(VALID_JOB)
+    payload["salary_currency"] = None  # but salary_min/max are present
+    with pytest.raises(ValidationError):
+        JobPostingV1.model_validate_json(json.dumps(payload))
+
+
+def test_job_no_salary_allows_null_currency():
+    # The "competitive"/undisclosed case: no salary figures means salary_currency may be
+    # null. salary_min/max/currency all null must validate.
+    payload = dict(VALID_JOB)
+    payload["salary_min"] = None
+    payload["salary_max"] = None
+    payload["salary_currency"] = None
+    JobPostingV1.model_validate_json(json.dumps(payload))  # must not raise
+
+
+def test_job_salary_min_only_requires_currency():
+    # Either bound present is enough to require a currency; a lone salary_min with no
+    # currency must fail.
+    payload = dict(VALID_JOB)
+    payload["salary_max"] = None
+    payload["salary_currency"] = None
+    with pytest.raises(ValidationError):
+        JobPostingV1.model_validate_json(json.dumps(payload))
+
+
+def test_job_omitting_nullable_key_fails():
+    # company is required-but-nullable (issue #8): the key must be present (explicit
+    # null), so omitting it entirely must fail (ADR 0002 explicit-null contract).
+    payload = dict(VALID_JOB)
+    del payload["company"]
+    with pytest.raises(ValidationError):
+        JobPostingV1.model_validate_json(json.dumps(payload))
+
+
+def test_job_schema_marks_every_field_required():
+    # Issue #8 acceptance: explicit-null means the JSON schema requires every key, so
+    # job_posting.v1 is now OpenAI-strict-valid like invoice.v1.
+    schema = JobPostingV1.model_json_schema()
+    assert set(schema["required"]) == set(schema["properties"])

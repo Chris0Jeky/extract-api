@@ -1,8 +1,14 @@
 """job_posting.v1 strict schema (UK job postings).
 
-The salary_max >= salary_min cross-field check is the canonical validation-retry
-trigger: it is a constraint the providers' structured-output JSON-schema subset
-provably cannot enforce, so it lives here and runs after parse.
+The salary cross-field checks are canonical validation-retry triggers: constraints the
+providers' structured-output JSON-schema subset provably cannot enforce, so they live
+here and run after parse. salary_max >= salary_min when both are present, and
+salary_currency is required whenever a salary figure is present (a figure without a
+currency is ambiguous).
+
+Nullable fields are required-but-nullable (no default), mirroring invoice.v1: a provider
+must emit the key as an explicit null when the value is genuinely absent, so omission
+fails loudly and the generated JSON schema marks every field required (ADR 0002).
 """
 
 from __future__ import annotations
@@ -62,20 +68,26 @@ class JobPostingV1(BaseModel):
     model_config = STRICT_CONFIG
 
     title: str
-    company: str | None = None
-    location: str | None = None
+    company: str | None
+    location: str | None
     remote_policy: RemotePolicy
-    salary_min: int | None = None
-    salary_max: int | None = None
-    salary_currency: CurrencyCode | None = None
+    salary_min: int | None
+    salary_max: int | None
+    salary_currency: CurrencyCode | None
     salary_period: SalaryPeriod
     employment_type: EmploymentType
     seniority: Seniority
     visa_sponsorship: VisaSponsorship
-    posted_date: date | None = None
+    posted_date: date | None
 
     @model_validator(mode="after")
-    def _check_salary_range(self) -> JobPostingV1:
+    def _check_salary(self) -> JobPostingV1:
+        # A salary figure without a currency is ambiguous (issue #4): when either bound is
+        # present, the currency must be too. salary_currency stays null only when the
+        # posting discloses no figure (for example "competitive").
+        has_salary = self.salary_min is not None or self.salary_max is not None
+        if has_salary and self.salary_currency is None:
+            raise ValueError("salary_currency is required when salary_min or salary_max is present")
         if (
             self.salary_min is not None
             and self.salary_max is not None
