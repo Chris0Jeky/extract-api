@@ -141,18 +141,22 @@ def install_error_handlers(app: FastAPI) -> None:
         # code too (issue #28), so every non-200 has exactly one code.
         code = _CODE_BY_HTTP_STATUS.get(exc.status_code)
         if code is None:
-            # An HTTPException at any other status (this app raises none directly) is an
-            # unexpected condition: log it and degrade to a sanitized internal_error, like
-            # the catch-all, rather than leaking exc.detail or inventing a code.
+            # Unreachable today: this app only ever raises framework 404/405 (a wrong
+            # Content-Type is a 422 RequestValidationError, not a 415). If a future path
+            # raises another HTTPException, log it and degrade to a sanitized internal_error
+            # rather than leaking exc.detail or inventing a code. Tracked: when such a path
+            # is added, preserve its client status and add the code (issue #32).
             logger.exception("unmapped HTTPException status %s", exc.status_code)
             return error_response(
                 ErrorCode.internal_error,
                 {"error": ErrorCode.internal_error.value, "detail": "internal error"},
             )
-        # Forward the original headers so a 405's RFC-required Allow header survives.
+        # Forward the original headers so a 405's RFC-required Allow header survives. Pass
+        # exc.detail through (not str()) so a structured detail keeps its JSON shape; the
+        # reachable 404/405 details are plain strings.
         return error_response(
             code,
-            {"error": code.value, "detail": str(exc.detail)},
+            {"error": code.value, "detail": exc.detail},
             headers=getattr(exc, "headers", None),
         )
 
