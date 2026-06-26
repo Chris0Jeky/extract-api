@@ -178,3 +178,30 @@ def test_empty_content_is_rejected_before_any_provider_call(monkeypatch):
     assert resp.status_code == 422
     assert resp.json()["error"] == "validation_failed"
     assert fake.calls == 0
+
+
+def test_missing_required_field_renders_validation_failed():
+    # A missing required field is a RequestValidationError -> validation_failed via the
+    # T05 handler, not FastAPI's default 422 body. Validation runs before the handler.
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    resp = client.post("/v1/extract", json={"doc_type": "invoice", "schema_version": "v1"})
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "validation_failed"
+
+
+def test_extra_forbidden_key_renders_validation_failed():
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    resp = client.post(
+        "/v1/extract",
+        json={"doc_type": "invoice", "schema_version": "v1", "content": "x", "bogus": 1},
+    )
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "validation_failed"
+
+
+def test_unexpected_client_error_renders_internal_error(monkeypatch):
+    # A non-provider exception escaping the pipeline maps to internal_error (500) via the
+    # T05 catch-all, still carrying exactly one taxonomy code (not a bare 500).
+    resp = _post(_client_with(monkeypatch, _FakeClient([RuntimeError("boom")])))
+    assert resp.status_code == 500
+    assert resp.json()["error"] == "internal_error"
