@@ -14,7 +14,15 @@ def test_get_client_routes_explicit_providers(monkeypatch):
 
 def test_get_client_default_uses_env(monkeypatch):
     monkeypatch.delenv("LLM_PROVIDER_MODE", raising=False)
-    monkeypatch.setenv("LLM_DEFAULT_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_DEFAULT_PROVIDER", "anthropic")
+    assert isinstance(get_client("default"), AnthropicClient)
+
+
+def test_get_client_default_falls_back_to_openai(monkeypatch):
+    # M1 window: with no LLM_DEFAULT_PROVIDER set, "default" resolves to the only
+    # implemented real provider (OpenAI), not the Anthropic stub.
+    monkeypatch.delenv("LLM_PROVIDER_MODE", raising=False)
+    monkeypatch.delenv("LLM_DEFAULT_PROVIDER", raising=False)
     assert isinstance(get_client("default"), OpenAIClient)
 
 

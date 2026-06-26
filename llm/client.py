@@ -282,7 +282,10 @@ def get_client(provider: str) -> LLMClient:
         return FixtureClient(os.environ.get("FIXTURE_CANNED_TEXT", ""))
     resolved = provider
     if provider == "default":
-        resolved = os.environ.get("LLM_DEFAULT_PROVIDER", "anthropic")
+        # M1 window: default to OpenAI, the only provider with a real call path. The
+        # Anthropic path lands in T09; until then a bare "default" request must reach a
+        # working provider, not the unimplemented stub. Override per deployment via env.
+        resolved = os.environ.get("LLM_DEFAULT_PROVIDER", "openai")
     if resolved == "openai":
         return OpenAIClient()
     if resolved == "anthropic":
