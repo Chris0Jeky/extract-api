@@ -61,6 +61,7 @@ def test_bad_dates_raise_not_coerce(bad):
         ("100.5", "GBP", 10050),
         ("0.99", "USD", 99),
         ("1,234.56", "EUR", 123456),
+        ("1,000,000.00", "GBP", 100000000),  # multi-group thousands separators
         ("-50.00", "GBP", -5000),  # credit notes are legitimate
         ("100", "JPY", 100),  # 0-digit currency
         ("1.234", "BHD", 1234),  # 3-digit currency
@@ -80,6 +81,9 @@ def test_money_to_minor_units(amount, currency, minor):
         ("", "GBP"),
         ("inf", "GBP"),
         ("nan", "GBP"),
+        ("1,23", "GBP"),  # comma not in a valid thousands position -> not mis-stripped
+        ("1,2345.6", "GBP"),  # malformed grouping
+        ("100.", "GBP"),  # trailing dot
         ("100.00", "ZZZ"),  # unknown currency
         ("100.00", "gbp"),  # lowercase is not a valid ISO-4217 code
     ],

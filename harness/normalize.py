@@ -18,10 +18,16 @@ requires ISO dates from the model, so the harness only needs ISO plus the numeri
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from schemas.iso4217 import ISO_4217_ALPHA
+
+# Strict money grammar: optional sign, digits either plain or Western thousands-grouped
+# (1,234,567), optional dot-decimal fraction. Validating before parse rejects malformed
+# comma use ("1,23"), empty strings, and non-numerals loudly instead of mis-stripping.
+_AMOUNT_RE = re.compile(r"-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
 
 # Explicit, ordered numeric formats tried after ISO, all day-first. Locale-independent
 # (no month names). Anything else raises (no fuzzy parsing).
@@ -92,24 +98,18 @@ def _minor_digits(currency: str) -> int:
 def to_minor_units(amount: str, currency: str) -> int:
     """Convert a money amount to integer minor units for the given ISO-4217 code.
 
-    `amount` is a decimal string (dot decimal separator; commas are treated as thousands
-    separators and stripped). Raises ValueError if the currency is unknown, the amount is
-    not a finite decimal, or it carries more fractional digits than the currency permits
-    (e.g. "100.001" GBP, "100.5" JPY) - those are failed loudly, never rounded.
+    `amount` is a decimal string (dot decimal separator; optional Western thousands-
+    grouped commas, e.g. "1,234.56"). Raises ValueError if the currency is unknown, the
+    string is not a well-formed amount, or it carries more fractional digits than the
+    currency permits (e.g. "100.001" GBP, "100.5" JPY) - those fail loudly, never rounded.
     """
     digits = _minor_digits(currency)
-    cleaned = amount.strip().replace(",", "")
-    if not cleaned:
-        raise ValueError("amount is empty")
-    try:
-        value = Decimal(cleaned)
-    except InvalidOperation as exc:
-        raise ValueError(f"amount {amount!r} is not a valid decimal number") from exc
-    if not value.is_finite():
-        raise ValueError(f"amount {amount!r} is not a finite number")
-    # Fractional-digit count = -exponent when the exponent is negative. A finite Decimal
-    # always has an int exponent (the 'n'/'F' sentinels are NaN/Infinity only, excluded
-    # above); assert it so the type narrows.
+    text = amount.strip()
+    if not _AMOUNT_RE.fullmatch(text):
+        raise ValueError(f"amount {amount!r} is not a valid decimal money string")
+    value = Decimal(text.replace(",", ""))
+    # A regex-validated numeral is always a finite Decimal, so the exponent is an int
+    # (the 'n'/'F' sentinels are NaN/Infinity only); assert it so the type narrows.
     exponent = value.as_tuple().exponent
     assert isinstance(exponent, int)
     fractional = max(0, -exponent)
