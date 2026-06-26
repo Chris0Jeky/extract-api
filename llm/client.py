@@ -285,7 +285,8 @@ def get_client(provider: str) -> LLMClient:
         # M1 window: default to OpenAI, the only provider with a real call path. The
         # Anthropic path lands in T09; until then a bare "default" request must reach a
         # working provider, not the unimplemented stub. Override per deployment via env.
-        resolved = os.environ.get("LLM_DEFAULT_PROVIDER", "openai")
+        # `or` (not a get default) so an empty LLM_DEFAULT_PROVIDER= also falls back.
+        resolved = os.environ.get("LLM_DEFAULT_PROVIDER") or "openai"
     if resolved == "openai":
         return OpenAIClient()
     if resolved == "anthropic":

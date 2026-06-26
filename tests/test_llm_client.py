@@ -26,6 +26,14 @@ def test_get_client_default_falls_back_to_openai(monkeypatch):
     assert isinstance(get_client("default"), OpenAIClient)
 
 
+def test_get_client_empty_default_env_falls_back_to_openai(monkeypatch):
+    # An empty LLM_DEFAULT_PROVIDER= must also fall back to openai, not resolve to "" ->
+    # unknown provider (os.environ.get default would not catch the empty-string case).
+    monkeypatch.delenv("LLM_PROVIDER_MODE", raising=False)
+    monkeypatch.setenv("LLM_DEFAULT_PROVIDER", "")
+    assert isinstance(get_client("default"), OpenAIClient)
+
+
 def test_get_client_fixture_mode_overrides(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER_MODE", "fixture")
     assert isinstance(get_client("openai"), FixtureClient)
