@@ -65,6 +65,9 @@ def test_bad_dates_raise_not_coerce(bad):
         ("-50.00", "GBP", -5000),  # credit notes are legitimate
         ("100", "JPY", 100),  # 0-digit currency
         ("1.234", "BHD", 1234),  # 3-digit currency
+        # Exact for any magnitude: >28 significant digits must not be rounded by the
+        # Decimal context (pure-integer scaling, not scaleb).
+        ("123456789012345678901234567.89", "GBP", 12345678901234567890123456789),
     ],
 )
 def test_money_to_minor_units(amount, currency, minor):
@@ -84,6 +87,9 @@ def test_money_to_minor_units(amount, currency, minor):
         ("1,23", "GBP"),  # comma not in a valid thousands position -> not mis-stripped
         ("1,2345.6", "GBP"),  # malformed grouping
         ("100.", "GBP"),  # trailing dot
+        ("١٢٣", "GBP"),  # Arabic-Indic digits: ASCII-strict grammar (re.ASCII) rejects
+        ("100.00", "JPY"),  # over-precision fails loud even as trailing zeros (0-digit ccy)
+        ("1234.500", "GBP"),  # trailing zeros beyond the 2 allowed digits still raise
         ("100.00", "ZZZ"),  # unknown currency
         ("100.00", "gbp"),  # lowercase is not a valid ISO-4217 code
     ],

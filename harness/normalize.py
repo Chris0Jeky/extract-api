@@ -6,7 +6,7 @@ out-of-range input raises rather than being coerced or guessed, so the accuracy
 harness never compares a silently-mangled value.
 
 Two conventions are committed here (documented, not guessed):
-- Numeric slash/dash dates are read DAY-FIRST (DD/MM/YYYY), the UK convention this
+- Numeric slash/dash/dot dates are read DAY-FIRST (DD/MM/YYYY), the UK convention this
   service targets. ISO input is detected first and never reinterpreted.
 - Minor-unit digits follow ISO-4217: default 2, with the standard 0-digit and 3-digit
   exceptions listed below. The currency must be a known ISO-4217 code.
@@ -27,7 +27,9 @@ from schemas.iso4217 import ISO_4217_ALPHA
 # Strict money grammar: optional sign, digits either plain or Western thousands-grouped
 # (1,234,567), optional dot-decimal fraction. Validating before parse rejects malformed
 # comma use ("1,23"), empty strings, and non-numerals loudly instead of mis-stripping.
-_AMOUNT_RE = re.compile(r"-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?")
+# re.ASCII keeps \d as [0-9], matching the ASCII-strict currency validator and to_iso_date
+# (so a non-ASCII digit like an Arabic-Indic numeral raises rather than being accepted).
+_AMOUNT_RE = re.compile(r"-?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?", re.ASCII)
 
 # Explicit, ordered numeric formats tried after ISO, all day-first. Locale-independent
 # (no month names). Anything else raises (no fuzzy parsing).
@@ -65,7 +67,7 @@ _THREE_DECIMAL: frozenset[str] = frozenset({"BHD", "IQD", "JOD", "KWD", "LYD", "
 def to_iso_date(value: str) -> str:
     """Normalize a date string to ISO-8601 (YYYY-MM-DD), or raise on bad input.
 
-    ISO input is validated and returned canonical; numeric slash/dash dates are read
+    ISO input is validated and returned canonical; numeric slash/dash/dot dates are read
     day-first (UK). Raises ValueError on anything that does not match a known format or
     is not a real calendar date (e.g. 2026-13-01, 31/02/2026).
     """
@@ -100,23 +102,28 @@ def to_minor_units(amount: str, currency: str) -> int:
 
     `amount` is a decimal string (dot decimal separator; optional Western thousands-
     grouped commas, e.g. "1,234.56"). Raises ValueError if the currency is unknown, the
-    string is not a well-formed amount, or it carries more fractional digits than the
-    currency permits (e.g. "100.001" GBP, "100.5" JPY) - those fail loudly, never rounded.
+    string is not a well-formed amount, or it has more fractional digit positions than the
+    currency permits (e.g. "100.001" GBP, "100.5" JPY). Over-precision fails loud even when
+    the extra positions are trailing zeros (e.g. "100.00" JPY): unexpected precision is
+    treated as suspect, never trimmed or rounded.
     """
     digits = _minor_digits(currency)
     text = amount.strip()
     if not _AMOUNT_RE.fullmatch(text):
         raise ValueError(f"amount {amount!r} is not a valid decimal money string")
-    value = Decimal(text.replace(",", ""))
-    # A regex-validated numeral is always a finite Decimal, so the exponent is an int
-    # (the 'n'/'F' sentinels are NaN/Infinity only); assert it so the type narrows.
-    exponent = value.as_tuple().exponent
+    # Decompose exactly: a regex-validated numeral is always a finite Decimal, so the
+    # exponent is an int (the 'n'/'F' sentinels are NaN/Infinity only); assert to narrow.
+    sign, digs, exponent = Decimal(text.replace(",", "")).as_tuple()
     assert isinstance(exponent, int)
     fractional = max(0, -exponent)
     if fractional > digits:
         raise ValueError(
             f"amount {amount!r} has {fractional} fractional digits but {currency} allows {digits}"
         )
-    # The fractional-digit check above guarantees value * 10^digits is an integer, so
-    # scaleb is exact and int() truncates nothing.
-    return int(value.scaleb(digits))
+    # Scale with pure integer math: the check above guarantees digits + exponent >= 0, so
+    # this is exact for ANY magnitude. Decimal.scaleb would round past the context's
+    # 28-digit precision, silently coercing a very large amount (a fail-loud violation).
+    # The annotation pins the result: mypy widens int ** int to Any (a negative exponent
+    # could yield float), which cannot happen here.
+    minor: int = int("".join(map(str, digs))) * 10 ** (digits + exponent)
+    return -minor if sign else minor
