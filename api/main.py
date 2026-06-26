@@ -43,6 +43,13 @@ def _run_extract(request: ExtractRequest) -> ExtractResponse:
     unregistered (doc_type, schema_version). Provider-seam errors and a terminal
     validation failure become the matching `ExtractError`.
     """
+    if not request.content.strip():
+        # Empty/whitespace content has nothing to extract; fail loud before spending a
+        # billed provider call rather than inviting the model to hallucinate a record.
+        raise ExtractError(
+            ErrorCode.validation_failed,
+            detail="content is empty or whitespace-only; nothing to extract",
+        )
     model_cls = resolve(request.doc_type, request.schema_version)
     client = get_client(request.provider)
     system = build_system_prompt(request.doc_type)

@@ -169,3 +169,12 @@ def test_unknown_schema_version_renders_unsupported_doc_type(monkeypatch):
     assert resp.status_code == 422
     assert resp.json()["error"] == "unsupported_doc_type"
     assert fake.calls == 0  # resolve fails before the client is called
+
+
+def test_empty_content_is_rejected_before_any_provider_call(monkeypatch):
+    # Whitespace-only content fails loud as validation_failed without a billed call.
+    fake = _FakeClient([VALID_JSON])
+    resp = _post(_client_with(monkeypatch, fake), content="   ")
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "validation_failed"
+    assert fake.calls == 0
