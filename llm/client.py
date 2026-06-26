@@ -237,7 +237,14 @@ class AnthropicClient:
 
 
 class FixtureClient:
-    """Deterministic in-process client for offline smoke + tests (T04b)."""
+    """Deterministic in-process client for offline smoke + tests (T04b).
+
+    Returns canned JSON text (no network, no key, cost 0). The validation-retry pipeline
+    validates it exactly as it would a real provider's output, so `make smoke` and the
+    endpoint tests exercise the full path offline. The canned text comes from the caller
+    (FIXTURE_CANNED_TEXT, read in get_client). An empty canned text is a misconfiguration
+    and fails loud rather than masquerading as an empty-but-valid extraction.
+    """
 
     provider = "fixture"
 
@@ -253,13 +260,26 @@ class FixtureClient:
         json_schema: dict[str, object],
         max_tokens: int = 4096,
     ) -> CompletionResult:
-        raise NotImplementedError("fixture canned-output wiring lands in T04b")
+        if not self._canned_text.strip():
+            raise ProviderError(
+                provider=self.provider,
+                detail="FixtureClient has no canned text (set FIXTURE_CANNED_TEXT)",
+            )
+        return CompletionResult(
+            text=self._canned_text,
+            model=self.model,
+            tokens_in=0,
+            tokens_out=0,
+            cost_usd=0.0,
+            latency_ms=0.0,
+            stop_reason="completed",
+        )
 
 
 def get_client(provider: str) -> LLMClient:
     """Resolve a provider client from env + the request's provider field."""
     if os.environ.get("LLM_PROVIDER_MODE") == "fixture":
-        return FixtureClient()
+        return FixtureClient(os.environ.get("FIXTURE_CANNED_TEXT", ""))
     resolved = provider
     if provider == "default":
         resolved = os.environ.get("LLM_DEFAULT_PROVIDER", "anthropic")
