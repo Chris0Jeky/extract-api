@@ -4,10 +4,11 @@ The extract flow is: resolve the strict model for (doc_type, schema_version) ->
 get the provider client (env-routed) -> run the validation-retry pipeline (provider
 call -> strict validate -> one feedback retry) -> render `data` + full `meta`. The
 provider seam raises `llm.errors.Provider*` and the pipeline raises `ExtractionFailed`;
-this layer maps those onto the `ErrorCode` taxonomy. (Full taxonomy coverage of
-FastAPI request-validation errors and the not-yet-implemented provider path lands in
-T05/T09; until then those surface as FastAPI's default 422/500.) `/healthz` stays a
-trivial liveness probe.
+this layer maps those onto the `ErrorCode` taxonomy, and `api/errors.py` renders
+request-shape errors (validation_failed / unsupported_doc_type) and any unmapped
+exception (internal_error) through it too (T05). The not-yet-implemented Anthropic
+provider path (T09) currently surfaces as internal_error. `/healthz` stays a trivial
+liveness probe.
 """
 
 from __future__ import annotations
