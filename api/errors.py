@@ -6,12 +6,16 @@ schema layer can map onto it freely.
 
 from __future__ import annotations
 
+import logging
 from enum import StrEnum
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from schemas.registry import UnknownSchema
+
+logger = logging.getLogger("extract.api")
 
 
 class ErrorCode(StrEnum):
@@ -22,6 +26,9 @@ class ErrorCode(StrEnum):
     provider_timeout = "provider_timeout"
     budget_exceeded = "budget_exceeded"
     idempotency_conflict = "idempotency_conflict"
+    # Catch-all for any otherwise-unmapped exception, so every non-200 still carries
+    # exactly one code (the only 500 in the taxonomy). Added in T05.
+    internal_error = "internal_error"
 
 
 # Exactly one HTTP status per taxonomy member.
@@ -33,6 +40,7 @@ STATUS_BY_CODE: dict[ErrorCode, int] = {
     ErrorCode.provider_timeout: 504,
     ErrorCode.budget_exceeded: 402,
     ErrorCode.idempotency_conflict: 409,
+    ErrorCode.internal_error: 500,
 }
 
 
@@ -80,4 +88,43 @@ def install_error_handlers(app: FastAPI) -> None:
         return error_response(
             ErrorCode.unsupported_doc_type,
             {"error": ErrorCode.unsupported_doc_type.value, "detail": str(exc)},
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def _handle_request_validation(_: Request, exc: RequestValidationError) -> JSONResponse:
+        # Render request-shape errors through the taxonomy instead of FastAPI's default
+        # 422 body (closes #5). Only a genuinely out-of-Literal doc_type VALUE is
+        # unsupported_doc_type; a missing/empty/otherwise-malformed body (including an
+        # omitted doc_type) is validation_failed. Gate on the literal-mismatch kind so a
+        # forgotten doc_type is not mislabeled as "unsupported", and anchor on the field
+        # position so only an error ON doc_type qualifies. doc_type classification wins
+        # over any coexisting field error.
+        code = ErrorCode.validation_failed
+        for err in exc.errors():
+            # Defensive: pydantic always emits loc as a tuple, but guard the subscript so a
+            # malformed/None loc cannot raise inside the handler.
+            loc = err.get("loc")
+            if (
+                loc
+                and isinstance(loc, (tuple, list))
+                and loc[-1] == "doc_type"
+                and err.get("type") == "literal_error"
+            ):
+                code = ErrorCode.unsupported_doc_type
+                break
+        detail = (
+            "unsupported doc_type"
+            if code is ErrorCode.unsupported_doc_type
+            else "request validation failed"
+        )
+        return error_response(code, {"error": code.value, "detail": detail})
+
+    @app.exception_handler(Exception)
+    async def _handle_unexpected(_: Request, exc: Exception) -> JSONResponse:
+        # Any otherwise-unmapped exception still carries exactly one ErrorCode. The full
+        # error is logged server-side; the client gets a generic detail (no internal leak).
+        logger.exception("unhandled exception during request: %s", type(exc).__name__)
+        return error_response(
+            ErrorCode.internal_error,
+            {"error": ErrorCode.internal_error.value, "detail": "internal error"},
         )

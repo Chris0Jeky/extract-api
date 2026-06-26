@@ -178,3 +178,48 @@ def test_empty_content_is_rejected_before_any_provider_call(monkeypatch):
     assert resp.status_code == 422
     assert resp.json()["error"] == "validation_failed"
     assert fake.calls == 0
+
+
+def test_missing_required_field_renders_validation_failed():
+    # A missing required field is a RequestValidationError -> validation_failed via the
+    # T05 handler, not FastAPI's default 422 body. Validation runs before the handler.
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    resp = client.post("/v1/extract", json={"doc_type": "invoice", "schema_version": "v1"})
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "validation_failed"
+
+
+def test_extra_forbidden_key_renders_validation_failed():
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    resp = client.post(
+        "/v1/extract",
+        json={"doc_type": "invoice", "schema_version": "v1", "content": "x", "bogus": 1},
+    )
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "validation_failed"
+
+
+def test_missing_doc_type_renders_validation_failed():
+    # An OMITTED doc_type is a malformed body (validation_failed), not unsupported_doc_type
+    # which is reserved for a genuinely out-of-Literal doc_type value.
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    resp = client.post("/v1/extract", json={"schema_version": "v1", "content": "x"})
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "validation_failed"
+
+
+def test_bad_doc_type_wins_over_other_field_errors():
+    # An out-of-Literal doc_type renders unsupported_doc_type even when other fields are
+    # also invalid (content is missing here): doc_type classification takes precedence.
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    resp = client.post("/v1/extract", json={"doc_type": "passport"})
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "unsupported_doc_type"
+
+
+def test_unexpected_client_error_renders_internal_error(monkeypatch):
+    # A non-provider exception escaping the pipeline maps to internal_error (500) via the
+    # T05 catch-all, still carrying exactly one taxonomy code (not a bare 500).
+    resp = _post(_client_with(monkeypatch, _FakeClient([RuntimeError("boom")])))
+    assert resp.status_code == 500
+    assert resp.json()["error"] == "internal_error"

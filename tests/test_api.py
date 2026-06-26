@@ -17,10 +17,10 @@ def test_healthz_ok():
 
 def test_anthropic_path_not_implemented_yet_fails_loudly(monkeypatch):
     # The endpoint is wired, but the Anthropic real-call client still raises
-    # NotImplementedError until T09; it surfaces as a 500, not a silent success.
+    # NotImplementedError until T09. The T05 catch-all maps that unmapped exception to
+    # internal_error (500) so it still carries exactly one taxonomy code, not a bare 500.
     # Pin routing: get_client short-circuits to FixtureClient when LLM_PROVIDER_MODE
-    # is set, which would make this 500 for the wrong reason. Delete it and assert the
-    # request actually routes to AnthropicClient so the cause is unambiguous.
+    # is set, which would make this fail for the wrong reason.
     monkeypatch.delenv("LLM_PROVIDER_MODE", raising=False)
     assert isinstance(get_client("anthropic"), AnthropicClient)
     client = TestClient(create_app(), raise_server_exceptions=False)
@@ -34,6 +34,7 @@ def test_anthropic_path_not_implemented_yet_fails_loudly(monkeypatch):
         },
     )
     assert resp.status_code == 500
+    assert resp.json()["error"] == "internal_error"
 
 
 def test_extract_rejects_unknown_doc_type_at_boundary():
@@ -42,5 +43,7 @@ def test_extract_rejects_unknown_doc_type_at_boundary():
         "/v1/extract",
         json={"doc_type": "passport", "schema_version": "v1", "content": "x"},
     )
-    # FastAPI request validation rejects an out-of-Literal doc_type before our code.
+    # An out-of-Literal doc_type is a RequestValidationError; the T05 handler renders it
+    # as the taxonomy's unsupported_doc_type, not FastAPI's default 422 body.
     assert resp.status_code == 422
+    assert resp.json()["error"] == "unsupported_doc_type"

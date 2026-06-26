@@ -52,18 +52,20 @@ numbers appear.
 
 ## Error taxonomy
 
-Every non-200 carries exactly one error. Observed frequencies are filled in from
-the accuracy run (numbers pending).
+Every non-200 from the API carries exactly one error code (framework routing 404/405
+are a tracked exception). Observed frequencies are filled in from the accuracy run
+(numbers pending).
 
 | error | HTTP | meaning | frequency |
 | --- | --- | --- | --- |
-| `validation_failed` | 422 | output failed strict validation twice | TBD |
+| `validation_failed` | 422 | output failed strict validation twice, or a malformed request | TBD |
 | `low_confidence` | 422 | confidence below threshold | TBD |
-| `unsupported_doc_type` | 422 | no schema for (doc_type, schema_version) | TBD |
+| `unsupported_doc_type` | 422 | no schema for (doc_type, schema_version), or an out-of-Literal doc_type | TBD |
 | `provider_error` | 502 | provider call failed | TBD |
 | `provider_timeout` | 504 | provider call timed out | TBD |
 | `budget_exceeded` | 402 | per-run USD cap reached | TBD |
 | `idempotency_conflict` | 409 | same key, different payload | TBD |
+| `internal_error` | 500 | unexpected or unmapped server error | TBD |
 
 ## Non-goals
 
