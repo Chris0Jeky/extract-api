@@ -1,5 +1,6 @@
 """Error taxonomy: one status per code, and handlers render the taxonomy body."""
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -18,6 +19,14 @@ def test_every_code_has_exactly_one_status():
         assert code in STATUS_BY_CODE
     assert STATUS_BY_CODE[ErrorCode.idempotency_conflict] == 409
     assert STATUS_BY_CODE[ErrorCode.validation_failed] == 422
+    assert STATUS_BY_CODE[ErrorCode.internal_error] == 500
+
+
+@pytest.mark.parametrize("code", list(ErrorCode))
+def test_every_code_renders_its_status(code):
+    # Each taxonomy member renders to its one HTTP status with its code in the body.
+    resp = error_response(code, {"error": code.value})
+    assert resp.status_code == STATUS_BY_CODE[code]
 
 
 def test_extract_error_body_carries_one_code():
@@ -58,6 +67,12 @@ def test_handlers_render_taxonomy():
     async def unknown() -> dict[str, str]:
         raise UnknownSchema("no schema")
 
+    @app.get("/explode")
+    async def explode() -> dict[str, str]:
+        # An unmapped exception must still render the taxonomy (internal_error), never a
+        # bare 500. The catch-all also logs the real error server-side (not asserted here).
+        raise RuntimeError("unexpected boom")
+
     client = TestClient(app, raise_server_exceptions=False)
 
     r1 = client.get("/boom")
@@ -67,3 +82,8 @@ def test_handlers_render_taxonomy():
     r2 = client.get("/unknown")
     assert r2.status_code == 422
     assert r2.json()["error"] == "unsupported_doc_type"
+
+    r3 = client.get("/explode")
+    assert r3.status_code == 500
+    assert r3.json()["error"] == "internal_error"
+    assert r3.json()["detail"] == "internal error"  # generic; no internal leak
