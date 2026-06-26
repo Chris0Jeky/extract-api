@@ -52,9 +52,8 @@ numbers appear.
 
 ## Error taxonomy
 
-Every non-200 from the API carries exactly one error code (framework routing 404/405
-are a tracked exception). Observed frequencies are filled in from the accuracy run
-(numbers pending).
+Every non-200 carries exactly one error code, including framework routing errors.
+Observed frequencies are filled in from the accuracy run (numbers pending).
 
 | error | HTTP | meaning | frequency |
 | --- | --- | --- | --- |
@@ -66,6 +65,8 @@ are a tracked exception). Observed frequencies are filled in from the accuracy r
 | `budget_exceeded` | 402 | per-run USD cap reached | TBD |
 | `idempotency_conflict` | 409 | same key, different payload | TBD |
 | `internal_error` | 500 | unexpected or unmapped server error | TBD |
+| `not_found` | 404 | no such route | TBD |
+| `method_not_allowed` | 405 | wrong HTTP method for the route | TBD |
 
 ## Non-goals
 
