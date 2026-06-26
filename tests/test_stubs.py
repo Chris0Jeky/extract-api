@@ -3,7 +3,6 @@
 import pytest
 
 from api.idempotency import SqliteIdempotencyStore, StoredResponse, payload_hash
-from harness.normalize import to_iso_date, to_minor_units
 from harness.run_accuracy import run_accuracy
 
 
@@ -21,13 +20,6 @@ def test_idempotency_store_methods_are_stubbed():
         store.put("k", StoredResponse("h", "{}", 200, 0.0))
     with pytest.raises(NotImplementedError):
         store.sweep()
-
-
-def test_normalize_stubs():
-    with pytest.raises(NotImplementedError):
-        to_iso_date("15/01/2026")
-    with pytest.raises(NotImplementedError):
-        to_minor_units("100.00", "GBP")
 
 
 def test_accuracy_stub():
