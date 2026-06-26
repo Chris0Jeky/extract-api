@@ -12,6 +12,7 @@ from enum import StrEnum
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from schemas.registry import UnknownSchema
 
@@ -29,6 +30,10 @@ class ErrorCode(StrEnum):
     # Catch-all for any otherwise-unmapped exception, so every non-200 still carries
     # exactly one code (the only 500 in the taxonomy). Added in T05.
     internal_error = "internal_error"
+    # Framework routing errors render through the taxonomy too (issue #28), so no non-200
+    # escapes with a code-less body.
+    not_found = "not_found"
+    method_not_allowed = "method_not_allowed"
 
 
 # Exactly one HTTP status per taxonomy member.
@@ -41,6 +46,15 @@ STATUS_BY_CODE: dict[ErrorCode, int] = {
     ErrorCode.budget_exceeded: 402,
     ErrorCode.idempotency_conflict: 409,
     ErrorCode.internal_error: 500,
+    ErrorCode.not_found: 404,
+    ErrorCode.method_not_allowed: 405,
+}
+
+# Framework HTTPException statuses we render with a dedicated code; any other status this
+# app never raises directly degrades to internal_error.
+_CODE_BY_HTTP_STATUS: dict[int, ErrorCode] = {
+    404: ErrorCode.not_found,
+    405: ErrorCode.method_not_allowed,
 }
 
 
@@ -118,6 +132,14 @@ def install_error_handlers(app: FastAPI) -> None:
             else "request validation failed"
         )
         return error_response(code, {"error": code.value, "detail": detail})
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _handle_http_exception(_: Request, exc: StarletteHTTPException) -> JSONResponse:
+        # Framework routing errors (404 unknown route, 405 wrong method) carry a taxonomy
+        # code too (issue #28), so every non-200 has exactly one code. An HTTPException at
+        # any other status (this app raises none directly) degrades to internal_error (500).
+        code = _CODE_BY_HTTP_STATUS.get(exc.status_code, ErrorCode.internal_error)
+        return error_response(code, {"error": code.value, "detail": str(exc.detail)})
 
     @app.exception_handler(Exception)
     async def _handle_unexpected(_: Request, exc: Exception) -> JSONResponse:
