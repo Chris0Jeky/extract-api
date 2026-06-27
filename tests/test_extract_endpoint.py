@@ -13,6 +13,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from api.idempotency import SqliteIdempotencyStore
 from api.main import create_app
 from llm.client import CompletionResult
 from llm.errors import ProviderError, ProviderRefusal, ProviderTimeout, ProviderTruncation
@@ -79,10 +80,10 @@ def _client_with(monkeypatch, fake: _FakeClient) -> TestClient:
     return TestClient(create_app(), raise_server_exceptions=False)
 
 
-def _post(client: TestClient, **overrides) -> object:
+def _post(client: TestClient, *, headers: dict[str, str] | None = None, **overrides) -> object:
     body = {"doc_type": "invoice", "schema_version": "v1", "content": "doc", "provider": "openai"}
     body.update(overrides)
-    return client.post("/v1/extract", json=body)
+    return client.post("/v1/extract", json=body, headers=headers)
 
 
 def test_happy_path_returns_data_and_full_meta(monkeypatch):
@@ -223,3 +224,73 @@ def test_unexpected_client_error_renders_internal_error(monkeypatch):
     resp = _post(_client_with(monkeypatch, _FakeClient([RuntimeError("boom")])))
     assert resp.status_code == 500
     assert resp.json()["error"] == "internal_error"
+
+
+# --- T12: idempotency wiring (store consulted before any model call) ---
+
+
+def _store(tmp_path) -> SqliteIdempotencyStore:
+    return SqliteIdempotencyStore(str(tmp_path / "i.sqlite"))
+
+
+def _client_with_store(monkeypatch, fake: _FakeClient, store) -> TestClient:
+    monkeypatch.setattr("api.main.get_client", lambda provider: fake)
+    return TestClient(create_app(idempotency_store=store), raise_server_exceptions=False)
+
+
+def test_same_key_same_payload_replays_without_a_model_call(monkeypatch, tmp_path):
+    # One canned step only: a second model call would pop an empty list and error, so this
+    # also proves the replay path never reaches the client.
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with_store(monkeypatch, fake, _store(tmp_path))
+    headers = {"Idempotency-Key": "abc123"}
+
+    first = _post(client, headers=headers)
+    assert first.status_code == 200
+    assert first.json()["meta"]["replayed"] is False
+    assert fake.calls == 1
+
+    second = _post(client, headers=headers)
+    assert second.status_code == 200
+    assert second.json()["meta"]["replayed"] is True
+    assert second.json()["data"] == first.json()["data"]
+    assert fake.calls == 1  # the replay did not call the model again
+
+
+def test_same_key_different_payload_returns_409(monkeypatch, tmp_path):
+    fake = _FakeClient([VALID_JSON])  # the conflict must be caught before a second call
+    client = _client_with_store(monkeypatch, fake, _store(tmp_path))
+    headers = {"Idempotency-Key": "dup"}
+
+    assert _post(client, headers=headers).status_code == 200
+    # Same key, different content -> different payload hash -> conflict.
+    resp = _post(client, headers=headers, content="a completely different document")
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "idempotency_conflict"
+    assert fake.calls == 1  # detected before any model call
+
+
+def test_different_keys_each_run(monkeypatch, tmp_path):
+    fake = _FakeClient([VALID_JSON, VALID_JSON])
+    client = _client_with_store(monkeypatch, fake, _store(tmp_path))
+    r1 = _post(client, headers={"Idempotency-Key": "k1"})
+    r2 = _post(client, headers={"Idempotency-Key": "k2"})
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert r2.json()["meta"]["replayed"] is False
+    assert fake.calls == 2  # distinct keys -> two model calls
+
+
+def test_failed_extraction_is_not_stored_so_retry_runs(monkeypatch, tmp_path):
+    # First attempt fails (provider error, not stored); a retry with the same key re-runs
+    # and can succeed, rather than replaying the failure.
+    fake = _FakeClient([ProviderError(provider="fake", detail="boom"), VALID_JSON])
+    client = _client_with_store(monkeypatch, fake, _store(tmp_path))
+    headers = {"Idempotency-Key": "retry-me"}
+
+    first = _post(client, headers=headers)
+    assert first.status_code == 502
+    second = _post(client, headers=headers)
+    assert second.status_code == 200
+    assert second.json()["meta"]["replayed"] is False
+    assert fake.calls == 2
