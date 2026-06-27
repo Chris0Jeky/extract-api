@@ -14,7 +14,7 @@ dependencies = [
     "openai>=2.41,<3",
     # Floor is the verified 0.109.1 (ADR 0001): the T09 structured-output path needs the
     # Messages `output_config` parameter, which the 0.109.0 floor did not guarantee.
-    "anthropic>=0.109.1,<0.112",
+    "anthropic>=0.109.1,<0.113",
     "PyMuPDF==1.27.2.3",
 ]
 
