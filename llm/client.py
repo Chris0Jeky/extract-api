@@ -324,7 +324,13 @@ class AnthropicClient:
         # model declined; "max_tokens"/"pause_turn" mean the answer is incomplete and this
         # synchronous single-shot seam cannot continue it.
         if stop_reason == "refusal":
-            raise ProviderRefusal(provider=self.provider, reason="refusal")
+            # Surface the provider's refusal diagnostic like the OpenAI path does. Only the
+            # bounded category enum (cyber/bio/frontier_llm/reasoning_extraction) is
+            # propagated; the free-text explanation is left out to avoid echoing model
+            # content back into an error body.
+            details = getattr(response, "stop_details", None)
+            category = getattr(details, "category", None)
+            raise ProviderRefusal(provider=self.provider, reason=str(category or "refusal"))
         if stop_reason in {"max_tokens", "pause_turn"}:
             raise ProviderTruncation(provider=self.provider, reason=str(stop_reason))
 
@@ -397,9 +403,8 @@ def get_client(provider: str) -> LLMClient:
         return FixtureClient(os.environ.get("FIXTURE_CANNED_TEXT", ""))
     resolved = provider
     if provider == "default":
-        # M1 window: default to OpenAI, the only provider with a real call path. The
-        # Anthropic path lands in T09; until then a bare "default" request must reach a
-        # working provider, not the unimplemented stub. Override per deployment via env.
+        # Both providers have real call paths now (T02 OpenAI, T09 Anthropic); openai
+        # remains the default by the locked decision, overridable per deployment via env.
         # `or` (not a get default) so an empty LLM_DEFAULT_PROVIDER= also falls back.
         resolved = os.environ.get("LLM_DEFAULT_PROVIDER") or "openai"
     if resolved == "openai":

@@ -88,6 +88,18 @@ def test_refusal_raises(monkeypatch):
         AnthropicClient().complete(system="s", prompt="p", json_schema=SCHEMA)
 
 
+def test_refusal_surfaces_stop_details_category(monkeypatch):
+    # The bounded refusal category is propagated into the error; the free-text
+    # explanation is deliberately not echoed back.
+    message = _message(stop_reason="refusal", text="")
+    message.stop_details = types.SimpleNamespace(category="cyber", explanation="secret reason")
+    _install(monkeypatch, message=message)
+    with pytest.raises(ProviderRefusal) as excinfo:
+        AnthropicClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+    assert "cyber" in str(excinfo.value)
+    assert "secret reason" not in str(excinfo.value)
+
+
 def test_timeout_raises(monkeypatch):
     req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
     _install(monkeypatch, raises=anthropic.APITimeoutError(request=req))
@@ -167,6 +179,19 @@ def test_missing_price_env_fails_loud(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_PRICE_OUT_PER_M", raising=False)
     with pytest.raises(ValueError, match="ANTHROPIC_PRICE"):
         AnthropicClient()
+
+
+def test_gateway_mode_uses_llm_credentials(monkeypatch):
+    # Default (non-bypass) path: the SDK is constructed with the gateway's base_url + key,
+    # not an ambient provider key. This is the primary production routing path.
+    captured, _ = _install(monkeypatch, message=_message())
+    monkeypatch.delenv("GATEWAY_BYPASS", raising=False)
+    monkeypatch.setenv("LLM_BASE_URL", "https://gateway.example")
+    monkeypatch.setenv("LLM_API_KEY", "gateway-key")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "should-not-be-used")
+    AnthropicClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+    assert captured["base_url"] == "https://gateway.example"
+    assert captured["api_key"] == "gateway-key"
 
 
 def test_gateway_bypass_uses_direct_anthropic_credentials(monkeypatch):
