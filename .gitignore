@@ -42,6 +42,10 @@ htmlcov/
 *.sqlite
 *.sqlite3
 *.db
+# WAL mode sidecar files (ADR 0004: the store never enters version control)
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
 
 # --- OS / editor noise ---
 .DS_Store
