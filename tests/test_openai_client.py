@@ -199,6 +199,16 @@ def test_missing_price_env_fails_loud(monkeypatch):
         OpenAIClient()
 
 
+@pytest.mark.parametrize("bad", ["nan", "inf", "-inf", "Infinity", "-0.5"])
+def test_non_finite_or_negative_price_fails_loud(monkeypatch, bad):
+    # A non-finite/negative price would feed invalid spend into cost_usd and the budget
+    # guard (nan never trips the cap; a negative cost reduces committed spend -> fail-open).
+    # Reject it loudly at construction, mirroring budget_from_env's EXTRACT_BUDGET_USD check.
+    monkeypatch.setenv("OPENAI_PRICE_IN_PER_M", bad)
+    with pytest.raises(ValueError, match="finite, non-negative"):
+        OpenAIClient()
+
+
 def test_sdk_construction_error_maps_to_provider_error(monkeypatch):
     def boom(**kwargs):
         raise openai.OpenAIError("the api_key client option must be set")
