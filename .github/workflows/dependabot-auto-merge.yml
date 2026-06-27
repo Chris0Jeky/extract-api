@@ -20,13 +20,15 @@ jobs:
         id: meta
         uses: dependabot/fetch-metadata@v3
 
-      - name: Approve and enable auto-merge (patch/minor dev + transitive)
+      - name: Enable auto-merge (patch/minor dev + transitive)
         if: |
           contains(fromJSON('["version-update:semver-patch", "version-update:semver-minor"]'), steps.meta.outputs.update-type)
           && contains(fromJSON('["direct:development", "indirect"]'), steps.meta.outputs.dependency-type)
-        run: |
-          gh pr review --approve "$PR_URL"
-          gh pr merge --auto --squash "$PR_URL"
+        # No `gh pr review --approve`: the GITHUB_TOKEN cannot approve PRs ("GitHub Actions
+        # is not permitted to approve pull requests"), which previously failed this job. main
+        # requires 0 approving reviews and only the CI status checks, so `--auto` completes
+        # the merge as soon as those checks are green (and never merges a red PR).
+        run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
