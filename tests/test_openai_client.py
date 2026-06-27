@@ -217,3 +217,25 @@ def test_gateway_bypass_uses_direct_openai_credentials(monkeypatch):
     OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
     assert captured["api_key"] == "direct-openai-key"  # not the gateway key
     assert captured["base_url"] is None  # direct to OpenAI, not the gateway URL
+
+
+def test_non_bypass_missing_gateway_config_fails_loud(monkeypatch):
+    # Issue #38: in gateway (non-bypass) mode, missing LLM_BASE_URL/LLM_API_KEY must NOT
+    # silently fall back to the ambient OPENAI_API_KEY + the public endpoint; fail loud.
+    monkeypatch.delenv("GATEWAY_BYPASS", raising=False)
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "ambient-key-that-must-not-be-used")
+    with pytest.raises(ValueError, match="gateway"):
+        OpenAIClient()
+
+
+@pytest.mark.parametrize("present", ["LLM_BASE_URL", "LLM_API_KEY"])
+def test_non_bypass_half_gateway_config_fails_loud(monkeypatch, present):
+    # Either half alone is still a broken gateway setup (URL without key, or key without URL).
+    monkeypatch.delenv("GATEWAY_BYPASS", raising=False)
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.setenv(present, "set")
+    with pytest.raises(ValueError, match="gateway"):
+        OpenAIClient()
