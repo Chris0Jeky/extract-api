@@ -294,8 +294,8 @@ class AnthropicClient:
         messages: list[MessageParam] = [{"role": "user", "content": prompt}]
         start = time.perf_counter()
         try:
-            # Construction can also raise (e.g. a missing/invalid key -> AnthropicError),
-            # so it is inside the try and mapped to the taxonomy like the call itself.
+            # Construction is inside the try so any SDK error it raises is mapped to the
+            # taxonomy like the call itself.
             client = Anthropic(
                 api_key=self.api_key,
                 base_url=self.base_url,
@@ -321,8 +321,9 @@ class AnthropicClient:
         stop_reason = getattr(response, "stop_reason", None)
         # Fail loud on every non-success stop, in order, so a provider fault is never
         # silently returned as an empty-but-valid extraction. A "refusal" stop means the
-        # model declined; "max_tokens"/"pause_turn" mean the answer is incomplete and this
-        # synchronous single-shot seam cannot continue it.
+        # model declined; max_tokens / pause_turn / model_context_window_exceeded all mean
+        # the answer is incomplete and this synchronous single-shot seam cannot continue it
+        # (Anthropic's guidance is to treat the context-window stop as truncation).
         if stop_reason == "refusal":
             # Surface the provider's refusal diagnostic like the OpenAI path does. Only the
             # bounded category enum (cyber/bio/frontier_llm/reasoning_extraction) is
@@ -331,7 +332,7 @@ class AnthropicClient:
             details = getattr(response, "stop_details", None)
             category = getattr(details, "category", None)
             raise ProviderRefusal(provider=self.provider, reason=str(category or "refusal"))
-        if stop_reason in {"max_tokens", "pause_turn"}:
+        if stop_reason in {"max_tokens", "pause_turn", "model_context_window_exceeded"}:
             raise ProviderTruncation(provider=self.provider, reason=str(stop_reason))
 
         text = _anthropic_text(response)

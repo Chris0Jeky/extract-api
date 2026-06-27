@@ -82,6 +82,14 @@ def test_pause_turn_raises_truncation(monkeypatch):
         AnthropicClient().complete(system="s", prompt="p", json_schema=SCHEMA)
 
 
+def test_context_window_exceeded_raises_truncation(monkeypatch):
+    # Anthropic's guidance is to treat a context-window stop as truncated output, not a
+    # normal completion handed to the validation loop.
+    _install(monkeypatch, message=_message(stop_reason="model_context_window_exceeded"))
+    with pytest.raises(ProviderTruncation):
+        AnthropicClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+
+
 def test_refusal_raises(monkeypatch):
     _install(monkeypatch, message=_message(stop_reason="refusal", text=""))
     with pytest.raises(ProviderRefusal):
