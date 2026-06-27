@@ -208,6 +208,20 @@ def test_sdk_construction_error_maps_to_provider_error(monkeypatch):
         OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
 
 
+def test_gateway_mode_uses_llm_credentials(monkeypatch):
+    # Default (non-bypass) path: the SDK is built with the gateway's base_url + key, not an
+    # ambient provider key. This is the primary production routing path (mirrors the
+    # Anthropic gateway-mode test so both providers assert it symmetrically).
+    captured = _install(monkeypatch, response=_response())
+    monkeypatch.delenv("GATEWAY_BYPASS", raising=False)
+    monkeypatch.setenv("LLM_BASE_URL", "https://gateway.example")
+    monkeypatch.setenv("LLM_API_KEY", "gateway-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "should-not-be-used")
+    OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+    assert captured["base_url"] == "https://gateway.example"
+    assert captured["api_key"] == "gateway-key"  # the gateway key, not the ambient OPENAI_API_KEY
+
+
 def test_gateway_bypass_uses_direct_openai_credentials(monkeypatch):
     captured = _install(monkeypatch, response=_response())
     monkeypatch.setenv("GATEWAY_BYPASS", "1")
