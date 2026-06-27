@@ -65,11 +65,9 @@ def run_accuracy(
     predict: Predictor,
     *,
     fixtures: list[dict[str, object]] | None = None,
-    schema_version: str = "v1",
 ) -> AccuracyReport:
     """Score `provider` over `doc_type`'s REVIEWED fixtures (or an injected fixture list)."""
     items = load_reviewed_fixtures(doc_type) if fixtures is None else fixtures
-    model_cls = resolve(doc_type, schema_version)
     scored = []
     costs: list[float] = []
     latencies: list[float] = []
@@ -78,6 +76,9 @@ def run_accuracy(
     for fx in items:
         expected = fx["expected"]
         assert isinstance(expected, dict)
+        # Resolve each fixture against ITS OWN schema_version, so a mixed-version corpus is
+        # scored correctly rather than all canonicalized against one run-level model.
+        model_cls = resolve(doc_type, str(fx["schema_version"]))
         try:
             prediction = predict(fx)
         except PredictionFailed:
