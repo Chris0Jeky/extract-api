@@ -74,7 +74,9 @@ def _mock_anthropic(monkeypatch, *, model="claude-test"):
 
 
 def _post(provider):
-    client = TestClient(create_app(), raise_server_exceptions=False)
+    # No raise_server_exceptions=False: these are happy-path 200 assertions, so letting an
+    # unexpected exception propagate gives a real traceback instead of a generic 500.
+    client = TestClient(create_app())
     return client.post(
         "/v1/extract",
         json={"doc_type": "invoice", "schema_version": "v1", "content": "x", "provider": provider},
@@ -86,7 +88,10 @@ def test_explicit_openai_routes_to_openai(monkeypatch):
     _mock_openai(monkeypatch)
     resp = _post("openai")
     assert resp.status_code == 200
-    assert resp.json()["meta"]["provider"] == "openai"
+    meta = resp.json()["meta"]
+    assert meta["provider"] == "openai"
+    # Also prove response.model -> meta.model flows through the real OpenAIClient end-to-end.
+    assert meta["model"] == "gpt-test"
 
 
 def test_explicit_anthropic_routes_to_anthropic(monkeypatch):
@@ -94,7 +99,10 @@ def test_explicit_anthropic_routes_to_anthropic(monkeypatch):
     _mock_anthropic(monkeypatch)
     resp = _post("anthropic")
     assert resp.status_code == 200
-    assert resp.json()["meta"]["provider"] == "anthropic"
+    meta = resp.json()["meta"]
+    assert meta["provider"] == "anthropic"
+    # Also prove response.model -> meta.model flows through the real AnthropicClient.
+    assert meta["model"] == "claude-test"
 
 
 def test_default_falls_back_to_openai(monkeypatch):
