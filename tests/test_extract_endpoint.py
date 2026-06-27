@@ -181,6 +181,23 @@ def test_provider_timeout_detail_is_sanitized(monkeypatch):
     assert "SECRET" not in body["detail"]
 
 
+def test_budget_cap_blocks_further_extractions(monkeypatch):
+    # T18: once committed spend reaches the per-run cap, the next request is 402 budget_exceeded
+    # before any model call. The fake spends 0.0012 per call; cap is below that.
+    from api.budget import BudgetGuard
+
+    fake = _FakeClient([VALID_JSON, VALID_JSON])
+    monkeypatch.setattr("api.main.get_client", lambda provider: fake)
+    client = TestClient(create_app(budget=BudgetGuard(0.001)), raise_server_exceptions=False)
+
+    first = _post(client)
+    assert first.status_code == 200  # spent 0 < cap, then committed 0.0012
+    second = _post(client)
+    assert second.status_code == 402
+    assert second.json()["error"] == "budget_exceeded"
+    assert fake.calls == 1  # the capped request did not spend a model call
+
+
 def test_unknown_schema_version_renders_unsupported_doc_type(monkeypatch):
     # A registered doc_type with an unregistered version misses the registry, which
     # raises UnknownSchema BEFORE any provider call -> the taxonomy, not a 500.

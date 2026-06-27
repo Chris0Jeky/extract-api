@@ -37,11 +37,10 @@ def test_every_code_renders_its_status_and_body(code):
 # Every taxonomy code is either reachable via a live request path or reserved for an
 # unbuilt feature. Each live-reachable code below is produced end-to-end by a real request
 # elsewhere: validation_failed / unsupported_doc_type / provider_error / provider_timeout /
-# idempotency_conflict / internal_error in tests/test_extract_endpoint.py; not_found /
-# method_not_allowed in tests/test_api.py.
+# idempotency_conflict / internal_error / budget_exceeded in tests/test_extract_endpoint.py;
+# not_found / method_not_allowed in tests/test_api.py.
 _RESERVED_CODES = {
     ErrorCode.low_confidence,  # needs confidence-gating (not built)
-    ErrorCode.budget_exceeded,  # needs the budget guard (M3 / T18)
 }
 _LIVE_REACHABLE_CODES = {
     ErrorCode.validation_failed,
@@ -50,6 +49,7 @@ _LIVE_REACHABLE_CODES = {
     ErrorCode.provider_timeout,
     ErrorCode.idempotency_conflict,
     ErrorCode.internal_error,
+    ErrorCode.budget_exceeded,  # reachable via the per-run budget guard (T18)
     ErrorCode.not_found,
     ErrorCode.method_not_allowed,
 }
