@@ -57,8 +57,8 @@ field_confidence, cost_usd, latency_ms}}`. 422 returns
 model_output}]}`. 409 returns `{error:"idempotency_conflict"}`. Every non-200
 carries one taxonomy error.
 
-`field_confidence` is heuristic (presence + validation pass + optional model
-self-report), labeled as such. `cost_usd` is emitted per request from day one
+`field_confidence` is a presence-only heuristic (1.0 for a present value, 0.0 for an
+explicit null), labeled as such. `cost_usd` is emitted per request from day one
 (the gateway later surfaces cost per accepted extraction).
 
 ## M0 build reconciliation
