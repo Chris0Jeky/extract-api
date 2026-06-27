@@ -3,6 +3,7 @@
 import pytest
 
 from harness.normalize import (
+    _NO_MINOR_UNIT,
     _THREE_DECIMAL,
     _ZERO_DECIMAL,
     to_iso_date,
@@ -92,6 +93,7 @@ def test_money_to_minor_units(amount, currency, minor):
         ("1234.500", "GBP"),  # trailing zeros beyond the 2 allowed digits still raise
         ("100.00", "ZZZ"),  # unknown currency
         ("100.00", "gbp"),  # lowercase is not a valid ISO-4217 code
+        ("100.00", "XDR"),  # XDR has no defined minor unit (N.A.) -> fail loud, never guess
     ],
 )
 def test_bad_money_raises_not_coerce(amount, currency):
@@ -99,8 +101,18 @@ def test_bad_money_raises_not_coerce(amount, currency):
         to_minor_units(amount, currency)
 
 
+def test_no_minor_unit_currency_fails_with_a_clear_message():
+    # XDR is a valid ISO-4217 code but its minor unit is undefined; converting must fail
+    # loud rather than scale by a guessed 10^2.
+    with pytest.raises(ValueError, match="minor unit"):
+        to_minor_units("100.00", "XDR")
+
+
 def test_minor_digit_tables_are_subset_of_known_currencies():
     # Guards against an exception list drifting out of the committed ISO-4217 set.
     assert _ZERO_DECIMAL <= ISO_4217_ALPHA
     assert _THREE_DECIMAL <= ISO_4217_ALPHA
+    assert _NO_MINOR_UNIT <= ISO_4217_ALPHA
+    # The three exception sets are mutually exclusive (a code has exactly one rule).
     assert _ZERO_DECIMAL.isdisjoint(_THREE_DECIMAL)
+    assert _NO_MINOR_UNIT.isdisjoint(_ZERO_DECIMAL | _THREE_DECIMAL)
