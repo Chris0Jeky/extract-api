@@ -12,7 +12,9 @@ dependencies = [
     "fastapi[standard]>=0.136,<0.139",
     "pydantic>=2.13,<3",
     "openai>=2.41,<3",
-    "anthropic>=0.109,<0.112",
+    # Floor is the verified 0.109.1 (ADR 0001): the T09 structured-output path needs the
+    # Messages `output_config` parameter, which the 0.109.0 floor did not guarantee.
+    "anthropic>=0.109.1,<0.112",
     "PyMuPDF==1.27.2.3",
 ]
 
@@ -51,6 +53,13 @@ strict = true
 packages = ["api", "schemas", "llm", "harness"]
 # Provider SDKs are imported only in llm/client.py; if their stubs are incomplete,
 # narrow with per-module overrides here rather than relaxing strict globally.
+
+[[tool.mypy.overrides]]
+# PyMuPDF (pymupdf) ships incomplete type info, so pymupdf.open reads as an untyped call
+# under strict mode. Treat the package as untyped at its import boundary (api/content.py is
+# the only importer) rather than relaxing strict for the whole codebase.
+module = ["pymupdf", "pymupdf.*"]
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -28,10 +28,39 @@ def test_every_code_has_exactly_one_status():
 @pytest.mark.parametrize("code", list(ErrorCode))
 def test_every_code_renders_its_status_and_body(code):
     # Each taxonomy member renders to its one HTTP status WITH its code in the body
-    # (covers low_confidence and idempotency_conflict, which no live path raises yet).
+    # (covers low_confidence and budget_exceeded, which no live path raises yet).
     resp = error_response(code, {"error": code.value, "detail": "x"})
     assert resp.status_code == STATUS_BY_CODE[code]
     assert json.loads(resp.body)["error"] == code.value
+
+
+# Every taxonomy code is either reachable via a live request path or reserved for an
+# unbuilt feature. Each live-reachable code below is produced end-to-end by a real request
+# elsewhere: validation_failed / unsupported_doc_type / provider_error / provider_timeout /
+# idempotency_conflict / internal_error / budget_exceeded in tests/test_extract_endpoint.py;
+# not_found / method_not_allowed in tests/test_api.py.
+_RESERVED_CODES = {
+    ErrorCode.low_confidence,  # needs confidence-gating (not built)
+}
+_LIVE_REACHABLE_CODES = {
+    ErrorCode.validation_failed,
+    ErrorCode.unsupported_doc_type,
+    ErrorCode.provider_error,
+    ErrorCode.provider_timeout,
+    ErrorCode.idempotency_conflict,
+    ErrorCode.internal_error,
+    ErrorCode.budget_exceeded,  # reachable via the per-run budget guard (T18)
+    ErrorCode.not_found,
+    ErrorCode.method_not_allowed,
+}
+
+
+def test_every_code_is_reachable_or_reserved():
+    # Tripwire: adding a new ErrorCode fails this until it is classified as live-reachable
+    # (with an end-to-end test) or reserved, so the taxonomy cannot silently grow an
+    # unreachable/untested member (CLAUDE.md: new members need owner approval).
+    assert _LIVE_REACHABLE_CODES.isdisjoint(_RESERVED_CODES)
+    assert set(ErrorCode) == _LIVE_REACHABLE_CODES | _RESERVED_CODES
 
 
 def test_extract_error_body_carries_one_code():

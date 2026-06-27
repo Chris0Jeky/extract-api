@@ -86,6 +86,32 @@ def test_refusal_raises(monkeypatch):
         OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
 
 
+def test_truncation_carries_billed_cost(monkeypatch):
+    # A truncation is a completed, billed response, so the call's own cost must ride on the
+    # exception (else the budget guard under-counts the most expensive failure mode).
+    monkeypatch.setenv("OPENAI_PRICE_IN_PER_M", "1.0")
+    monkeypatch.setenv("OPENAI_PRICE_OUT_PER_M", "2.0")
+    _install(
+        monkeypatch,
+        response=_response(status="incomplete", incomplete_reason="max_output_tokens", text=""),
+    )
+    with pytest.raises(ProviderTruncation) as excinfo:
+        OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+    assert excinfo.value.cost_usd == pytest.approx((100 * 1.0 + 50 * 2.0) / 1_000_000)
+
+
+def test_refusal_carries_billed_cost(monkeypatch):
+    # A refusal is also a billed response; its cost must ride on the exception too.
+    monkeypatch.setenv("OPENAI_PRICE_IN_PER_M", "1.0")
+    monkeypatch.setenv("OPENAI_PRICE_OUT_PER_M", "2.0")
+    refusal_part = types.SimpleNamespace(type="refusal", refusal="cannot help")
+    message = types.SimpleNamespace(content=[refusal_part])
+    _install(monkeypatch, response=_response(output=[message]))
+    with pytest.raises(ProviderRefusal) as excinfo:
+        OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+    assert excinfo.value.cost_usd == pytest.approx((100 * 1.0 + 50 * 2.0) / 1_000_000)
+
+
 def test_timeout_raises(monkeypatch):
     req = httpx.Request("POST", "https://api.openai.com/v1/responses")
     _install(monkeypatch, raises=openai.APITimeoutError(request=req))
@@ -173,6 +199,16 @@ def test_missing_price_env_fails_loud(monkeypatch):
         OpenAIClient()
 
 
+@pytest.mark.parametrize("bad", ["nan", "inf", "-inf", "Infinity", "-0.5"])
+def test_non_finite_or_negative_price_fails_loud(monkeypatch, bad):
+    # A non-finite/negative price would feed invalid spend into cost_usd and the budget
+    # guard (nan never trips the cap; a negative cost reduces committed spend -> fail-open).
+    # Reject it loudly at construction, mirroring budget_from_env's EXTRACT_BUDGET_USD check.
+    monkeypatch.setenv("OPENAI_PRICE_IN_PER_M", bad)
+    with pytest.raises(ValueError, match="finite, non-negative"):
+        OpenAIClient()
+
+
 def test_sdk_construction_error_maps_to_provider_error(monkeypatch):
     def boom(**kwargs):
         raise openai.OpenAIError("the api_key client option must be set")
@@ -180,6 +216,20 @@ def test_sdk_construction_error_maps_to_provider_error(monkeypatch):
     monkeypatch.setattr(openai, "OpenAI", boom)
     with pytest.raises(ProviderError):
         OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+
+
+def test_gateway_mode_uses_llm_credentials(monkeypatch):
+    # Default (non-bypass) path: the SDK is built with the gateway's base_url + key, not an
+    # ambient provider key. This is the primary production routing path (mirrors the
+    # Anthropic gateway-mode test so both providers assert it symmetrically).
+    captured = _install(monkeypatch, response=_response())
+    monkeypatch.delenv("GATEWAY_BYPASS", raising=False)
+    monkeypatch.setenv("LLM_BASE_URL", "https://gateway.example")
+    monkeypatch.setenv("LLM_API_KEY", "gateway-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "should-not-be-used")
+    OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+    assert captured["base_url"] == "https://gateway.example"
+    assert captured["api_key"] == "gateway-key"  # the gateway key, not the ambient OPENAI_API_KEY
 
 
 def test_gateway_bypass_uses_direct_openai_credentials(monkeypatch):
@@ -191,3 +241,25 @@ def test_gateway_bypass_uses_direct_openai_credentials(monkeypatch):
     OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
     assert captured["api_key"] == "direct-openai-key"  # not the gateway key
     assert captured["base_url"] is None  # direct to OpenAI, not the gateway URL
+
+
+def test_non_bypass_missing_gateway_config_fails_loud(monkeypatch):
+    # Issue #38: in gateway (non-bypass) mode, missing LLM_BASE_URL/LLM_API_KEY must NOT
+    # silently fall back to the ambient OPENAI_API_KEY + the public endpoint; fail loud.
+    monkeypatch.delenv("GATEWAY_BYPASS", raising=False)
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "ambient-key-that-must-not-be-used")
+    with pytest.raises(ValueError, match="gateway"):
+        OpenAIClient()
+
+
+@pytest.mark.parametrize("present", ["LLM_BASE_URL", "LLM_API_KEY"])
+def test_non_bypass_half_gateway_config_fails_loud(monkeypatch, present):
+    # Either half alone is still a broken gateway setup (URL without key, or key without URL).
+    monkeypatch.delenv("GATEWAY_BYPASS", raising=False)
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.setenv(present, "set")
+    with pytest.raises(ValueError, match="gateway"):
+        OpenAIClient()

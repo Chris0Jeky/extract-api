@@ -21,6 +21,7 @@ from pydantic import BaseModel, ValidationError
 from pydantic_core import ErrorDetails
 
 from llm.client import CompletionResult, LLMClient
+from llm.errors import ProviderError
 
 logger = logging.getLogger("extract.pipeline")
 
@@ -41,10 +42,12 @@ class ExtractionFailed(Exception):
     the 422 body without re-serializing.
     """
 
-    def __init__(self, *, attempts: int, trail: list[ErrorSummary]) -> None:
+    def __init__(self, *, attempts: int, trail: list[ErrorSummary], cost_usd: float = 0.0) -> None:
         super().__init__(f"extraction failed strict validation after {attempts} attempt(s)")
         self.attempts = attempts
         self.trail = trail
+        # Total billed spend across all attempts, so the API budget guard can reconcile it.
+        self.cost_usd = cost_usd
 
 
 def _summarize(errors: list[ErrorDetails]) -> ErrorSummary:
@@ -90,9 +93,18 @@ def run_extraction(
     tokens_in = tokens_out = 0
     cost_usd = latency_ms = 0.0
     for attempt in range(1, MAX_ATTEMPTS + 1):
-        result = client.complete(
-            system=system, prompt=prompt, json_schema=schema, max_tokens=max_tokens
-        )
+        try:
+            result = client.complete(
+                system=system, prompt=prompt, json_schema=schema, max_tokens=max_tokens
+            )
+        except ProviderError as exc:
+            # Reconcile total billed spend for this run: prior successful attempts PLUS this
+            # failed call's own cost. A refusal/truncation is a billed response, so the client
+            # sets exc.cost_usd to that call's cost; add the prior-attempt accumulator so the
+            # budget guard sees the full spend. A timeout/SDK error carries 0.0 (cost unknown),
+            # leaving just the prior-attempt total.
+            exc.cost_usd += cost_usd
+            raise
         tokens_in += result.tokens_in
         tokens_out += result.tokens_out
         cost_usd += result.cost_usd
@@ -123,4 +135,4 @@ def run_extraction(
             stop_reason=result.stop_reason,
         )
         return model, aggregated, attempt
-    raise ExtractionFailed(attempts=len(trail), trail=trail)
+    raise ExtractionFailed(attempts=len(trail), trail=trail, cost_usd=cost_usd)

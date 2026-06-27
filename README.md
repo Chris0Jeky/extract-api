@@ -25,9 +25,12 @@ Headers: Idempotency-Key: <client uuid>
 Body: {
   "doc_type": "invoice" | "uk_job_posting",
   "schema_version": "v1",
-  "content": "<text or base64 pdf>",
+  "content": "<document text, or a base64 PDF when content_format is pdf_base64>",
+  "content_format": "text" | "pdf_base64",   // optional, default "text"
   "provider": "openai" | "anthropic" | "default"
 }
+// PDF callers MUST set "content_format": "pdf_base64"; otherwise the base64 is treated
+// as literal text. PDF text is extracted with PyMuPDF (no OCR).
 
 200 OK:
 { "data": { ...validated fields... },
@@ -46,23 +49,25 @@ Idempotency: `Idempotency-Key` + `sha256(payload)` is stored with the response.
 Same key + same hash replays the stored response with no model call
 (`replayed: true` in meta); same key + different hash is a 409; TTL 24h.
 
-`field_confidence` is a **heuristic** (presence + validation pass + optional model
-self-report), not a calibrated probability. The README will say so wherever the
+`field_confidence` is a presence-only **heuristic** (1.0 for a present value, 0.0 for an
+explicit null), not a calibrated probability. The README will say so wherever the
 numbers appear.
 
 ## Error taxonomy
 
 Every non-200 carries exactly one error code, including framework routing errors.
-Observed frequencies are filled in from the accuracy run (numbers pending).
+Observed frequencies are filled in from the accuracy run (numbers pending). One code is
+**reserved** (`low_confidence`): it has a fixed status and renders correctly, but no live
+request path emits it yet because confidence-gating is unbuilt.
 
 | error | HTTP | meaning | frequency |
 | --- | --- | --- | --- |
 | `validation_failed` | 422 | output failed strict validation twice, or a malformed request | TBD |
-| `low_confidence` | 422 | confidence below threshold | TBD |
+| `low_confidence` | 422 | confidence below threshold (reserved: confidence-gating not built) | n/a (reserved) |
 | `unsupported_doc_type` | 422 | no schema for (doc_type, schema_version), or an out-of-Literal doc_type | TBD |
 | `provider_error` | 502 | provider call failed | TBD |
 | `provider_timeout` | 504 | provider call timed out | TBD |
-| `budget_exceeded` | 402 | per-run USD cap reached | TBD |
+| `budget_exceeded` | 402 | per-run USD cap (EXTRACT_BUDGET_USD) reached | TBD |
 | `idempotency_conflict` | 409 | same key, different payload | TBD |
 | `internal_error` | 500 | unexpected or unmapped server error | TBD |
 | `not_found` | 404 | no such route | TBD |
