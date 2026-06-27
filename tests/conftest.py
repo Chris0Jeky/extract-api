@@ -10,3 +10,12 @@ def _openai_prices(monkeypatch):
     # the missing-price failure deletes them explicitly.
     monkeypatch.setenv("OPENAI_PRICE_IN_PER_M", "0.15")
     monkeypatch.setenv("OPENAI_PRICE_OUT_PER_M", "0.60")
+
+
+@pytest.fixture(autouse=True)
+def _anthropic_prices(monkeypatch):
+    # AnthropicClient requires explicit per-model prices too (same rule as OpenAI), so
+    # constructing it (e.g. via get_client("anthropic")) works; the test that asserts the
+    # missing-price failure deletes them explicitly.
+    monkeypatch.setenv("ANTHROPIC_PRICE_IN_PER_M", "3.0")
+    monkeypatch.setenv("ANTHROPIC_PRICE_OUT_PER_M", "15.0")

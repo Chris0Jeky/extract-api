@@ -3,15 +3,16 @@
 Routing is env-only. The seam reads LLM_PROVIDER_MODE (the fixture short-circuit) and
 LLM_DEFAULT_PROVIDER (default resolution). OpenAIClient (T02) routes via LLM_BASE_URL +
 LLM_API_KEY, except under GATEWAY_BYPASS=1, where it talks to OpenAI directly with
-OPENAI_API_KEY and no gateway base URL. The Anthropic real-call path lands in T09.
+OPENAI_API_KEY and no gateway base URL. AnthropicClient (T09) mirrors this exactly:
+same routing, ANTHROPIC_API_KEY under GATEWAY_BYPASS, structured-output JSON text out.
 Keeping it all env-driven means the week-10 gateway migration stays an env change,
 not a code change. Provider SDKs are imported lazily inside complete() so importing
 this module never needs credentials. cost_usd is carried on every result from day
 one (ADR 0002).
 
-Real call paths land in T02 (OpenAI responses.parse) and T09 (Anthropic
-messages.parse); the FixtureClient (T04b) gives an offline deterministic path for
-`make smoke` and tests.
+Real call paths: T02 (OpenAI Responses API, strict json_schema) and T09 (Anthropic
+Messages API, structured outputs via output_config); the FixtureClient (T04b) gives
+an offline deterministic path for `make smoke` and tests.
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from llm.errors import ProviderError, ProviderRefusal, ProviderTimeout, Provider
 from llm.schema_utils import sanitize_for_provider
 
 if TYPE_CHECKING:
+    from anthropic.types import MessageParam, OutputConfigParam
     from openai.types.responses import ResponseTextConfigParam
 
 
@@ -83,6 +85,16 @@ def _int_env(name: str, default: str) -> int:
         raise ValueError(f"env {name}={raw!r} is not a valid int") from exc
 
 
+def _token_cost(
+    tokens_in: int, tokens_out: int, *, price_in_per_m: float, price_out_per_m: float
+) -> float:
+    """USD cost from token counts and per-million-token prices. 0 tokens -> 0.0.
+
+    Shared by both real providers so the cost formula has one definition.
+    """
+    return (tokens_in * price_in_per_m + tokens_out * price_out_per_m) / 1_000_000.0
+
+
 def _first_refusal(response: object) -> str | None:
     """Return the first refusal string in the response output, or None.
 
@@ -94,6 +106,20 @@ def _first_refusal(response: object) -> str | None:
             if getattr(part, "type", None) == "refusal":
                 return str(getattr(part, "refusal", "") or "")
     return None
+
+
+def _anthropic_text(response: object) -> str:
+    """Concatenate the text of every text content block on an Anthropic message.
+
+    Structured outputs return the JSON payload as ordinary text blocks
+    (content.type == "text"); scanning defensively (getattr) keeps this robust to
+    SDK shape drift, exactly as OpenAI's output_text is read for that provider.
+    """
+    parts: list[str] = []
+    for block in getattr(response, "content", None) or []:
+        if getattr(block, "type", None) == "text":
+            parts.append(str(getattr(block, "text", "") or ""))
+    return "".join(parts)
 
 
 class OpenAIClient:
@@ -211,18 +237,44 @@ class OpenAIClient:
     def _cost_usd(self, tokens_in: int, tokens_out: int) -> float:
         # usage absent -> 0 tokens -> 0.0 (documented fallback when a degraded gateway
         # omits usage). A real gateway-supplied cost override lands with the gateway work.
-        return (tokens_in * self.price_in_per_m + tokens_out * self.price_out_per_m) / 1_000_000.0
+        return _token_cost(
+            tokens_in,
+            tokens_out,
+            price_in_per_m=self.price_in_per_m,
+            price_out_per_m=self.price_out_per_m,
+        )
 
 
 class AnthropicClient:
-    """Anthropic structured-output client. Real call lands in T09."""
+    """Anthropic structured-output client (Messages API with output_config json_schema).
+
+    Mirrors OpenAIClient: returns raw JSON text (ADR 0002) for the validation-retry
+    loop to re-validate, and prices cost_usd from env-configured per-million-token
+    rates so there is no committed table to drift. Structured outputs place the JSON
+    in a text content block, so the seam reads it like any other completion.
+    """
 
     provider = "anthropic"
 
     def __init__(self) -> None:
-        self.base_url = _env("LLM_BASE_URL")
-        self.api_key = _env("LLM_API_KEY")
+        # Mirror OpenAI's bypass: GATEWAY_BYPASS=1 talks to Anthropic directly with the
+        # provider key and no gateway base URL; otherwise route through the LLM_* gateway
+        # config so the week-10 migration stays an env flip.
+        if os.environ.get("GATEWAY_BYPASS") == "1":
+            self.base_url = None
+            self.api_key = _env("ANTHROPIC_API_KEY") or _env("LLM_API_KEY")
+        else:
+            self.base_url = _env("LLM_BASE_URL")
+            self.api_key = _env("LLM_API_KEY")
         self.model = os.environ.get("ANTHROPIC_MODEL", "")
+        # Per-million-token prices (USD). REQUIRED and explicit for the same reason as
+        # OpenAI: a silent default would bill every model at one rate and report a wrong
+        # cost_usd. The operator must set the prices for their ANTHROPIC_MODEL.
+        self.price_in_per_m = _float_env_required("ANTHROPIC_PRICE_IN_PER_M")
+        self.price_out_per_m = _float_env_required("ANTHROPIC_PRICE_OUT_PER_M")
+        # Same call bounds as OpenAI so a slow provider cannot pin a worker.
+        self.timeout_s = _float_env("LLM_REQUEST_TIMEOUT_S", "60")
+        self.max_retries = _int_env("LLM_MAX_RETRIES", "2")
 
     def complete(
         self,
@@ -232,8 +284,78 @@ class AnthropicClient:
         json_schema: dict[str, object],
         max_tokens: int = 4096,
     ) -> CompletionResult:
-        # from anthropic import Anthropic  # lazy import lands with the real call (T09)
-        raise NotImplementedError("Anthropic messages.parse path lands in T09")
+        # Lazy, and the ONLY place the Anthropic SDK is imported (gateway-seam rule).
+        import anthropic
+        from anthropic import Anthropic
+
+        output_config: OutputConfigParam = {
+            "format": {"type": "json_schema", "schema": sanitize_for_provider(json_schema)}
+        }
+        messages: list[MessageParam] = [{"role": "user", "content": prompt}]
+        start = time.perf_counter()
+        try:
+            # Construction is inside the try so any SDK error it raises is mapped to the
+            # taxonomy like the call itself.
+            client = Anthropic(
+                api_key=self.api_key,
+                base_url=self.base_url,
+                timeout=self.timeout_s,
+                max_retries=self.max_retries,
+            )
+            response = client.messages.create(
+                model=self.model,
+                system=system,
+                messages=messages,
+                max_tokens=max_tokens,
+                output_config=output_config,
+            )
+        except anthropic.APITimeoutError as exc:
+            raise ProviderTimeout(provider=self.provider, detail=str(exc)) from exc
+        except anthropic.APIError as exc:
+            raise ProviderError(provider=self.provider, detail=str(exc)) from exc
+        except anthropic.AnthropicError as exc:
+            # Base SDK error (e.g. construction/config failures) that is not an APIError.
+            raise ProviderError(provider=self.provider, detail=str(exc)) from exc
+        latency_ms = (time.perf_counter() - start) * 1000.0
+
+        stop_reason = getattr(response, "stop_reason", None)
+        # Fail loud on every non-success stop, in order, so a provider fault is never
+        # silently returned as an empty-but-valid extraction. A "refusal" stop means the
+        # model declined; max_tokens / pause_turn / model_context_window_exceeded all mean
+        # the answer is incomplete and this synchronous single-shot seam cannot continue it
+        # (Anthropic's guidance is to treat the context-window stop as truncation).
+        if stop_reason == "refusal":
+            # Surface the provider's refusal diagnostic like the OpenAI path does. Only the
+            # bounded category enum (cyber/bio/frontier_llm/reasoning_extraction) is
+            # propagated; the free-text explanation is left out to avoid echoing model
+            # content back into an error body.
+            details = getattr(response, "stop_details", None)
+            category = getattr(details, "category", None)
+            raise ProviderRefusal(provider=self.provider, reason=str(category or "refusal"))
+        if stop_reason in {"max_tokens", "pause_turn", "model_context_window_exceeded"}:
+            raise ProviderTruncation(provider=self.provider, reason=str(stop_reason))
+
+        text = _anthropic_text(response)
+        if not text.strip():
+            raise ProviderError(provider=self.provider, detail="empty completion (no output text)")
+
+        usage = getattr(response, "usage", None)
+        tokens_in = int(getattr(usage, "input_tokens", 0) or 0)
+        tokens_out = int(getattr(usage, "output_tokens", 0) or 0)
+        return CompletionResult(
+            text=text,
+            model=getattr(response, "model", None) or self.model,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            cost_usd=_token_cost(
+                tokens_in,
+                tokens_out,
+                price_in_per_m=self.price_in_per_m,
+                price_out_per_m=self.price_out_per_m,
+            ),
+            latency_ms=latency_ms,
+            stop_reason=str(stop_reason or "end_turn"),
+        )
 
 
 class FixtureClient:
@@ -282,9 +404,8 @@ def get_client(provider: str) -> LLMClient:
         return FixtureClient(os.environ.get("FIXTURE_CANNED_TEXT", ""))
     resolved = provider
     if provider == "default":
-        # M1 window: default to OpenAI, the only provider with a real call path. The
-        # Anthropic path lands in T09; until then a bare "default" request must reach a
-        # working provider, not the unimplemented stub. Override per deployment via env.
+        # Both providers have real call paths now (T02 OpenAI, T09 Anthropic); openai
+        # remains the default by the locked decision, overridable per deployment via env.
         # `or` (not a get default) so an empty LLM_DEFAULT_PROVIDER= also falls back.
         resolved = os.environ.get("LLM_DEFAULT_PROVIDER") or "openai"
     if resolved == "openai":

@@ -6,8 +6,7 @@ call -> strict validate -> one feedback retry) -> render `data` + full `meta`. T
 provider seam raises `llm.errors.Provider*` and the pipeline raises `ExtractionFailed`;
 this layer maps those onto the `ErrorCode` taxonomy, and `api/errors.py` renders
 request-shape errors (validation_failed / unsupported_doc_type) and any unmapped
-exception (internal_error) through it too (T05). The not-yet-implemented Anthropic
-provider path (T09) currently surfaces as internal_error. `/healthz` stays a trivial
+exception (internal_error) through it too (T05). `/healthz` stays a trivial
 liveness probe.
 """
 
