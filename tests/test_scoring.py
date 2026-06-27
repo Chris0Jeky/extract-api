@@ -97,5 +97,6 @@ def test_render_markdown_has_summary_and_per_field_table():
     md = render_markdown(report)
     assert "### invoice / openai" in md
     assert "overall exact-match: 100.0%" in md
+    assert "latency p50/p95 (successful):" in md  # honest: success-only latency
     assert "| field | exact-match | mismatch | missed | hallucinated |" in md
     assert "`invoice_number`" in md

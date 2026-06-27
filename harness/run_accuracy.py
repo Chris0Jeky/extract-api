@@ -1,8 +1,9 @@
 """Deterministic accuracy harness (NO LLM judges anywhere).
 
 Scores a provider over the REVIEWED fixtures for a doc type: per-field exact-match (after
-canonical normalization), null-handling, and the hallucinated-field rate, plus cost and
-p50/p95 latency. Scoring itself is pure (harness/scoring.py) and unit-tested offline;
+canonical normalization) and the hallucinated-field rate, plus cost and success-only
+p50/p95 latency (a null-handling-correctness rate over expected-null fields is pending
+issue #46). Scoring itself is pure (harness/scoring.py) and unit-tested offline;
 producing real numbers needs `--live`, which POSTs each fixture to the serving endpoint.
 DRAFT-labelled fixtures are never scored (ADR 0003). The markdown report lands in
 evals/reports/ via T17.

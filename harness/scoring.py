@@ -10,8 +10,10 @@ in their canonical form, not as raw strings). Each field gets one outcome:
 - hallucinated: expected is null, predicted is non-null (the model invented a value for a
                 genuinely-absent field)
 
-Aggregation reports per-field exact-match rate, the hallucinated-field rate, null-handling
-correctness, plus cost and p50/p95 latency. Pure and dependency-light so it is trivially
+Aggregation reports per-field exact-match rate, the hallucinated-field rate, plus total
+cost and success-only p50/p95 latency (failed extractions are counted as n_failures but do
+not contribute a latency sample). A dedicated null-handling-correctness rate over
+expected-null fields is pending issue #46. Pure and dependency-light, so it is trivially
 testable and never touches the network.
 """
 
@@ -168,7 +170,7 @@ def render_markdown(report: AccuracyReport) -> str:
         f"({report.total_matches}/{report.total_fields})",
         f"- hallucinated-field rate: {report.hallucinated_field_rate:.1%} "
         f"({report.total_hallucinated}/{report.total_fields})",
-        f"- cost: ${report.cost_usd_total:.4f} | latency p50/p95: "
+        f"- cost: ${report.cost_usd_total:.4f} | latency p50/p95 (successful): "
         f"{report.latency_p50_ms:.0f}/{report.latency_p95_ms:.0f} ms",
         "",
         "| field | exact-match | mismatch | missed | hallucinated |",
