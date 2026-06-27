@@ -83,6 +83,8 @@ def _run_extract(request: ExtractRequest, budget: BudgetGuard) -> ExtractRespons
         # Subclass of ProviderError, so it must be caught first to keep its 504 code. Log the
         # full provider detail server-side but return a sanitized client message, so an
         # upstream provider/gateway error string is never echoed to external callers (#21).
+        # Reconcile any spend incurred before the failure so the budget cannot be defeated.
+        budget.add(exc.cost_usd)
         logger.warning("provider timeout (%s): %s", exc.provider, exc.detail)
         raise ExtractError(
             ErrorCode.provider_timeout, detail=f"the {exc.provider} provider timed out"
@@ -91,13 +93,17 @@ def _run_extract(request: ExtractRequest, budget: BudgetGuard) -> ExtractRespons
         # Covers ProviderError + ProviderRefusal + ProviderTruncation (all 502 in v1; a
         # dedicated refusal/truncation code is a future taxonomy decision). Same sanitization:
         # the provider's raw message is logged, not returned in the body.
+        budget.add(exc.cost_usd)
         logger.warning("provider error (%s): %s", exc.provider, exc.detail)
         raise ExtractError(
             ErrorCode.provider_error, detail=f"the {exc.provider} provider call failed"
         ) from exc
     except ExtractionFailed as exc:
-        # Strict validation failed on every attempt: 422 with the full per-attempt
-        # trail (JSON-safe by construction) so the caller sees exactly what broke.
+        # Strict validation failed on every attempt: 422 with the full per-attempt trail
+        # (JSON-safe by construction) so the caller sees exactly what broke. The attempts
+        # were billed, so reconcile their cost into the budget (a failure-heavy stream must
+        # still count against the cap).
+        budget.add(exc.cost_usd)
         raise ExtractError(
             ErrorCode.validation_failed,
             detail=str(exc),

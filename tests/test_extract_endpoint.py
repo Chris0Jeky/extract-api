@@ -198,6 +198,24 @@ def test_budget_cap_blocks_further_extractions(monkeypatch):
     assert fake.calls == 1  # the capped request did not spend a model call
 
 
+def test_budget_counts_failed_extraction_spend(monkeypatch):
+    # Failed extractions are billed (2 attempts) and MUST count against the cap, so a
+    # failure-heavy stream cannot silently defeat the budget.
+    from api.budget import BudgetGuard
+
+    fake = _FakeClient([INVALID_JSON, INVALID_JSON])  # both attempts fail strict validation
+    monkeypatch.setattr("api.main.get_client", lambda provider: fake)
+    client = TestClient(create_app(budget=BudgetGuard(0.001)), raise_server_exceptions=False)
+
+    first = _post(client)
+    assert first.status_code == 422  # validation_failed, but its 0.0024 spend is reconciled
+    assert fake.calls == 2
+    second = _post(client)
+    assert second.status_code == 402  # the failed request's billed spend tripped the cap
+    assert second.json()["error"] == "budget_exceeded"
+    assert fake.calls == 2  # the capped request spent nothing more
+
+
 def test_unknown_schema_version_renders_unsupported_doc_type(monkeypatch):
     # A registered doc_type with an unregistered version misses the registry, which
     # raises UnknownSchema BEFORE any provider call -> the taxonomy, not a 500.
