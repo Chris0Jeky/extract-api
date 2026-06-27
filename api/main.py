@@ -138,6 +138,10 @@ def _run_extract_idempotent(
     hash match the stored response is replayed (no model call, `replayed:true`); on a key
     reused with a different payload we fail loud with `idempotency_conflict` (409). Only a
     successful 200 is stored, so a transient failure stays retryable under the same key.
+
+    This guarantee is for SEQUENTIAL requests. Concurrent same-key requests can both miss
+    `get` and both run before either `put`s (the model call sits in the get/put window);
+    atomic reservation for that case is tracked in issue #42.
     """
     request_hash = payload_hash(request.model_dump_json().encode())
     existing = store.get(key)
