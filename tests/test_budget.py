@@ -62,3 +62,11 @@ def test_budget_from_env_invalid_fails_loud(monkeypatch):
     monkeypatch.setenv("EXTRACT_BUDGET_USD", "notanumber")
     with pytest.raises(ValueError, match="EXTRACT_BUDGET_USD"):
         budget_from_env()
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf", "-inf", "Infinity"])
+def test_budget_from_env_rejects_non_finite(monkeypatch, bad):
+    # nan/inf parse as floats but would silently disable or never-trip the cap -> fail loud.
+    monkeypatch.setenv("EXTRACT_BUDGET_USD", bad)
+    with pytest.raises(ValueError, match="finite"):
+        budget_from_env()

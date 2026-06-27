@@ -14,6 +14,7 @@ reserve-with-estimate (the full Hero-1 pattern) is a future refinement if needed
 from __future__ import annotations
 
 import logging
+import math
 import os
 import threading
 
@@ -67,4 +68,8 @@ def budget_from_env() -> BudgetGuard:
         cap = float(raw)
     except ValueError as exc:
         raise ValueError(f"env EXTRACT_BUDGET_USD={raw!r} is not a valid float") from exc
+    if not math.isfinite(cap):
+        # nan/inf parse fine but would silently disable (nan: not > 0) or never trip (inf)
+        # the guard; an explicitly-configured cap must be a finite number -> fail loud.
+        raise ValueError(f"env EXTRACT_BUDGET_USD={raw!r} must be a finite number")
     return BudgetGuard(cap)
