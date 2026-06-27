@@ -108,6 +108,27 @@ def test_refusal_surfaces_stop_details_category(monkeypatch):
     assert "secret reason" not in str(excinfo.value)
 
 
+def test_truncation_carries_billed_cost(monkeypatch):
+    # A truncation bills the generated output tokens, so the call's own cost must ride on
+    # the exception (mirrors the OpenAI path) so the budget guard does not under-count it.
+    monkeypatch.setenv("ANTHROPIC_PRICE_IN_PER_M", "3.0")
+    monkeypatch.setenv("ANTHROPIC_PRICE_OUT_PER_M", "15.0")
+    _install(monkeypatch, message=_message(stop_reason="max_tokens"))
+    with pytest.raises(ProviderTruncation) as excinfo:
+        AnthropicClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+    assert excinfo.value.cost_usd == pytest.approx((100 * 3.0 + 50 * 15.0) / 1_000_000)
+
+
+def test_refusal_carries_billed_cost(monkeypatch):
+    # A refusal is a billed response too; its cost rides on the exception.
+    monkeypatch.setenv("ANTHROPIC_PRICE_IN_PER_M", "3.0")
+    monkeypatch.setenv("ANTHROPIC_PRICE_OUT_PER_M", "15.0")
+    _install(monkeypatch, message=_message(stop_reason="refusal", text=""))
+    with pytest.raises(ProviderRefusal) as excinfo:
+        AnthropicClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+    assert excinfo.value.cost_usd == pytest.approx((100 * 3.0 + 50 * 15.0) / 1_000_000)
+
+
 def test_timeout_raises(monkeypatch):
     req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
     _install(monkeypatch, raises=anthropic.APITimeoutError(request=req))

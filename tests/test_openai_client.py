@@ -86,6 +86,32 @@ def test_refusal_raises(monkeypatch):
         OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
 
 
+def test_truncation_carries_billed_cost(monkeypatch):
+    # A truncation is a completed, billed response, so the call's own cost must ride on the
+    # exception (else the budget guard under-counts the most expensive failure mode).
+    monkeypatch.setenv("OPENAI_PRICE_IN_PER_M", "1.0")
+    monkeypatch.setenv("OPENAI_PRICE_OUT_PER_M", "2.0")
+    _install(
+        monkeypatch,
+        response=_response(status="incomplete", incomplete_reason="max_output_tokens", text=""),
+    )
+    with pytest.raises(ProviderTruncation) as excinfo:
+        OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+    assert excinfo.value.cost_usd == pytest.approx((100 * 1.0 + 50 * 2.0) / 1_000_000)
+
+
+def test_refusal_carries_billed_cost(monkeypatch):
+    # A refusal is also a billed response; its cost must ride on the exception too.
+    monkeypatch.setenv("OPENAI_PRICE_IN_PER_M", "1.0")
+    monkeypatch.setenv("OPENAI_PRICE_OUT_PER_M", "2.0")
+    refusal_part = types.SimpleNamespace(type="refusal", refusal="cannot help")
+    message = types.SimpleNamespace(content=[refusal_part])
+    _install(monkeypatch, response=_response(output=[message]))
+    with pytest.raises(ProviderRefusal) as excinfo:
+        OpenAIClient().complete(system="s", prompt="p", json_schema=SCHEMA)
+    assert excinfo.value.cost_usd == pytest.approx((100 * 1.0 + 50 * 2.0) / 1_000_000)
+
+
 def test_timeout_raises(monkeypatch):
     req = httpx.Request("POST", "https://api.openai.com/v1/responses")
     _install(monkeypatch, raises=openai.APITimeoutError(request=req))
