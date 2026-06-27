@@ -96,17 +96,21 @@ class SqliteIdempotencyStore:
             created_at_epoch=float(row[3]),
         )
         if self._is_expired(stored):
-            # An expired hit is no hit: drop it so a stale response is never replayed.
-            self._delete(key)
+            # An expired hit is no hit: drop it so a stale response is never replayed. Scope
+            # the delete to the exact row we read (by timestamp), so if a fresh put replaced
+            # it between this SELECT and the DELETE, the fresh row is preserved.
+            self._delete_expired(key, stored.created_at_epoch)
             return None
         return stored
 
     def put(self, key: str, stored: StoredResponse) -> None:
-        # INSERT OR REPLACE: re-storing the same key (e.g. a thread race where two callers
-        # both miss get()) is idempotent rather than an error.
+        # First-writer-wins (INSERT OR IGNORE): once a response is stored for a key it is the
+        # canonical one and a later put (e.g. a thread race where two callers both miss
+        # get()) is a no-op, not an overwrite. This keeps the stored response stable, which
+        # is what replay and the same-key-different-hash 409 (T12) rely on.
         with closing(self._connect()) as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO idempotency"
+                "INSERT OR IGNORE INTO idempotency"
                 " (key, payload_sha256, response_json, status_code, created_at_epoch)"
                 " VALUES (?, ?, ?, ?, ?)",
                 (
@@ -132,7 +136,13 @@ class SqliteIdempotencyStore:
     def _is_expired(self, stored: StoredResponse) -> bool:
         return (time.time() - stored.created_at_epoch) > self._ttl_seconds()
 
-    def _delete(self, key: str) -> None:
+    def _delete_expired(self, key: str, created_at_epoch: float) -> None:
+        # Delete only the exact (key, created_at) row we read as expired. The stored epoch
+        # is the same double we read back, so the equality match is exact; a fresher row
+        # for the same key has a different epoch and is left untouched.
         with closing(self._connect()) as conn:
-            conn.execute("DELETE FROM idempotency WHERE key = ?", (key,))
+            conn.execute(
+                "DELETE FROM idempotency WHERE key = ? AND created_at_epoch = ?",
+                (key, created_at_epoch),
+            )
             conn.commit()

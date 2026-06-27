@@ -77,13 +77,29 @@ def test_sweep_removes_only_expired(tmp_path):
     assert store.get("stale1") is None
 
 
-def test_put_replaces_same_key(tmp_path):
+def test_put_is_first_writer_wins(tmp_path):
+    # Once a key is stored it is canonical; a later put for the same key is a no-op, so the
+    # stored response stays stable (replay + the same-key-different-hash 409 depend on this).
     store = _store(tmp_path)
     store.put("k", _stored(body='{"v":1}'))
     store.put("k", _stored(body='{"v":2}'))
     got = store.get("k")
     assert got is not None
-    assert got.response_json == '{"v":2}'
+    assert got.response_json == '{"v":1}'
+
+
+def test_expired_delete_is_scoped_to_the_read_row(tmp_path):
+    # The expiry delete on read must not clobber a fresh row that replaced the expired one
+    # in the gap. A stale delete qualified by the OLD timestamp must leave the fresh row.
+    store = _store(tmp_path, ttl_hours=24)
+    old = time.time() - 25 * 3600
+    store.put("k", _stored(created_at=old))  # expired row
+    assert store.get("k") is None  # reads expired -> deletes only the old-timestamp row
+    store.put("k", _stored(body='{"fresh":true}'))  # a fresh row now lands for the same key
+    store._delete_expired("k", old)  # a late, stale expiry-delete for the OLD row
+    got = store.get("k")
+    assert got is not None
+    assert got.response_json == '{"fresh":true}'  # the fresh row survived
 
 
 def test_persists_across_store_instances(tmp_path):
