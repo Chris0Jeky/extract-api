@@ -49,8 +49,8 @@ Idempotency: `Idempotency-Key` + `sha256(payload)` is stored with the response.
 Same key + same hash replays the stored response with no model call
 (`replayed: true` in meta); same key + different hash is a 409; TTL 24h.
 
-`field_confidence` is a **heuristic** (presence + validation pass + optional model
-self-report), not a calibrated probability. The README will say so wherever the
+`field_confidence` is a presence-only **heuristic** (1.0 for a present value, 0.0 for an
+explicit null), not a calibrated probability. The README will say so wherever the
 numbers appear.
 
 ## Error taxonomy

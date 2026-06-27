@@ -30,8 +30,8 @@ class ExtractMeta(BaseModel):
     schema_version: str
     attempts: int
     replayed: bool = False
-    # field_confidence is HEURISTIC (presence + validation pass + optional model
-    # self-report). It is not a calibrated probability; the README says so.
+    # field_confidence is a presence-only HEURISTIC (1.0 for a present value, 0.0 for an
+    # explicit null), not a calibrated probability. See _field_confidence in api/main.py.
     field_confidence: dict[str, float]
     cost_usd: float
     latency_ms: float
