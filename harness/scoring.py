@@ -61,6 +61,18 @@ def score_record(
     return outcomes
 
 
+def score_failed(
+    model_cls: type[BaseModel], expected: dict[str, object]
+) -> dict[str, FieldOutcome]:
+    """Outcomes for a fixture whose extraction failed entirely (no record produced).
+
+    The model returned nothing usable, so every expected field counts as missed; this
+    keeps a failed extraction in the per-field denominator (it is the accuracy signal),
+    rather than dropping the fixture or crashing the run. Pair with AccuracyReport.n_failures.
+    """
+    return dict.fromkeys(_canonical(model_cls, expected), FieldOutcome.missed)
+
+
 @dataclass
 class FieldStats:
     total: int = 0
@@ -83,6 +95,7 @@ class AccuracyReport:
     cost_usd_total: float = 0.0
     latency_p50_ms: float = 0.0
     latency_p95_ms: float = 0.0
+    n_failures: int = 0  # fixtures whose extraction failed entirely (no record produced)
 
     @property
     def total_fields(self) -> int:
@@ -119,9 +132,13 @@ def aggregate(
     scored: list[dict[str, FieldOutcome]],
     costs_usd: list[float],
     latencies_ms: list[float],
+    *,
+    n_failures: int = 0,
 ) -> AccuracyReport:
     """Fold per-fixture field outcomes + cost/latency into one report."""
-    report = AccuracyReport(doc_type=doc_type, provider=provider, n_fixtures=len(scored))
+    report = AccuracyReport(
+        doc_type=doc_type, provider=provider, n_fixtures=len(scored), n_failures=n_failures
+    )
     for outcomes in scored:
         for key, outcome in outcomes.items():
             stats = report.per_field.setdefault(key, FieldStats())
@@ -146,7 +163,7 @@ def render_markdown(report: AccuracyReport) -> str:
     lines = [
         f"### {report.doc_type} / {report.provider}",
         "",
-        f"- fixtures: {report.n_fixtures}",
+        f"- fixtures: {report.n_fixtures} ({report.n_failures} failed extraction(s))",
         f"- overall exact-match: {report.overall_exact_match_rate:.1%} "
         f"({report.total_matches}/{report.total_fields})",
         f"- hallucinated-field rate: {report.hallucinated_field_rate:.1%} "

@@ -14,16 +14,37 @@ import argparse
 import json
 import sys
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
-from harness.scoring import AccuracyReport, aggregate, render_markdown, score_record
+from harness.scoring import AccuracyReport, aggregate, render_markdown, score_failed, score_record
 from schemas.registry import resolve
 
-# A predictor maps a fixture to (predicted_record, cost_usd, latency_ms). Injecting it keeps
+
+@dataclass(frozen=True)
+class Prediction:
+    """One fixture's extracted record plus the cost/latency and the provider the server used."""
+
+    record: dict[str, object]
+    cost_usd: float
+    latency_ms: float
+    provider: str
+
+
+class PredictionFailed(Exception):
+    """The endpoint did not return a usable record for a fixture (a non-2xx or transport error).
+
+    A failed extraction is itself the accuracy signal, so the harness records it (the fixture's
+    fields all count as missed) and continues, rather than aborting the whole run.
+    """
+
+
+# A predictor maps a fixture to a Prediction or raises PredictionFailed. Injecting it keeps
 # run_accuracy testable offline; --live supplies the real endpoint-backed implementation.
-Predictor = Callable[[dict[str, object]], tuple[dict[str, object], float, float]]
+Predictor = Callable[[dict[str, object]], Prediction]
 
 _FIXTURE_DIRS = {"invoice": "invoices", "uk_job_posting": "job_postings"}
+_PROVIDERS = ("openai", "anthropic", "default")
 _FIXTURES_ROOT = Path(__file__).resolve().parent.parent / "fixtures"
 
 
@@ -52,35 +73,62 @@ def run_accuracy(
     scored = []
     costs: list[float] = []
     latencies: list[float] = []
+    failures = 0
+    resolved_provider = provider  # fallback if every fixture fails (no server label to read)
     for fx in items:
-        predicted, cost, latency = predict(fx)
         expected = fx["expected"]
         assert isinstance(expected, dict)
-        scored.append(score_record(model_cls, predicted, expected))
-        costs.append(cost)
-        latencies.append(latency)
-    return aggregate(doc_type, provider, scored, costs, latencies)
+        try:
+            prediction = predict(fx)
+        except PredictionFailed:
+            # A failed extraction is the accuracy signal: count every field as missed and
+            # keep going, so one hard (or transiently-failing) fixture cannot erase the run.
+            scored.append(score_failed(model_cls, expected))
+            failures += 1
+            continue
+        resolved_provider = prediction.provider  # the provider the server actually used
+        scored.append(score_record(model_cls, prediction.record, expected))
+        costs.append(prediction.cost_usd)
+        latencies.append(prediction.latency_ms)
+    return aggregate(doc_type, resolved_provider, scored, costs, latencies, n_failures=failures)
 
 
 def live_predictor(base_url: str, provider: str) -> Predictor:
-    """A predictor that POSTs each fixture to a serving /v1/extract and reads the result."""
+    """A predictor that POSTs each fixture to a serving /v1/extract and reads the result.
+
+    A non-2xx (e.g. a terminal validation_failed 422, provider_error 502) or a transport
+    error becomes PredictionFailed, so the run records that fixture as a failed extraction
+    and continues instead of crashing on the documents the harness exists to measure.
+    """
     import httpx  # local import: only --live needs an HTTP client
 
-    def predict(fx: dict[str, object]) -> tuple[dict[str, object], float, float]:
-        resp = httpx.post(
-            f"{base_url.rstrip('/')}/v1/extract",
-            json={
-                "doc_type": fx["doc_type"],
-                "schema_version": fx["schema_version"],
-                "content": fx["content"],
-                "provider": provider,
-            },
-            timeout=120.0,
-        )
-        resp.raise_for_status()
+    def predict(fx: dict[str, object]) -> Prediction:
+        try:
+            resp = httpx.post(
+                f"{base_url.rstrip('/')}/v1/extract",
+                json={
+                    "doc_type": fx["doc_type"],
+                    "schema_version": fx["schema_version"],
+                    "content": fx["content"],
+                    "provider": provider,
+                },
+                timeout=120.0,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise PredictionFailed(
+                f"{fx.get('fixture_id', '?')}: HTTP {exc.response.status_code}"
+            ) from exc
+        except httpx.RequestError as exc:
+            raise PredictionFailed(f"{fx.get('fixture_id', '?')}: {type(exc).__name__}") from exc
         body = resp.json()
         meta = body["meta"]
-        return body["data"], float(meta["cost_usd"]), float(meta["latency_ms"])
+        return Prediction(
+            record=body["data"],
+            cost_usd=float(meta["cost_usd"]),
+            latency_ms=float(meta["latency_ms"]),
+            provider=str(meta["provider"]),  # the provider the server resolved (not the request)
+        )
 
     return predict
 
@@ -88,7 +136,7 @@ def live_predictor(base_url: str, provider: str) -> Predictor:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Deterministic accuracy harness (no LLM judge).")
     parser.add_argument("--doc-type", required=True, choices=sorted(_FIXTURE_DIRS))
-    parser.add_argument("--provider", default="openai")
+    parser.add_argument("--provider", default="openai", choices=_PROVIDERS)
     parser.add_argument("--live", action="store_true", help="POST fixtures to a live endpoint")
     parser.add_argument("--base-url", default="http://localhost:8200")
     parser.add_argument("--out", default=None, help="write the markdown report to this path")

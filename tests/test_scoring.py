@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from harness.scoring import FieldOutcome, aggregate, render_markdown, score_record
+from harness.scoring import FieldOutcome, aggregate, render_markdown, score_failed, score_record
 from schemas.registry import resolve
 
 _MODEL = resolve("invoice", "v1")
@@ -71,9 +71,23 @@ def test_aggregate_rolls_up_per_field_rates_cost_and_latency():
     assert 0.0 < report.overall_exact_match_rate < 1.0
 
 
+def test_score_failed_marks_every_field_missed():
+    # A failed extraction (no record) counts every expected field as missed.
+    outcomes = score_failed(_MODEL, _rec())
+    assert set(outcomes.values()) == {FieldOutcome.missed}
+    assert set(outcomes) == set(_BASE)  # every field accounted for
+
+
+def test_aggregate_carries_failure_count():
+    report = aggregate("invoice", "openai", [score_failed(_MODEL, _rec())], [], [], n_failures=1)
+    assert report.n_failures == 1
+    assert report.overall_exact_match_rate == 0.0  # a failed extraction got nothing right
+
+
 def test_empty_run_is_safe():
     report = aggregate("invoice", "openai", [], [], [])
     assert report.n_fixtures == 0
+    assert report.n_failures == 0
     assert report.overall_exact_match_rate == 0.0
     assert report.hallucinated_field_rate == 0.0
 
