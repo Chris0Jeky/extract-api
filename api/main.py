@@ -15,6 +15,7 @@ present, a key + payload-hash match replays the stored response with no model ca
 
 from __future__ import annotations
 
+import logging
 import os
 import time
 from typing import Annotated, Any
@@ -35,6 +36,8 @@ from llm.errors import ProviderError, ProviderTimeout
 from llm.pipeline import ExtractionFailed, run_extraction
 from llm.prompts import build_system_prompt
 from schemas.registry import resolve
+
+logger = logging.getLogger("extract.api")
 
 
 def _field_confidence(data: dict[str, Any]) -> dict[str, float]:
@@ -73,12 +76,21 @@ def _run_extract(request: ExtractRequest) -> ExtractResponse:
     try:
         model, result, attempts = run_extraction(client, model_cls, system=system, content=content)
     except ProviderTimeout as exc:
-        # Subclass of ProviderError, so it must be caught first to keep its 504 code.
-        raise ExtractError(ErrorCode.provider_timeout, detail=str(exc)) from exc
+        # Subclass of ProviderError, so it must be caught first to keep its 504 code. Log the
+        # full provider detail server-side but return a sanitized client message, so an
+        # upstream provider/gateway error string is never echoed to external callers (#21).
+        logger.warning("provider timeout (%s): %s", exc.provider, exc.detail)
+        raise ExtractError(
+            ErrorCode.provider_timeout, detail=f"the {exc.provider} provider timed out"
+        ) from exc
     except ProviderError as exc:
-        # Covers ProviderError + ProviderRefusal + ProviderTruncation (all 502 in v1;
-        # a dedicated refusal/truncation code is a future taxonomy decision).
-        raise ExtractError(ErrorCode.provider_error, detail=str(exc)) from exc
+        # Covers ProviderError + ProviderRefusal + ProviderTruncation (all 502 in v1; a
+        # dedicated refusal/truncation code is a future taxonomy decision). Same sanitization:
+        # the provider's raw message is logged, not returned in the body.
+        logger.warning("provider error (%s): %s", exc.provider, exc.detail)
+        raise ExtractError(
+            ErrorCode.provider_error, detail=f"the {exc.provider} provider call failed"
+        ) from exc
     except ExtractionFailed as exc:
         # Strict validation failed on every attempt: 422 with the full per-attempt
         # trail (JSON-safe by construction) so the caller sees exactly what broke.
