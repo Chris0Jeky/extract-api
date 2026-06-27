@@ -63,6 +63,12 @@ _ZERO_DECIMAL: frozenset[str] = frozenset(
 )
 _THREE_DECIMAL: frozenset[str] = frozenset({"BHD", "IQD", "JOD", "KWD", "LYD", "OMR", "TND"})
 
+# ISO-4217 codes whose minor unit is "N.A." (no defined subdivision). XDR (IMF Special
+# Drawing Rights) is the only such code in the committed ISO_4217_ALPHA set (metals / test /
+# fund codes are excluded). Converting an amount to minor units for these would scale by a
+# guessed 10^2 against an undefined subdivision, so we fail loud instead (never-guess).
+_NO_MINOR_UNIT: frozenset[str] = frozenset({"XDR"})
+
 
 def to_iso_date(value: str) -> str:
     """Normalize a date string to ISO-8601 (YYYY-MM-DD), or raise on bad input.
@@ -90,6 +96,8 @@ def to_iso_date(value: str) -> str:
 def _minor_digits(currency: str) -> int:
     if currency not in ISO_4217_ALPHA:
         raise ValueError(f"unknown ISO-4217 currency code: {currency!r}")
+    if currency in _NO_MINOR_UNIT:
+        raise ValueError(f"currency {currency!r} has no defined ISO-4217 minor unit (N.A.)")
     if currency in _ZERO_DECIMAL:
         return 0
     if currency in _THREE_DECIMAL:
