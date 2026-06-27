@@ -60,6 +60,28 @@ def _env(name: str) -> str | None:
     return value or None
 
 
+def _resolve_credentials(direct_key_env: str) -> tuple[str | None, str | None]:
+    """Resolve (base_url, api_key) for a provider client, failing loud on a half-config.
+
+    GATEWAY_BYPASS=1: talk to the provider directly (no gateway base URL, the provider's
+    own key, falling back to LLM_API_KEY). Otherwise route through the gateway's LLM_*
+    config and FAIL LOUD if either LLM_BASE_URL or LLM_API_KEY is unset: an SDK built with
+    base_url=None / api_key=None would silently fall back to the ambient provider key and
+    the provider's PUBLIC endpoint, bypassing the gateway entirely (issue #38). Failing
+    loud here keeps the non-bypass contract honest rather than leaking a direct call.
+    """
+    if os.environ.get("GATEWAY_BYPASS") == "1":
+        return None, (_env(direct_key_env) or _env("LLM_API_KEY"))
+    base_url = _env("LLM_BASE_URL")
+    api_key = _env("LLM_API_KEY")
+    if base_url is None or api_key is None:
+        raise ValueError(
+            "gateway (non-bypass) mode requires both LLM_BASE_URL and LLM_API_KEY; set "
+            "GATEWAY_BYPASS=1 to call the provider directly with its own key"
+        )
+    return base_url, api_key
+
+
 def _float_env(name: str, default: str) -> float:
     raw = os.environ.get(name, default)
     try:
@@ -141,16 +163,12 @@ class OpenAIClient:
     provider = "openai"
 
     def __init__(self) -> None:
-        # GATEWAY_BYPASS=1: talk to OpenAI directly with the provider-specific key and
-        # no gateway base URL. Otherwise route through the gateway's LLM_* config so the
-        # week-10 migration is an env flip. (.env.example documents OPENAI_API_KEY as the
-        # direct, not-through-the-gateway credential.)
-        if os.environ.get("GATEWAY_BYPASS") == "1":
-            self.base_url = None
-            self.api_key = _env("OPENAI_API_KEY") or _env("LLM_API_KEY")
-        else:
-            self.base_url = _env("LLM_BASE_URL")
-            self.api_key = _env("LLM_API_KEY")
+        # GATEWAY_BYPASS=1: talk to OpenAI directly with the provider-specific key and no
+        # gateway base URL. Otherwise route through the gateway's LLM_* config (an env flip
+        # at the week-10 migration), failing loud on a half-config so a missing gateway
+        # setup cannot silently degrade into a direct ambient-key call (issue #38).
+        # (.env.example documents OPENAI_API_KEY as the direct, not-through-gateway credential.)
+        self.base_url, self.api_key = _resolve_credentials("OPENAI_API_KEY")
         self.model = os.environ.get("OPENAI_MODEL", "")
         # Per-million-token prices (USD). REQUIRED and explicit: defaulting would bill
         # every model at one model's rate, silently producing wrong cost_usd. The
@@ -276,15 +294,11 @@ class AnthropicClient:
     provider = "anthropic"
 
     def __init__(self) -> None:
-        # Mirror OpenAI's bypass: GATEWAY_BYPASS=1 talks to Anthropic directly with the
+        # Mirror OpenAI exactly: GATEWAY_BYPASS=1 talks to Anthropic directly with the
         # provider key and no gateway base URL; otherwise route through the LLM_* gateway
-        # config so the week-10 migration stays an env flip.
-        if os.environ.get("GATEWAY_BYPASS") == "1":
-            self.base_url = None
-            self.api_key = _env("ANTHROPIC_API_KEY") or _env("LLM_API_KEY")
-        else:
-            self.base_url = _env("LLM_BASE_URL")
-            self.api_key = _env("LLM_API_KEY")
+        # config (an env flip at the week-10 migration), failing loud on a half-config so a
+        # missing gateway setup cannot silently degrade into a direct ambient-key call (#38).
+        self.base_url, self.api_key = _resolve_credentials("ANTHROPIC_API_KEY")
         self.model = os.environ.get("ANTHROPIC_MODEL", "")
         # Per-million-token prices (USD). REQUIRED and explicit for the same reason as
         # OpenAI: a silent default would bill every model at one rate and report a wrong

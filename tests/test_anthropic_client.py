@@ -250,3 +250,25 @@ def test_output_config_carries_sanitized_json_schema(monkeypatch):
     assert call["system"] == "sys"
     assert call["messages"] == [{"role": "user", "content": "prm"}]
     assert call["max_tokens"] == 4096
+
+
+def test_non_bypass_missing_gateway_config_fails_loud(monkeypatch):
+    # Issue #38: in gateway (non-bypass) mode, missing LLM_BASE_URL/LLM_API_KEY must NOT
+    # silently fall back to the ambient ANTHROPIC_API_KEY + the public endpoint; fail loud.
+    monkeypatch.delenv("GATEWAY_BYPASS", raising=False)
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "ambient-key-that-must-not-be-used")
+    with pytest.raises(ValueError, match="gateway"):
+        AnthropicClient()
+
+
+@pytest.mark.parametrize("present", ["LLM_BASE_URL", "LLM_API_KEY"])
+def test_non_bypass_half_gateway_config_fails_loud(monkeypatch, present):
+    # Either half alone is still a broken gateway setup (URL without key, or key without URL).
+    monkeypatch.delenv("GATEWAY_BYPASS", raising=False)
+    monkeypatch.delenv("LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    monkeypatch.setenv(present, "set")
+    with pytest.raises(ValueError, match="gateway"):
+        AnthropicClient()
