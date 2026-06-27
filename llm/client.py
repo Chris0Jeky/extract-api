@@ -17,6 +17,7 @@ an offline deterministic path for `make smoke` and tests.
 
 from __future__ import annotations
 
+import math
 import os
 import time
 from dataclasses import dataclass
@@ -72,9 +73,16 @@ def _float_env_required(name: str) -> float:
     if not raw:
         raise ValueError(f"env {name} is required: set the per-model price explicitly")
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError as exc:
         raise ValueError(f"env {name}={raw!r} is not a valid float") from exc
+    if not math.isfinite(value) or value < 0:
+        # A non-finite or negative price propagates into cost_usd and then into the budget
+        # guard as invalid spend: nan/inf never trips the cap and a negative cost reduces the
+        # committed total (a fail-open). Reject it loudly at the source (mirroring
+        # budget_from_env) so all computed cost stays finite and non-negative.
+        raise ValueError(f"env {name}={raw!r} must be a finite, non-negative number")
+    return value
 
 
 def _int_env(name: str, default: str) -> int:
@@ -200,36 +208,47 @@ class OpenAIClient:
             raise ProviderError(provider=self.provider, detail=str(exc)) from exc
         latency_ms = (time.perf_counter() - start) * 1000.0
 
+        # Read usage and price the call BEFORE the failure ladder: a refusal or a
+        # truncation is a completed, BILLED response, so its cost must be attached to the
+        # raised error or the budget guard would under-count the most expensive failures.
+        usage = getattr(response, "usage", None)
+        tokens_in = int(getattr(usage, "input_tokens", 0) or 0)
+        tokens_out = int(getattr(usage, "output_tokens", 0) or 0)
+        cost_usd = self._cost_usd(tokens_in, tokens_out)
+
         status = getattr(response, "status", None)
         # Fail loud on every non-success outcome, in order, so a provider fault is
         # never silently returned as an empty-but-valid extraction.
         refusal = _first_refusal(response)
         if refusal is not None:
-            raise ProviderRefusal(provider=self.provider, reason=refusal)
+            raise ProviderRefusal(provider=self.provider, reason=refusal, cost_usd=cost_usd)
         if status in {"failed", "cancelled"}:
             err = getattr(response, "error", None)
             detail = str(getattr(err, "message", None) or status)
-            raise ProviderError(provider=self.provider, detail=f"response {status}: {detail}")
+            raise ProviderError(
+                provider=self.provider, detail=f"response {status}: {detail}", cost_usd=cost_usd
+            )
         if status == "incomplete":
             details = getattr(response, "incomplete_details", None)
             reason = str(getattr(details, "reason", None) or "unknown")
             if reason == "content_filter":
-                raise ProviderRefusal(provider=self.provider, reason=reason)
-            raise ProviderTruncation(provider=self.provider, reason=reason)
+                raise ProviderRefusal(provider=self.provider, reason=reason, cost_usd=cost_usd)
+            raise ProviderTruncation(provider=self.provider, reason=reason, cost_usd=cost_usd)
 
         text = str(getattr(response, "output_text", "") or "")
         if not text.strip():
-            raise ProviderError(provider=self.provider, detail="empty completion (no output text)")
+            raise ProviderError(
+                provider=self.provider,
+                detail="empty completion (no output text)",
+                cost_usd=cost_usd,
+            )
 
-        usage = getattr(response, "usage", None)
-        tokens_in = int(getattr(usage, "input_tokens", 0) or 0)
-        tokens_out = int(getattr(usage, "output_tokens", 0) or 0)
         return CompletionResult(
             text=text,
             model=getattr(response, "model", None) or self.model,
             tokens_in=tokens_in,
             tokens_out=tokens_out,
-            cost_usd=self._cost_usd(tokens_in, tokens_out),
+            cost_usd=cost_usd,
             latency_ms=latency_ms,
             stop_reason=str(status or "completed"),
         )
@@ -318,6 +337,19 @@ class AnthropicClient:
             raise ProviderError(provider=self.provider, detail=str(exc)) from exc
         latency_ms = (time.perf_counter() - start) * 1000.0
 
+        # Read usage and price the call BEFORE the failure ladder, mirroring the OpenAI
+        # path: a refusal or a truncation is a completed, BILLED response, so its cost is
+        # attached to the raised error and the budget guard does not under-count it.
+        usage = getattr(response, "usage", None)
+        tokens_in = int(getattr(usage, "input_tokens", 0) or 0)
+        tokens_out = int(getattr(usage, "output_tokens", 0) or 0)
+        cost_usd = _token_cost(
+            tokens_in,
+            tokens_out,
+            price_in_per_m=self.price_in_per_m,
+            price_out_per_m=self.price_out_per_m,
+        )
+
         stop_reason = getattr(response, "stop_reason", None)
         # Fail loud on every non-success stop, in order, so a provider fault is never
         # silently returned as an empty-but-valid extraction. A "refusal" stop means the
@@ -331,28 +363,28 @@ class AnthropicClient:
             # content back into an error body.
             details = getattr(response, "stop_details", None)
             category = getattr(details, "category", None)
-            raise ProviderRefusal(provider=self.provider, reason=str(category or "refusal"))
+            raise ProviderRefusal(
+                provider=self.provider, reason=str(category or "refusal"), cost_usd=cost_usd
+            )
         if stop_reason in {"max_tokens", "pause_turn", "model_context_window_exceeded"}:
-            raise ProviderTruncation(provider=self.provider, reason=str(stop_reason))
+            raise ProviderTruncation(
+                provider=self.provider, reason=str(stop_reason), cost_usd=cost_usd
+            )
 
         text = _anthropic_text(response)
         if not text.strip():
-            raise ProviderError(provider=self.provider, detail="empty completion (no output text)")
+            raise ProviderError(
+                provider=self.provider,
+                detail="empty completion (no output text)",
+                cost_usd=cost_usd,
+            )
 
-        usage = getattr(response, "usage", None)
-        tokens_in = int(getattr(usage, "input_tokens", 0) or 0)
-        tokens_out = int(getattr(usage, "output_tokens", 0) or 0)
         return CompletionResult(
             text=text,
             model=getattr(response, "model", None) or self.model,
             tokens_in=tokens_in,
             tokens_out=tokens_out,
-            cost_usd=_token_cost(
-                tokens_in,
-                tokens_out,
-                price_in_per_m=self.price_in_per_m,
-                price_out_per_m=self.price_out_per_m,
-            ),
+            cost_usd=cost_usd,
             latency_ms=latency_ms,
             stop_reason=str(stop_reason or "end_turn"),
         )

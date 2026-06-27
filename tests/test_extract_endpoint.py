@@ -216,6 +216,26 @@ def test_budget_counts_failed_extraction_spend(monkeypatch):
     assert fake.calls == 2  # the capped request spent nothing more
 
 
+def test_budget_counts_truncated_call_spend(monkeypatch):
+    # A truncation/refusal is a billed response whose cost the client attaches to the
+    # exception; the endpoint must reconcile it so a truncation-heavy stream (the most
+    # expensive failure mode) cannot silently escape the per-run cap.
+    from api.budget import BudgetGuard
+
+    truncated = ProviderTruncation(provider="fake", reason="max_output_tokens", cost_usd=0.0012)
+    fake = _FakeClient([truncated])
+    monkeypatch.setattr("api.main.get_client", lambda provider: fake)
+    client = TestClient(create_app(budget=BudgetGuard(0.001)), raise_server_exceptions=False)
+
+    first = _post(client)
+    assert first.status_code == 502  # provider_error, but the truncation's 0.0012 is reconciled
+    assert fake.calls == 1
+    second = _post(client)
+    assert second.status_code == 402  # the truncated call's billed spend tripped the cap
+    assert second.json()["error"] == "budget_exceeded"
+    assert fake.calls == 1  # the capped request spent nothing more
+
+
 def test_unknown_schema_version_renders_unsupported_doc_type(monkeypatch):
     # A registered doc_type with an unregistered version misses the registry, which
     # raises UnknownSchema BEFORE any provider call -> the taxonomy, not a 500.

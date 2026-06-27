@@ -98,9 +98,12 @@ def run_extraction(
                 system=system, prompt=prompt, json_schema=schema, max_tokens=max_tokens
             )
         except ProviderError as exc:
-            # Carry the spend already incurred this run (prior successful attempts) so the
-            # API budget guard reconciles it even though this attempt failed loud.
-            exc.cost_usd = cost_usd
+            # Reconcile total billed spend for this run: prior successful attempts PLUS this
+            # failed call's own cost. A refusal/truncation is a billed response, so the client
+            # sets exc.cost_usd to that call's cost; add the prior-attempt accumulator so the
+            # budget guard sees the full spend. A timeout/SDK error carries 0.0 (cost unknown),
+            # leaving just the prior-attempt total.
+            exc.cost_usd += cost_usd
             raise
         tokens_in += result.tokens_in
         tokens_out += result.tokens_out
