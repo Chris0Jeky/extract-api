@@ -1,75 +1,73 @@
 # STATUS - where extract-api is
 
-Living snapshot for starting a new session strong. Last updated 2026-06-20.
+Living snapshot for starting a new session strong. Last updated 2026-06-27.
 Authoritative detail lives in `AGENTS.md` (rules), `tasks/BACKLOG.md` (tasks),
 `docs/plan/PLAN.md` + `docs/adr/` (decisions). This file is the orientation.
 
-## Merged to `main` (gate-green, ~98% coverage)
+## Merged to `main` (gate-green)
 
-M0 + M1's T01-T03 are merged. The invoice pipeline is built end-to-end **except the
-HTTP wiring**.
+M0 + all of M1's engineering (T01-T06) + T08 + the full error-taxonomy work are merged
+(through PR #34). The **invoice path is live end-to-end**: `POST /v1/extract` ->
+resolve schema -> resolve content -> OpenAI client -> validation-retry pipeline ->
+`data` + full `meta`, with the taxonomy wired for every non-200, offline `make smoke`,
+and the normalization helpers.
 
-| Slice | PR | What landed |
-| --- | --- | --- |
-| M0 | #1 | config + pinned deps (ADR 0001), strict schemas + registry, FastAPI app w/ `/healthz`, the `llm/client.py` seam, CI + governance + `.claude` hooks/skills, 10 DRAFT invoice fixtures |
-| T01 | #7 | invoice schema completeness: `schemas/iso4217.py` membership set, ASCII currency gate, cross-field validators (`total == subtotal + tax`; `subtotal == sum(line amounts)`), explicit-null required-but-nullable keys, empty-`[]` rejection |
-| T02 | #11 | OpenAI path: `responses.create` + strict json_schema, `llm/errors.py` (Provider* exceptions), `llm/schema_utils.py` (sanitize to provider subset), fail-loud on refusal/truncation/failed/empty, env-priced `cost_usd`, `latency_ms`, bounded timeout, `GATEWAY_BYPASS` routing |
-| T03 | #12 | `llm/pipeline.py:run_extraction` - call -> strict validate -> 1 feedback retry (prev response + error summary) -> `ExtractionFailed` (JSON-safe trail) on 2nd fail; usage accumulated; retries logged |
+| Area | What is on main |
+| --- | --- |
+| M0 | config + pinned deps (ADR 0001), strict schemas + registry, FastAPI app, `llm/client.py` seam, CI + governance + `.claude` hooks/skills |
+| T01-T03 | invoice schema completeness; OpenAI Responses path (strict json_schema, env-priced cost); validation-retry loop (1 retry / 2 attempts) |
+| T04-T06 + Q8 | `POST /v1/extract` happy path; FixtureClient + offline smoke; full taxonomy wiring (`internal_error`, RequestValidationError, catch-all); `harness/normalize.py`; default provider = openai |
+| T08 | `JobPostingV1` completeness (explicit-null keys, salary cross-field validators) |
+| #28 / #29 | framework 404/405 carry taxonomy codes; locked taxonomy reframed as a principle (one-code-per-non-200; `api/errors.py` is the source of truth; new codes need owner approval) |
 
-Key architecture decisions made during the build:
-- The seam is **text-based**: `complete(json_schema) -> raw JSON text`; the retry loop
-  re-validates. So OpenAI uses `responses.create` (not `parse`). (ADR 0002 note.)
-- **Layering**: `llm/` never imports `api/`. The client raises `llm.errors.Provider*`;
-  the API layer (T04) maps them to the `api/errors.py` taxonomy.
-- **Cost** is computed from REQUIRED env per-token prices (no silent default that
-  would mis-bill); a gateway may supply cost later.
-- **Retry = 1 retry / 2 attempts** (confirmed by Chris).
+Locked architecture: the seam is text-based (`complete(json_schema) -> raw JSON text`,
+re-validated by the retry loop); `llm/` never imports `api/`; `cost_usd` is env-priced
+(no silent default that would mis-bill); retry = 1 retry / 2 attempts.
 
-## Next up (finish M1)
+## Queued for merge (reviewed + CI-green, NOT merged)
 
-1. **T04** `POST /v1/extract` happy path: wire `get_client` + `run_extraction` into
-   `api/main.py`; build `data` + full `meta` (incl. heuristic `field_confidence`,
-   `cost_usd`, `latency_ms`); map `ExtractionFailed`/`Provider*` -> taxonomy; new
-   `llm/prompts.py` for the system prompt. Integration test via FixtureClient.
-2. **T04b** `FixtureClient.complete` returns canned text; `make smoke` POSTs a fixture
-   offline and asserts the record + a forced 422.
-3. **T05** taxonomy wiring: add a `RequestValidationError` handler so an unknown
-   `doc_type` renders `unsupported_doc_type` (closes #5).
-4. **T06** `harness/normalize.py`: date->ISO, money->minor-units (currency digit table).
+A ~15-PR M2/M3 batch is queued. Each PR is gate-green with two independent adversarial
+reviews + gemini clean; **none is self-merged** (the never-self-merge red line holds -
+merge authorization is granted explicitly per run). Merge **oldest-first**:
 
-Then M2 (job-posting + idempotency), M3 (accuracy harness + two-provider table),
-M4 (deploy + README numbers). See `tasks/BACKLOG.md`.
+```
+main <- #37 T09 anthropic <- #39 T10 routing <- #40 T11 idem store <- #41 T12 idem wiring
+     <- #43 T13 taxonomy <- #44 T14 pdf <- #48 (#21 5xx sanitize) <- #49 (#22 fc docs)
+     <- #50 T18 budget <- #51 failed-call cost <- #53 (#38 gateway fail-loud)
+```
 
-The T02-T05 architecture blueprint (from a code-architect pass) is summarized in the
-local `ORCHESTRATOR.md` if more detail is needed.
+Off-main, independent (merge any time): **#45** (T16 accuracy harness), **#47** (#25 XDR
+fail-loud), **#55** (dependabot-auto-merge fix). Held for Chris's editorial sign-off:
+**#36** (T07: flip the 10 invoice fixtures DRAFT -> REVIEWED, a ground-truth label change).
+
+## Next up (after the merge)
+
+Merging the queue unblocks: **T17** (two-provider accuracy table - needs paid `--live`
+runs), **T19** (docker compose live), **T20** (README with measured numbers), **T21**
+(gateway-readiness trace). **T15** (30-50 new labeled fixtures) blocks on Chris's labels.
 
 ## Open tracked issues
 
-- **#4 + #8** (T08, M2): JobPostingV1 needs explicit-null required-but-nullable keys
-  and a `salary_currency`-when-present check (mirrors the invoice T01 change). Until
-  then job_posting's schema is not OpenAI-strict-valid; invoice is.
-- **#5** (T05): unsupported `doc_type` must render the taxonomy, not FastAPI's 422.
-- **#6**: commit `uv.lock` + switch CI to a frozen install (ADR 0001 hardening).
-- **#9** (T02/T09): provider json-schema sanitization edge cases.
-- **#10**: periodic ISO-4217 refresh / currency-status audit.
-- **#13**: hook-hardening backlog (obscure destructive-command bypass variants).
-
-## Known bug
-
-`.github/workflows/dependabot-auto-merge.yml` job FAILS (non-required check; GitHub
-native auto-merge covers it). Fix it.
+- **#6**: commit `uv.lock` + frozen CI install (needs `uv`, absent in the sandbox).
+- **#9**: provider JSON-schema sanitization - verified resolved by code; close on stack merge.
+- **#10**: periodic ISO-4217 refresh (needs external data).
+- **#13**: hook-hardening backlog (sensitive: edits the agent safety hooks).
+- **#32**: degrade-branch masks future non-404/405 HTTPExceptions (needs an owner taxonomy call).
+- **#35**: consider nullable `subtotal_minor` for total-only invoices.
+- **#42**: idempotency atomic reservation under concurrency (sequential contract is correct).
+- **#46**: hallucination-rate denominator (T17 metric refinement).
+- **#52**: accuracy harness scores a control-plane 402 as an all-fields-missed extraction (T17).
+- **#54**: v1 invoice cannot represent total-level shipping/adjustment outside subtotal (v2 / owner).
 
 ## Open questions for Chris
 
-- **Q2**: only PR #1 was actually open at the last session's start (not "plenty"); the
-  rest were generated as the stacked PRs. Confirm that matches intent.
-- **Q3**: invoice line-item math - aggregate consistency is enforced (`total`,
-  `subtotal == sum`), but NOT per-line `qty*price` (discounts/rounding make it unsafe
-  in v1). Confirm, or ask to add it.
-- **Q4**: flip the 10 DRAFT invoice fixtures to REVIEWED (T07) - blocks on your labels.
+- **Merge authorization**: grant merge auth (or merge the queue oldest-first). Never self-merged.
+- **#36 sign-off**: merging it is the REVIEWED clearance for the 10 invoice fixtures (your labels).
+- Older Q2/Q3/Q4 are resolved (Q3 = aggregate-only invoice math, confirmed).
 
 ## Operating notes
 
-See `docs/agentic/GIT_WORKFLOW.md` ("Agent operating notes"): the safety hook blocks
-your own command strings that *describe* destructive patterns (use `-F` files), run
-the full gate before every push, and the stacked-merge flow under strict protection.
+See `docs/agentic/GIT_WORKFLOW.md`: the safety hook blocks command strings that *describe*
+destructive patterns (use `-F` files), run the full gate before every push, and the
+stacked-merge flow under strict protection. The local, git-excluded `ORCHESTRATOR.md` is
+the live working log.
