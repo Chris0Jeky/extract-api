@@ -6,7 +6,9 @@ Each test uses a fresh tmp_path db file, so they are isolated and offline.
 
 from __future__ import annotations
 
+import sqlite3
 import time
+from contextlib import closing
 
 from api.idempotency import SqliteIdempotencyStore, StoredResponse, payload_hash
 
@@ -22,6 +24,15 @@ def _stored(*, sha="sha-abc", body='{"x":1}', status=200, created_at=None):
 
 def _store(tmp_path, ttl_hours=24):
     return SqliteIdempotencyStore(str(tmp_path / "idem.sqlite"), ttl_hours=ttl_hours)
+
+
+def test_uses_wal_journal_mode(tmp_path):
+    # ADR 0004: WAL handles the low-concurrency load (readers alongside one writer). WAL is
+    # persistent, so a fresh connection to the same file reports it.
+    _store(tmp_path)
+    with closing(sqlite3.connect(str(tmp_path / "idem.sqlite"))) as conn:
+        mode = conn.execute("PRAGMA journal_mode").fetchone()[0]
+    assert str(mode).lower() == "wal"
 
 
 def test_payload_hash_is_stable_and_distinguishing():

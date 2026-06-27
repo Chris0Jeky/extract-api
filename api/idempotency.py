@@ -64,6 +64,12 @@ class SqliteIdempotencyStore:
 
     def _init_db(self) -> None:
         with closing(self._connect()) as conn:
+            # WAL lets readers proceed alongside a single writer under the request
+            # threadpool (ADR 0004's concurrency rationale). It is a persistent property of
+            # the db file, so enabling it once at init suffices; both journal modes are
+            # ACID, so this is best-effort (a filesystem that rejects WAL still yields a
+            # correct store, just with the default rollback journal).
+            conn.execute("PRAGMA journal_mode=WAL")
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS idempotency ("
                 " key TEXT PRIMARY KEY,"
