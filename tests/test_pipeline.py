@@ -6,7 +6,7 @@ import logging
 import pytest
 
 from llm.client import CompletionResult
-from llm.errors import ProviderTimeout
+from llm.errors import ProviderRefusal, ProviderTimeout, ProviderTruncation
 from llm.pipeline import ExtractionFailed, run_extraction
 from schemas.invoice_v1 import InvoiceV1
 
@@ -41,9 +41,10 @@ class _ScriptedClient:
 
     provider = "fake"
 
-    def __init__(self, steps):
+    def __init__(self, steps, cost_usd=0.0):
         self._steps = list(steps)
         self.prompts: list[str] = []
+        self._cost_usd = cost_usd
 
     def complete(self, *, system, prompt, json_schema, max_tokens=4096):
         self.prompts.append(prompt)
@@ -55,7 +56,7 @@ class _ScriptedClient:
             model="fake",
             tokens_in=1,
             tokens_out=1,
-            cost_usd=0.0,
+            cost_usd=self._cost_usd,
             latency_ms=0.0,
             stop_reason="completed",
         )
@@ -108,3 +109,52 @@ def test_provider_error_on_second_attempt_propagates():
     client = _ScriptedClient([INVALID_JSON, ProviderTimeout(provider="fake", detail="slow")])
     with pytest.raises(ProviderTimeout):
         run_extraction(client, InvoiceV1, system="sys", content="doc")
+
+
+def test_both_fail_carries_total_billed_cost():
+    # ExtractionFailed must carry the spend of all billed attempts so the budget reconciles it.
+    client = _ScriptedClient([INVALID_JSON, INVALID_JSON], cost_usd=0.5)
+    with pytest.raises(ExtractionFailed) as excinfo:
+        run_extraction(client, InvoiceV1, system="sys", content="doc")
+    assert excinfo.value.cost_usd == pytest.approx(1.0)  # 2 billed attempts x 0.5
+
+
+def test_provider_error_on_second_attempt_carries_prior_cost():
+    # The first (validation-failing) attempt was billed; the provider error on the retry must
+    # carry that already-incurred spend so the budget still counts it.
+    client = _ScriptedClient(
+        [INVALID_JSON, ProviderTimeout(provider="fake", detail="slow")], cost_usd=0.5
+    )
+    with pytest.raises(ProviderTimeout) as excinfo:
+        run_extraction(client, InvoiceV1, system="sys", content="doc")
+    assert excinfo.value.cost_usd == pytest.approx(0.5)
+
+
+def test_provider_error_on_first_attempt_carries_zero_cost():
+    # Nothing was billed before the first call failed, so the carried cost is 0 when the
+    # failed call's own cost is unknown (a timeout raises before any usage is read).
+    client = _ScriptedClient([ProviderTimeout(provider="fake", detail="slow")], cost_usd=0.5)
+    with pytest.raises(ProviderTimeout) as excinfo:
+        run_extraction(client, InvoiceV1, system="sys", content="doc")
+    assert excinfo.value.cost_usd == 0.0
+
+
+def test_refusal_on_first_attempt_carries_its_own_billed_cost():
+    # A refusal/truncation is a billed response; the client sets the failed call's own cost
+    # on the exception, and the pipeline must preserve it (prior spend here is 0).
+    client = _ScriptedClient([ProviderRefusal(provider="fake", reason="bio", cost_usd=0.3)])
+    with pytest.raises(ProviderRefusal) as excinfo:
+        run_extraction(client, InvoiceV1, system="sys", content="doc")
+    assert excinfo.value.cost_usd == pytest.approx(0.3)
+
+
+def test_truncation_on_second_attempt_adds_prior_and_own_cost():
+    # First attempt is billed (validation miss); the retry truncates (billed). The carried
+    # cost must be prior-attempt spend PLUS the truncated call's own cost.
+    client = _ScriptedClient(
+        [INVALID_JSON, ProviderTruncation(provider="fake", reason="max_tokens", cost_usd=0.3)],
+        cost_usd=0.5,
+    )
+    with pytest.raises(ProviderTruncation) as excinfo:
+        run_extraction(client, InvoiceV1, system="sys", content="doc")
+    assert excinfo.value.cost_usd == pytest.approx(0.8)  # 0.5 prior + 0.3 own

@@ -1,4 +1,5 @@
-"""Provider seam: env-only routing now; the real calls are stubs."""
+"""Provider seam: env-only routing. Per-provider call behavior lives in
+test_openai_client.py and test_anthropic_client.py."""
 
 import pytest
 
@@ -66,9 +67,3 @@ def test_fixture_client_without_canned_text_fails_loud():
     # An unconfigured fixture client must not return an empty-but-valid extraction.
     with pytest.raises(ProviderError, match="canned text"):
         FixtureClient().complete(system="s", prompt="p", json_schema={})
-
-
-def test_anthropic_path_is_stubbed():
-    # OpenAI (T02) and FixtureClient (T04b) are implemented; Anthropic fails loud until T09.
-    with pytest.raises(NotImplementedError):
-        AnthropicClient().complete(system="s", prompt="p", json_schema={})

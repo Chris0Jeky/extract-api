@@ -17,6 +17,10 @@ class ExtractRequest(BaseModel):
     doc_type: Literal["invoice", "uk_job_posting"]
     schema_version: str = "v1"
     content: str
+    # "text": content is the document text. "pdf_base64": content is a base64-encoded PDF
+    # whose embedded text is extracted server-side (PyMuPDF, no OCR). Defaults to text, so
+    # existing callers are unaffected.
+    content_format: Literal["text", "pdf_base64"] = "text"
     provider: Literal["openai", "anthropic", "default"] = "default"
 
 
@@ -26,8 +30,8 @@ class ExtractMeta(BaseModel):
     schema_version: str
     attempts: int
     replayed: bool = False
-    # field_confidence is HEURISTIC (presence + validation pass + optional model
-    # self-report). It is not a calibrated probability; the README says so.
+    # field_confidence is a presence-only HEURISTIC (1.0 for a present value, 0.0 for an
+    # explicit null), not a calibrated probability. See _field_confidence in api/main.py.
     field_confidence: dict[str, float]
     cost_usd: float
     latency_ms: float

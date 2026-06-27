@@ -13,6 +13,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from api.idempotency import SqliteIdempotencyStore
 from api.main import create_app
 from llm.client import CompletionResult
 from llm.errors import ProviderError, ProviderRefusal, ProviderTimeout, ProviderTruncation
@@ -57,9 +58,11 @@ class _FakeClient:
         self._tokens_in = tokens_in
         self._tokens_out = tokens_out
         self.calls = 0
+        self.last_prompt: str | None = None
 
     def complete(self, *, system, prompt, json_schema, max_tokens=4096):
         self.calls += 1
+        self.last_prompt = prompt
         step = self._steps.pop(0)
         if isinstance(step, Exception):
             raise step
@@ -79,10 +82,10 @@ def _client_with(monkeypatch, fake: _FakeClient) -> TestClient:
     return TestClient(create_app(), raise_server_exceptions=False)
 
 
-def _post(client: TestClient, **overrides) -> object:
+def _post(client: TestClient, *, headers: dict[str, str] | None = None, **overrides) -> object:
     body = {"doc_type": "invoice", "schema_version": "v1", "content": "doc", "provider": "openai"}
     body.update(overrides)
-    return client.post("/v1/extract", json=body)
+    return client.post("/v1/extract", json=body, headers=headers)
 
 
 def test_happy_path_returns_data_and_full_meta(monkeypatch):
@@ -161,6 +164,78 @@ def test_provider_failures_map_to_502(monkeypatch, exc):
     assert resp.json()["error"] == "provider_error"
 
 
+def test_provider_error_detail_is_sanitized(monkeypatch):
+    # The raw upstream provider/gateway message must not be echoed in the 502 body (#21);
+    # the safe provider name is retained, the secret-bearing detail is not.
+    fake = _FakeClient([ProviderError(provider="fake", detail="SECRET upstream body")])
+    body = _post(_client_with(monkeypatch, fake)).json()
+    assert body["error"] == "provider_error"
+    assert "SECRET" not in body["detail"]
+    assert "fake" in body["detail"]
+
+
+def test_provider_timeout_detail_is_sanitized(monkeypatch):
+    fake = _FakeClient([ProviderTimeout(provider="fake", detail="SECRET timeout body")])
+    body = _post(_client_with(monkeypatch, fake)).json()
+    assert body["error"] == "provider_timeout"
+    assert "SECRET" not in body["detail"]
+
+
+def test_budget_cap_blocks_further_extractions(monkeypatch):
+    # T18: once committed spend reaches the per-run cap, the next request is 402 budget_exceeded
+    # before any model call. The fake spends 0.0012 per call; cap is below that.
+    from api.budget import BudgetGuard
+
+    fake = _FakeClient([VALID_JSON, VALID_JSON])
+    monkeypatch.setattr("api.main.get_client", lambda provider: fake)
+    client = TestClient(create_app(budget=BudgetGuard(0.001)), raise_server_exceptions=False)
+
+    first = _post(client)
+    assert first.status_code == 200  # spent 0 < cap, then committed 0.0012
+    second = _post(client)
+    assert second.status_code == 402
+    assert second.json()["error"] == "budget_exceeded"
+    assert fake.calls == 1  # the capped request did not spend a model call
+
+
+def test_budget_counts_failed_extraction_spend(monkeypatch):
+    # Failed extractions are billed (2 attempts) and MUST count against the cap, so a
+    # failure-heavy stream cannot silently defeat the budget.
+    from api.budget import BudgetGuard
+
+    fake = _FakeClient([INVALID_JSON, INVALID_JSON])  # both attempts fail strict validation
+    monkeypatch.setattr("api.main.get_client", lambda provider: fake)
+    client = TestClient(create_app(budget=BudgetGuard(0.001)), raise_server_exceptions=False)
+
+    first = _post(client)
+    assert first.status_code == 422  # validation_failed, but its 0.0024 spend is reconciled
+    assert fake.calls == 2
+    second = _post(client)
+    assert second.status_code == 402  # the failed request's billed spend tripped the cap
+    assert second.json()["error"] == "budget_exceeded"
+    assert fake.calls == 2  # the capped request spent nothing more
+
+
+def test_budget_counts_truncated_call_spend(monkeypatch):
+    # A truncation/refusal is a billed response whose cost the client attaches to the
+    # exception; the endpoint must reconcile it so a truncation-heavy stream (the most
+    # expensive failure mode) cannot silently escape the per-run cap.
+    from api.budget import BudgetGuard
+
+    truncated = ProviderTruncation(provider="fake", reason="max_output_tokens", cost_usd=0.0012)
+    fake = _FakeClient([truncated])
+    monkeypatch.setattr("api.main.get_client", lambda provider: fake)
+    client = TestClient(create_app(budget=BudgetGuard(0.001)), raise_server_exceptions=False)
+
+    first = _post(client)
+    assert first.status_code == 502  # provider_error, but the truncation's 0.0012 is reconciled
+    assert fake.calls == 1
+    second = _post(client)
+    assert second.status_code == 402  # the truncated call's billed spend tripped the cap
+    assert second.json()["error"] == "budget_exceeded"
+    assert fake.calls == 1  # the capped request spent nothing more
+
+
 def test_unknown_schema_version_renders_unsupported_doc_type(monkeypatch):
     # A registered doc_type with an unregistered version misses the registry, which
     # raises UnknownSchema BEFORE any provider call -> the taxonomy, not a 500.
@@ -223,3 +298,162 @@ def test_unexpected_client_error_renders_internal_error(monkeypatch):
     resp = _post(_client_with(monkeypatch, _FakeClient([RuntimeError("boom")])))
     assert resp.status_code == 500
     assert resp.json()["error"] == "internal_error"
+
+
+# --- T12: idempotency wiring (store consulted before any model call) ---
+
+
+def _store(tmp_path) -> SqliteIdempotencyStore:
+    return SqliteIdempotencyStore(str(tmp_path / "i.sqlite"))
+
+
+def _client_with_store(monkeypatch, fake: _FakeClient, store) -> TestClient:
+    monkeypatch.setattr("api.main.get_client", lambda provider: fake)
+    return TestClient(create_app(idempotency_store=store), raise_server_exceptions=False)
+
+
+def test_same_key_same_payload_replays_without_a_model_call(monkeypatch, tmp_path):
+    # One canned step only: a second model call would pop an empty list and error, so this
+    # also proves the replay path never reaches the client.
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with_store(monkeypatch, fake, _store(tmp_path))
+    headers = {"Idempotency-Key": "abc123"}
+
+    first = _post(client, headers=headers)
+    assert first.status_code == 200
+    assert first.json()["meta"]["replayed"] is False
+    assert fake.calls == 1
+
+    second = _post(client, headers=headers)
+    assert second.status_code == 200
+    assert second.json()["meta"]["replayed"] is True
+    assert second.json()["data"] == first.json()["data"]
+    assert fake.calls == 1  # the replay did not call the model again
+
+
+def test_same_key_different_payload_returns_409(monkeypatch, tmp_path):
+    fake = _FakeClient([VALID_JSON])  # the conflict must be caught before a second call
+    client = _client_with_store(monkeypatch, fake, _store(tmp_path))
+    headers = {"Idempotency-Key": "dup"}
+
+    assert _post(client, headers=headers).status_code == 200
+    # Same key, different content -> different payload hash -> conflict.
+    resp = _post(client, headers=headers, content="a completely different document")
+    assert resp.status_code == 409
+    assert resp.json()["error"] == "idempotency_conflict"
+    assert fake.calls == 1  # detected before any model call
+
+
+def test_different_keys_each_run(monkeypatch, tmp_path):
+    fake = _FakeClient([VALID_JSON, VALID_JSON])
+    client = _client_with_store(monkeypatch, fake, _store(tmp_path))
+    r1 = _post(client, headers={"Idempotency-Key": "k1"})
+    r2 = _post(client, headers={"Idempotency-Key": "k2"})
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert r2.json()["meta"]["replayed"] is False
+    assert fake.calls == 2  # distinct keys -> two model calls
+
+
+def test_failed_extraction_is_not_stored_so_retry_runs(monkeypatch, tmp_path):
+    # First attempt fails (provider error, not stored); a retry with the same key re-runs
+    # and can succeed, rather than replaying the failure.
+    fake = _FakeClient([ProviderError(provider="fake", detail="boom"), VALID_JSON])
+    client = _client_with_store(monkeypatch, fake, _store(tmp_path))
+    headers = {"Idempotency-Key": "retry-me"}
+
+    first = _post(client, headers=headers)
+    assert first.status_code == 502
+    second = _post(client, headers=headers)
+    assert second.status_code == 200
+    assert second.json()["meta"]["replayed"] is False
+    assert fake.calls == 2
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_blank_idempotency_key_is_rejected(monkeypatch, tmp_path, blank):
+    # A present-but-blank header must fail loud (not become a degenerate shared key), and
+    # before any model call - mirroring the empty-content guard.
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with_store(monkeypatch, fake, _store(tmp_path))
+    resp = _post(client, headers={"Idempotency-Key": blank})
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "validation_failed"
+    assert fake.calls == 0
+
+
+def test_oversized_idempotency_key_is_rejected(monkeypatch, tmp_path):
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with_store(monkeypatch, fake, _store(tmp_path))
+    resp = _post(client, headers={"Idempotency-Key": "x" * 256})
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "validation_failed"
+    assert fake.calls == 0
+
+
+# --- T14: PDF content (base64 PDF -> extracted text drives the extraction) ---
+
+
+def _pdf_b64(text: str) -> str:
+    import base64
+
+    import pymupdf
+
+    doc = pymupdf.open()
+    doc.new_page().insert_text((72, 72), text)
+    raw = doc.tobytes()
+    doc.close()
+    return base64.b64encode(raw).decode()
+
+
+def test_pdf_content_is_extracted_and_drives_extraction(monkeypatch):
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with(monkeypatch, fake)
+    resp = _post(client, content=_pdf_b64("Invoice body text 42"), content_format="pdf_base64")
+    assert resp.status_code == 200
+    # The pipeline received the EXTRACTED text, not the base64 blob.
+    assert fake.last_prompt is not None
+    assert "Invoice body text 42" in fake.last_prompt
+
+
+def test_bad_pdf_at_endpoint_returns_422(monkeypatch):
+    import base64
+
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with(monkeypatch, fake)
+    not_pdf = base64.b64encode(b"plainly not a pdf").decode()
+    resp = _post(client, content=not_pdf, content_format="pdf_base64")
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "validation_failed"
+    assert fake.calls == 0  # bad PDF fails loud before any model call
+
+
+def test_unsupported_schema_is_caught_before_pdf_extraction(monkeypatch):
+    import base64
+
+    # An unsupported schema_version fails as unsupported_doc_type BEFORE any PDF work, even
+    # with a bad PDF (which would otherwise be validation_failed): schema is checked first.
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with(monkeypatch, fake)
+    bad_pdf = base64.b64encode(b"not a pdf at all").decode()
+    resp = _post(client, schema_version="v2", content=bad_pdf, content_format="pdf_base64")
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "unsupported_doc_type"
+    assert fake.calls == 0
+
+
+def test_default_store_is_built_lazily_from_env(monkeypatch, tmp_path):
+    # No injected store: the default store is built lazily from IDEMPOTENCY_DB_PATH on the
+    # first keyed request (not at import), and replay works through it.
+    monkeypatch.setenv("IDEMPOTENCY_DB_PATH", str(tmp_path / "default.sqlite"))
+    fake = _FakeClient([VALID_JSON])
+    monkeypatch.setattr("api.main.get_client", lambda provider: fake)
+    client = TestClient(create_app(), raise_server_exceptions=False)  # no store injected
+    headers = {"Idempotency-Key": "lazy-1"}
+
+    first = _post(client, headers=headers)
+    assert first.status_code == 200
+    second = _post(client, headers=headers)
+    assert second.json()["meta"]["replayed"] is True
+    assert fake.calls == 1
+    assert (tmp_path / "default.sqlite").exists()  # built on first keyed use, in the tmp dir
