@@ -1,18 +1,6 @@
 """Shared pytest fixtures."""
 
-import os
-import tempfile
-from pathlib import Path
-
 import pytest
-
-# api.main builds the default idempotency store at import (`app = create_app()`), and any
-# test that calls create_app() without injecting a store builds one too. Default the db
-# path into the system temp dir so those never litter the repo working tree. Tests that
-# exercise idempotency inject their own tmp_path store for isolation.
-os.environ.setdefault(
-    "IDEMPOTENCY_DB_PATH", str(Path(tempfile.gettempdir()) / "extract_api_test_idem.sqlite")
-)
 
 
 @pytest.fixture(autouse=True)

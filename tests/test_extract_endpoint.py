@@ -294,3 +294,41 @@ def test_failed_extraction_is_not_stored_so_retry_runs(monkeypatch, tmp_path):
     assert second.status_code == 200
     assert second.json()["meta"]["replayed"] is False
     assert fake.calls == 2
+
+
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_blank_idempotency_key_is_rejected(monkeypatch, tmp_path, blank):
+    # A present-but-blank header must fail loud (not become a degenerate shared key), and
+    # before any model call - mirroring the empty-content guard.
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with_store(monkeypatch, fake, _store(tmp_path))
+    resp = _post(client, headers={"Idempotency-Key": blank})
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "validation_failed"
+    assert fake.calls == 0
+
+
+def test_oversized_idempotency_key_is_rejected(monkeypatch, tmp_path):
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with_store(monkeypatch, fake, _store(tmp_path))
+    resp = _post(client, headers={"Idempotency-Key": "x" * 256})
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "validation_failed"
+    assert fake.calls == 0
+
+
+def test_default_store_is_built_lazily_from_env(monkeypatch, tmp_path):
+    # No injected store: the default store is built lazily from IDEMPOTENCY_DB_PATH on the
+    # first keyed request (not at import), and replay works through it.
+    monkeypatch.setenv("IDEMPOTENCY_DB_PATH", str(tmp_path / "default.sqlite"))
+    fake = _FakeClient([VALID_JSON])
+    monkeypatch.setattr("api.main.get_client", lambda provider: fake)
+    client = TestClient(create_app(), raise_server_exceptions=False)  # no store injected
+    headers = {"Idempotency-Key": "lazy-1"}
+
+    first = _post(client, headers=headers)
+    assert first.status_code == 200
+    second = _post(client, headers=headers)
+    assert second.json()["meta"]["replayed"] is True
+    assert fake.calls == 1
+    assert (tmp_path / "default.sqlite").exists()  # built on first keyed use, in the tmp dir

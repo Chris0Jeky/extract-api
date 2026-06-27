@@ -96,12 +96,36 @@ def _run_extract(request: ExtractRequest) -> ExtractResponse:
     return ExtractResponse(data=data, meta=meta)
 
 
+# Idempotency-Key is a client-supplied string used as the store primary key; bound its
+# length so a caller cannot store unbounded keys (255 is the common cap, e.g. Stripe).
+_MAX_IDEMPOTENCY_KEY_LEN = 255
+
+
 def _store_from_env() -> IdempotencyStore:
     """Build the default SQLite idempotency store from env (ADR 0004)."""
     return SqliteIdempotencyStore(
         os.environ.get("IDEMPOTENCY_DB_PATH", "idempotency.sqlite"),
         int(os.environ.get("IDEMPOTENCY_TTL_HOURS", "24")),
     )
+
+
+def _validate_idempotency_key(idempotency_key: str) -> str:
+    """Normalize + validate a client-supplied Idempotency-Key, failing loud on a bad one.
+
+    A present-but-blank header (`Idempotency-Key:` with no value) is not None, so without
+    this it would be used verbatim as a degenerate shared key (cross-request false 409s and
+    unintended replays). Fail loud instead, mirroring the empty-content guard, and bound the
+    length. Surrounding whitespace is stripped so trivially-different keys do not diverge.
+    """
+    key = idempotency_key.strip()
+    if not key:
+        raise ExtractError(ErrorCode.validation_failed, detail="Idempotency-Key must not be blank")
+    if len(key) > _MAX_IDEMPOTENCY_KEY_LEN:
+        raise ExtractError(
+            ErrorCode.validation_failed,
+            detail=f"Idempotency-Key must be at most {_MAX_IDEMPOTENCY_KEY_LEN} characters",
+        )
+    return key
 
 
 def _run_extract_idempotent(
@@ -140,7 +164,17 @@ def _run_extract_idempotent(
 
 
 def create_app(*, idempotency_store: IdempotencyStore | None = None) -> FastAPI:
-    store = idempotency_store if idempotency_store is not None else _store_from_env()
+    # The default store is built lazily on first use, so merely importing this module (or
+    # serving requests that never use idempotency) performs no filesystem I/O. An injected
+    # store (tests, smoke) is used as-is.
+    cached_store: IdempotencyStore | None = idempotency_store
+
+    def _store() -> IdempotencyStore:
+        nonlocal cached_store
+        if cached_store is None:
+            cached_store = _store_from_env()
+        return cached_store
+
     app = FastAPI(
         title="extract-api",
         version="0.1.0",
@@ -164,7 +198,8 @@ def create_app(*, idempotency_store: IdempotencyStore | None = None) -> FastAPI:
         # model call (replay on match, 409 on a payload mismatch).
         if idempotency_key is None:
             return _run_extract(request)
-        return _run_extract_idempotent(store, idempotency_key, request)
+        key = _validate_idempotency_key(idempotency_key)
+        return _run_extract_idempotent(_store(), key, request)
 
     return app
 
