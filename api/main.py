@@ -55,6 +55,9 @@ def _run_extract(request: ExtractRequest) -> ExtractResponse:
     unregistered (doc_type, schema_version). Provider-seam errors and a terminal
     validation failure become the matching `ExtractError`.
     """
+    # Resolve the schema first: an unsupported (doc_type, schema_version) fails cheaply and
+    # consistently (unsupported_doc_type) before any PDF extraction, which is independent of it.
+    model_cls = resolve(request.doc_type, request.schema_version)
     # Resolve the text to extract from: passthrough for text, decoded text for a PDF.
     # A bad PDF (corrupt/oversized/no-text) fails loud here as validation_failed.
     content = resolve_content(request)
@@ -65,7 +68,6 @@ def _run_extract(request: ExtractRequest) -> ExtractResponse:
             ErrorCode.validation_failed,
             detail="content is empty or whitespace-only; nothing to extract",
         )
-    model_cls = resolve(request.doc_type, request.schema_version)
     client = get_client(request.provider)
     system = build_system_prompt(request.doc_type)
     try:

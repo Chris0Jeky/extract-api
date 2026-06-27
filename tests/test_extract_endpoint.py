@@ -356,6 +356,20 @@ def test_bad_pdf_at_endpoint_returns_422(monkeypatch):
     assert fake.calls == 0  # bad PDF fails loud before any model call
 
 
+def test_unsupported_schema_is_caught_before_pdf_extraction(monkeypatch):
+    import base64
+
+    # An unsupported schema_version fails as unsupported_doc_type BEFORE any PDF work, even
+    # with a bad PDF (which would otherwise be validation_failed): schema is checked first.
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with(monkeypatch, fake)
+    bad_pdf = base64.b64encode(b"not a pdf at all").decode()
+    resp = _post(client, schema_version="v2", content=bad_pdf, content_format="pdf_base64")
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "unsupported_doc_type"
+    assert fake.calls == 0
+
+
 def test_default_store_is_built_lazily_from_env(monkeypatch, tmp_path):
     # No injected store: the default store is built lazily from IDEMPOTENCY_DB_PATH on the
     # first keyed request (not at import), and replay works through it.
