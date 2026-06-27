@@ -17,6 +17,7 @@ an offline deterministic path for `make smoke` and tests.
 
 from __future__ import annotations
 
+import math
 import os
 import time
 from dataclasses import dataclass
@@ -72,9 +73,16 @@ def _float_env_required(name: str) -> float:
     if not raw:
         raise ValueError(f"env {name} is required: set the per-model price explicitly")
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError as exc:
         raise ValueError(f"env {name}={raw!r} is not a valid float") from exc
+    if not math.isfinite(value) or value < 0:
+        # A non-finite or negative price propagates into cost_usd and then into the budget
+        # guard as invalid spend: nan/inf never trips the cap and a negative cost reduces the
+        # committed total (a fail-open). Reject it loudly at the source (mirroring
+        # budget_from_env) so all computed cost stays finite and non-negative.
+        raise ValueError(f"env {name}={raw!r} must be a finite, non-negative number")
+    return value
 
 
 def _int_env(name: str, default: str) -> int:
