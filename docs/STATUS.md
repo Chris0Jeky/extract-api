@@ -6,8 +6,10 @@ Authoritative detail lives in `AGENTS.md` (rules), `tasks/BACKLOG.md` (tasks),
 
 ## Merged to `main` (gate-green)
 
-M0 + all of M1's engineering (T01-T06) + T08 + the full error-taxonomy work are merged
-(through PR #34). The **invoice path is live end-to-end**: `POST /v1/extract` ->
+M0 + all of M1's engineering (T01-T06) + T08 + the error-taxonomy principle and framework
+404/405 codes (#28 / #29) are merged (through PR #34). Full taxonomy *coverage* (reserved
+codes + completeness tripwire, T13) is still in the queue below. The **invoice path is live
+end-to-end**: `POST /v1/extract` ->
 resolve schema -> resolve content -> OpenAI client -> validation-retry pipeline ->
 `data` + full `meta`, with the taxonomy wired for every non-200, offline `make smoke`,
 and the normalization helpers.
@@ -16,7 +18,7 @@ and the normalization helpers.
 | --- | --- |
 | M0 | config + pinned deps (ADR 0001), strict schemas + registry, FastAPI app, `llm/client.py` seam, CI + governance + `.claude` hooks/skills |
 | T01-T03 | invoice schema completeness; OpenAI Responses path (strict json_schema, env-priced cost); validation-retry loop (1 retry / 2 attempts) |
-| T04-T06 + Q8 | `POST /v1/extract` happy path; FixtureClient + offline smoke; full taxonomy wiring (`internal_error`, RequestValidationError, catch-all); `harness/normalize.py`; default provider = openai |
+| T04-T06 | `POST /v1/extract` happy path; FixtureClient + offline smoke; taxonomy handler wiring (`internal_error`, RequestValidationError, catch-all); `harness/normalize.py`; default provider = openai |
 | T08 | `JobPostingV1` completeness (explicit-null keys, salary cross-field validators) |
 | #28 / #29 | framework 404/405 carry taxonomy codes; locked taxonomy reframed as a principle (one-code-per-non-200; `api/errors.py` is the source of truth; new codes need owner approval) |
 
@@ -40,11 +42,17 @@ Off-main, independent (merge any time): **#45** (T16 accuracy harness), **#47** 
 fail-loud), **#55** (dependabot-auto-merge fix). Held for Chris's editorial sign-off:
 **#36** (T07: flip the 10 invoice fixtures DRAFT -> REVIEWED, a ground-truth label change).
 
+Known bug on current `main` (until #55 merges): the `dependabot-auto-merge` job fails on
+dev/transitive bumps (`gh pr review --approve` cannot run under `GITHUB_TOKEN`); #55 fixes it.
+
 ## Next up (after the merge)
 
-Merging the queue unblocks: **T17** (two-provider accuracy table - needs paid `--live`
-runs), **T19** (docker compose live), **T20** (README with measured numbers), **T21**
-(gateway-readiness trace). **T15** (30-50 new labeled fixtures) blocks on Chris's labels.
+Merging the queue lands the engineering prerequisites (T16 accuracy harness #45, the budget
+guard, both providers). Beyond the merge, **T17** (two-provider accuracy table) additionally
+needs **T15** labeled fixtures (block on Chris's labels) and paid `--live` runs; **T20**
+(README with measured numbers) follows T17; **T19** (docker compose live) needs Docker;
+**T21** (gateway-readiness trace) needs a `--live` run. So the merge unblocks the *code* path
+to M3/M4, but the published numbers still wait on labels + paid runs.
 
 ## Open tracked issues
 

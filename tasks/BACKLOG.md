@@ -35,15 +35,15 @@ resolved, green CI, aged, with a newer PR above it. Small conventional commits.
   response; second failure -> `ExtractionFailed` (JSON-safe trail) for the 422; usage
   accumulated across attempts; every retry logged with its kinds; first-fail-then-pass
   + both-fail + provider-error-passthrough tested. (1 retry / 2 attempts.)
-- **T04 `POST /v1/extract` happy path (invoice, OpenAI).** DoD: endpoint returns
+- [x] **T04 `POST /v1/extract` happy path (invoice, OpenAI).** (PR #23) endpoint returns
   200 with `data` + full `meta`; integration test against a stubbed client.
-- **T04b Fixture/mock provider + `make smoke` extraction.** DoD: FixtureClient
+- [x] **T04b Fixture/mock provider + `make smoke` extraction.** (PR #24) FixtureClient
   returns canned structured output; `make smoke` POSTs a known fixture and asserts
   the validated record + a forced 422, offline. (Extended in T12 with idempotency.)
-- **T05 `api/errors.py` taxonomy wiring.** DoD: full taxonomy -> HTTP rendering in
-  the live app; tests assert each member renders the right status+body. (Enum +
-  mapping + handlers already exist from M0.)
-- **T06 `harness/normalize.py`.** DoD: date->ISO and money->minor-units with a
+- [x] **T05 `api/errors.py` taxonomy wiring.** (PR #30) full taxonomy -> HTTP rendering in
+  the live app; tests assert each member renders the right status+body. Added the
+  owner-approved `internal_error` (500) member + RequestValidationError + catch-all handlers.
+- [x] **T06 `harness/normalize.py`.** (PR #26) date->ISO and money->minor-units with a
   currency minor-digit table; tests on GBP/USD/JPY (0 digits) and bad input
   raising, not coercing.
 - **T07 Flip 10 invoice fixtures to REVIEWED + passing.** DoD: human-cleared
@@ -52,8 +52,9 @@ resolved, green CI, aged, with a newer PR above it. Small conventional commits.
 
 ## M2 - job-posting path + idempotency + full taxonomy
 
-- **T08 Job-posting schema completeness + tests.** DoD: enum + cross-field edge
-  tests (the `competitive` and inverted-range cases). Base model exists from M0.
+- [x] **T08 Job-posting schema completeness + tests.** (PR #31) enum + cross-field edge
+  tests (the `competitive` and inverted-range cases); explicit-null keys + salary
+  currency-when-present (closed #4, #8). Base model existed from M0.
 - **T09 `llm/client.py` Anthropic path (`messages.parse`).** DoD: structured
   output behind the seam; `stop_reason` refusal/`max_tokens` mapped; strict-tool
   fallback stubbed; mocked-response test.
