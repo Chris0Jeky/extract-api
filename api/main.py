@@ -1,8 +1,9 @@
 """FastAPI app. POST /v1/extract is the product surface.
 
-The extract flow is: resolve the strict model for (doc_type, schema_version) ->
-get the provider client (env-routed) -> run the validation-retry pipeline (provider
-call -> strict validate -> one feedback retry) -> render `data` + full `meta`. The
+The extract flow is: resolve the content (text, or a base64 PDF's text via PyMuPDF) ->
+resolve the strict model for (doc_type, schema_version) -> get the provider client
+(env-routed) -> run the validation-retry pipeline (provider call -> strict validate ->
+one feedback retry) -> render `data` + full `meta`. The
 provider seam raises `llm.errors.Provider*` and the pipeline raises `ExtractionFailed`;
 this layer maps those onto the `ErrorCode` taxonomy, and `api/errors.py` renders
 request-shape errors (validation_failed / unsupported_doc_type) and any unmapped
@@ -20,6 +21,7 @@ from typing import Annotated, Any
 
 from fastapi import FastAPI, Header
 
+from api.content import resolve_content
 from api.errors import ErrorCode, ExtractError, install_error_handlers
 from api.idempotency import (
     IdempotencyStore,
@@ -53,20 +55,23 @@ def _run_extract(request: ExtractRequest) -> ExtractResponse:
     unregistered (doc_type, schema_version). Provider-seam errors and a terminal
     validation failure become the matching `ExtractError`.
     """
-    if not request.content.strip():
+    # Resolve the schema first: an unsupported (doc_type, schema_version) fails cheaply and
+    # consistently (unsupported_doc_type) before any PDF extraction, which is independent of it.
+    model_cls = resolve(request.doc_type, request.schema_version)
+    # Resolve the text to extract from: passthrough for text, decoded text for a PDF.
+    # A bad PDF (corrupt/oversized/no-text) fails loud here as validation_failed.
+    content = resolve_content(request)
+    if not content.strip():
         # Empty/whitespace content has nothing to extract; fail loud before spending a
         # billed provider call rather than inviting the model to hallucinate a record.
         raise ExtractError(
             ErrorCode.validation_failed,
             detail="content is empty or whitespace-only; nothing to extract",
         )
-    model_cls = resolve(request.doc_type, request.schema_version)
     client = get_client(request.provider)
     system = build_system_prompt(request.doc_type)
     try:
-        model, result, attempts = run_extraction(
-            client, model_cls, system=system, content=request.content
-        )
+        model, result, attempts = run_extraction(client, model_cls, system=system, content=content)
     except ProviderTimeout as exc:
         # Subclass of ProviderError, so it must be caught first to keep its 504 code.
         raise ExtractError(ErrorCode.provider_timeout, detail=str(exc)) from exc

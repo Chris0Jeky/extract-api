@@ -54,6 +54,13 @@ packages = ["api", "schemas", "llm", "harness"]
 # Provider SDKs are imported only in llm/client.py; if their stubs are incomplete,
 # narrow with per-module overrides here rather than relaxing strict globally.
 
+[[tool.mypy.overrides]]
+# PyMuPDF (pymupdf) ships incomplete type info, so pymupdf.open reads as an untyped call
+# under strict mode. Treat the package as untyped at its import boundary (api/content.py is
+# the only importer) rather than relaxing strict for the whole codebase.
+module = ["pymupdf", "pymupdf.*"]
+follow_imports = "skip"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q --cov=api --cov=schemas --cov=llm --cov=harness --cov-report=term-missing --cov-fail-under=70"

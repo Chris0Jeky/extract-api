@@ -58,9 +58,11 @@ class _FakeClient:
         self._tokens_in = tokens_in
         self._tokens_out = tokens_out
         self.calls = 0
+        self.last_prompt: str | None = None
 
     def complete(self, *, system, prompt, json_schema, max_tokens=4096):
         self.calls += 1
+        self.last_prompt = prompt
         step = self._steps.pop(0)
         if isinstance(step, Exception):
             raise step
@@ -314,6 +316,57 @@ def test_oversized_idempotency_key_is_rejected(monkeypatch, tmp_path):
     resp = _post(client, headers={"Idempotency-Key": "x" * 256})
     assert resp.status_code == 422
     assert resp.json()["error"] == "validation_failed"
+    assert fake.calls == 0
+
+
+# --- T14: PDF content (base64 PDF -> extracted text drives the extraction) ---
+
+
+def _pdf_b64(text: str) -> str:
+    import base64
+
+    import pymupdf
+
+    doc = pymupdf.open()
+    doc.new_page().insert_text((72, 72), text)
+    raw = doc.tobytes()
+    doc.close()
+    return base64.b64encode(raw).decode()
+
+
+def test_pdf_content_is_extracted_and_drives_extraction(monkeypatch):
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with(monkeypatch, fake)
+    resp = _post(client, content=_pdf_b64("Invoice body text 42"), content_format="pdf_base64")
+    assert resp.status_code == 200
+    # The pipeline received the EXTRACTED text, not the base64 blob.
+    assert fake.last_prompt is not None
+    assert "Invoice body text 42" in fake.last_prompt
+
+
+def test_bad_pdf_at_endpoint_returns_422(monkeypatch):
+    import base64
+
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with(monkeypatch, fake)
+    not_pdf = base64.b64encode(b"plainly not a pdf").decode()
+    resp = _post(client, content=not_pdf, content_format="pdf_base64")
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "validation_failed"
+    assert fake.calls == 0  # bad PDF fails loud before any model call
+
+
+def test_unsupported_schema_is_caught_before_pdf_extraction(monkeypatch):
+    import base64
+
+    # An unsupported schema_version fails as unsupported_doc_type BEFORE any PDF work, even
+    # with a bad PDF (which would otherwise be validation_failed): schema is checked first.
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with(monkeypatch, fake)
+    bad_pdf = base64.b64encode(b"not a pdf at all").decode()
+    resp = _post(client, schema_version="v2", content=bad_pdf, content_format="pdf_base64")
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "unsupported_doc_type"
     assert fake.calls == 0
 
 

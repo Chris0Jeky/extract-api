@@ -25,9 +25,12 @@ Headers: Idempotency-Key: <client uuid>
 Body: {
   "doc_type": "invoice" | "uk_job_posting",
   "schema_version": "v1",
-  "content": "<text or base64 pdf>",
+  "content": "<document text, or a base64 PDF when content_format is pdf_base64>",
+  "content_format": "text" | "pdf_base64",   // optional, default "text"
   "provider": "openai" | "anthropic" | "default"
 }
+// PDF callers MUST set "content_format": "pdf_base64"; otherwise the base64 is treated
+// as literal text. PDF text is extracted with PyMuPDF (no OCR).
 
 200 OK:
 { "data": { ...validated fields... },
