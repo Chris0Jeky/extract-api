@@ -56,9 +56,9 @@ numbers appear.
 ## Error taxonomy
 
 Every non-200 carries exactly one error code, including framework routing errors.
-Observed frequencies are filled in from the accuracy run (numbers pending). Two codes
-are **reserved**: each has a fixed status and renders correctly, but no live request
-path emits one yet because the feature that would is unbuilt.
+Observed frequencies are filled in from the accuracy run (numbers pending). One code is
+**reserved** (`low_confidence`): it has a fixed status and renders correctly, but no live
+request path emits it yet because confidence-gating is unbuilt.
 
 | error | HTTP | meaning | frequency |
 | --- | --- | --- | --- |
@@ -67,7 +67,7 @@ path emits one yet because the feature that would is unbuilt.
 | `unsupported_doc_type` | 422 | no schema for (doc_type, schema_version), or an out-of-Literal doc_type | TBD |
 | `provider_error` | 502 | provider call failed | TBD |
 | `provider_timeout` | 504 | provider call timed out | TBD |
-| `budget_exceeded` | 402 | per-run USD cap reached (reserved: budget guard lands in M3) | n/a (reserved) |
+| `budget_exceeded` | 402 | per-run USD cap (EXTRACT_BUDGET_USD) reached | TBD |
 | `idempotency_conflict` | 409 | same key, different payload | TBD |
 | `internal_error` | 500 | unexpected or unmapped server error | TBD |
 | `not_found` | 404 | no such route | TBD |

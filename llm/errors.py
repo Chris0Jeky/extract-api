@@ -12,10 +12,13 @@ from __future__ import annotations
 class ProviderError(Exception):
     """A provider call failed. Base for the more specific provider failures."""
 
-    def __init__(self, *, provider: str, detail: str = "") -> None:
+    def __init__(self, *, provider: str, detail: str = "", cost_usd: float = 0.0) -> None:
         super().__init__(detail or provider)
         self.provider = provider
         self.detail = detail
+        # Spend already incurred this run before the failure (set by the pipeline so the
+        # budget guard can reconcile it). 0.0 when the failed call's own cost is unknown.
+        self.cost_usd = cost_usd
 
 
 class ProviderTimeout(ProviderError):
