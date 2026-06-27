@@ -22,6 +22,7 @@ from typing import Annotated, Any
 
 from fastapi import FastAPI, Header
 
+from api.budget import BudgetGuard, budget_from_env
 from api.content import resolve_content
 from api.errors import ErrorCode, ExtractError, install_error_handlers
 from api.idempotency import (
@@ -51,12 +52,13 @@ def _field_confidence(data: dict[str, Any]) -> dict[str, float]:
     return {key: (0.0 if value is None else 1.0) for key, value in data.items()}
 
 
-def _run_extract(request: ExtractRequest) -> ExtractResponse:
+def _run_extract(request: ExtractRequest, budget: BudgetGuard) -> ExtractResponse:
     """Drive one extraction and map provider/validation failures to the taxonomy.
 
     `resolve` raises `UnknownSchema` (handled -> unsupported_doc_type) for an
     unregistered (doc_type, schema_version). Provider-seam errors and a terminal
-    validation failure become the matching `ExtractError`.
+    validation failure become the matching `ExtractError`. The per-run budget is checked
+    before the (billed) provider call and reconciled with the actual cost after.
     """
     # Resolve the schema first: an unsupported (doc_type, schema_version) fails cheaply and
     # consistently (unsupported_doc_type) before any PDF extraction, which is independent of it.
@@ -71,6 +73,8 @@ def _run_extract(request: ExtractRequest) -> ExtractResponse:
             ErrorCode.validation_failed,
             detail="content is empty or whitespace-only; nothing to extract",
         )
+    # Enforce the per-run USD budget before spending on the provider call (no-op if disabled).
+    budget.check()
     client = get_client(request.provider)
     system = build_system_prompt(request.doc_type)
     try:
@@ -100,6 +104,8 @@ def _run_extract(request: ExtractRequest) -> ExtractResponse:
             extra={"attempts": exc.attempts, "trail": exc.trail},
         ) from exc
 
+    # Reconcile the request's actual spend (across all attempts) into the running budget.
+    budget.add(result.cost_usd)
     data = model.model_dump(mode="json")
     meta = ExtractMeta(
         provider=client.provider,
@@ -146,7 +152,7 @@ def _validate_idempotency_key(idempotency_key: str) -> str:
 
 
 def _run_extract_idempotent(
-    store: IdempotencyStore, key: str, request: ExtractRequest
+    store: IdempotencyStore, key: str, request: ExtractRequest, budget: BudgetGuard
 ) -> ExtractResponse:
     """Idempotent extraction: check the store before any model call.
 
@@ -171,7 +177,7 @@ def _run_extract_idempotent(
         replayed = ExtractResponse.model_validate_json(existing.response_json)
         replayed.meta.replayed = True
         return replayed
-    response = _run_extract(request)
+    response = _run_extract(request, budget)
     store.put(
         key,
         StoredResponse(
@@ -184,11 +190,14 @@ def _run_extract_idempotent(
     return response
 
 
-def create_app(*, idempotency_store: IdempotencyStore | None = None) -> FastAPI:
+def create_app(
+    *, idempotency_store: IdempotencyStore | None = None, budget: BudgetGuard | None = None
+) -> FastAPI:
     # The default store is built lazily on first use, so merely importing this module (or
     # serving requests that never use idempotency) performs no filesystem I/O. An injected
-    # store (tests, smoke) is used as-is.
+    # store / budget (tests, smoke) is used as-is; otherwise both come from env.
     cached_store: IdempotencyStore | None = idempotency_store
+    budget_guard = budget if budget is not None else budget_from_env()
 
     def _store() -> IdempotencyStore:
         nonlocal cached_store
@@ -218,9 +227,9 @@ def create_app(*, idempotency_store: IdempotencyStore | None = None) -> FastAPI:
         # Without a key, every request runs; with one, the store is consulted before any
         # model call (replay on match, 409 on a payload mismatch).
         if idempotency_key is None:
-            return _run_extract(request)
+            return _run_extract(request, budget_guard)
         key = _validate_idempotency_key(idempotency_key)
-        return _run_extract_idempotent(_store(), key, request)
+        return _run_extract_idempotent(_store(), key, request, budget_guard)
 
     return app
 
