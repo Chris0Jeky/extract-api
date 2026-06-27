@@ -79,3 +79,49 @@ def test_text_free_pdf_fails_loud():
         extract_pdf_text(_blank_pdf_b64())
     assert exc.value.code.value == "validation_failed"
     assert "ocr" in exc.value.detail.lower()
+
+
+def test_multipage_text_is_joined():
+    # The all-pages join is the reason _pdf_text iterates; lock it so a page-0-only
+    # regression (which is byte-identical on single-page fixtures) is caught.
+    doc = pymupdf.open()
+    doc.new_page().insert_text((72, 72), "PAGE ONE alpha")
+    doc.new_page().insert_text((72, 72), "PAGE TWO beta")
+    raw = doc.tobytes()
+    doc.close()
+    out = extract_pdf_text(base64.b64encode(raw).decode())
+    assert "PAGE ONE alpha" in out
+    assert "PAGE TWO beta" in out
+
+
+def test_too_many_pages_fails_loud(monkeypatch):
+    monkeypatch.setattr("api.content._MAX_PDF_PAGES", 1)
+    doc = pymupdf.open()
+    doc.new_page().insert_text((72, 72), "p1")
+    doc.new_page().insert_text((72, 72), "p2")
+    raw = doc.tobytes()
+    doc.close()
+    with pytest.raises(ExtractError) as exc:
+        extract_pdf_text(base64.b64encode(raw).decode())
+    assert exc.value.code.value == "validation_failed"
+    assert "page" in exc.value.detail.lower()
+
+
+def test_oversized_extracted_text_fails_loud(monkeypatch):
+    # A small PDF that expands past the text cap (a bomb) fails loud, not OOM.
+    monkeypatch.setattr("api.content._MAX_TEXT_CHARS", 3)
+    with pytest.raises(ExtractError) as exc:
+        extract_pdf_text(_pdf_b64("this text is much longer than three characters"))
+    assert exc.value.code.value == "validation_failed"
+    assert "char" in exc.value.detail.lower()
+
+
+def test_line_wrapped_base64_is_accepted():
+    # Standard MIME / RFC-2045 base64 wraps at 76 cols with newlines; it must still decode.
+    doc = pymupdf.open()
+    doc.new_page().insert_text((72, 72), "Wrapped base64 invoice")
+    raw = doc.tobytes()
+    doc.close()
+    wrapped = base64.encodebytes(raw).decode()
+    assert "\n" in wrapped  # genuinely line-wrapped
+    assert "Wrapped base64 invoice" in extract_pdf_text(wrapped)
