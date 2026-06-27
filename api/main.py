@@ -6,17 +6,27 @@ call -> strict validate -> one feedback retry) -> render `data` + full `meta`. T
 provider seam raises `llm.errors.Provider*` and the pipeline raises `ExtractionFailed`;
 this layer maps those onto the `ErrorCode` taxonomy, and `api/errors.py` renders
 request-shape errors (validation_failed / unsupported_doc_type) and any unmapped
-exception (internal_error) through it too (T05). `/healthz` stays a trivial
-liveness probe.
+exception (internal_error) through it too (T05). When an `Idempotency-Key` header is
+present, a key + payload-hash match replays the stored response with no model call
+(`replayed:true`), and a key reused with a different payload returns
+`idempotency_conflict` (409) (T12). `/healthz` stays a trivial liveness probe.
 """
 
 from __future__ import annotations
 
+import os
+import time
 from typing import Annotated, Any
 
 from fastapi import FastAPI, Header
 
 from api.errors import ErrorCode, ExtractError, install_error_handlers
+from api.idempotency import (
+    IdempotencyStore,
+    SqliteIdempotencyStore,
+    StoredResponse,
+    payload_hash,
+)
 from api.models import ExtractMeta, ExtractRequest, ExtractResponse
 from llm.client import get_client
 from llm.errors import ProviderError, ProviderTimeout
@@ -86,7 +96,89 @@ def _run_extract(request: ExtractRequest) -> ExtractResponse:
     return ExtractResponse(data=data, meta=meta)
 
 
-def create_app() -> FastAPI:
+# Idempotency-Key is a client-supplied string used as the store primary key; bound its
+# length so a caller cannot store unbounded keys (255 is the common cap, e.g. Stripe).
+_MAX_IDEMPOTENCY_KEY_LEN = 255
+
+
+def _store_from_env() -> IdempotencyStore:
+    """Build the default SQLite idempotency store from env (ADR 0004)."""
+    return SqliteIdempotencyStore(
+        os.environ.get("IDEMPOTENCY_DB_PATH", "idempotency.sqlite"),
+        int(os.environ.get("IDEMPOTENCY_TTL_HOURS", "24")),
+    )
+
+
+def _validate_idempotency_key(idempotency_key: str) -> str:
+    """Normalize + validate a client-supplied Idempotency-Key, failing loud on a bad one.
+
+    A present-but-blank header (`Idempotency-Key:` with no value) is not None, so without
+    this it would be used verbatim as a degenerate shared key (cross-request false 409s and
+    unintended replays). Fail loud instead, mirroring the empty-content guard, and bound the
+    length. Surrounding whitespace is stripped so trivially-different keys do not diverge.
+    """
+    key = idempotency_key.strip()
+    if not key:
+        raise ExtractError(ErrorCode.validation_failed, detail="Idempotency-Key must not be blank")
+    if len(key) > _MAX_IDEMPOTENCY_KEY_LEN:
+        raise ExtractError(
+            ErrorCode.validation_failed,
+            detail=f"Idempotency-Key must be at most {_MAX_IDEMPOTENCY_KEY_LEN} characters",
+        )
+    return key
+
+
+def _run_extract_idempotent(
+    store: IdempotencyStore, key: str, request: ExtractRequest
+) -> ExtractResponse:
+    """Idempotent extraction: check the store before any model call.
+
+    The payload hash is over the canonical serialization of the validated request, so
+    two byte-different-but-equivalent bodies for the same key still replay. On a key +
+    hash match the stored response is replayed (no model call, `replayed:true`); on a key
+    reused with a different payload we fail loud with `idempotency_conflict` (409). Only a
+    successful 200 is stored, so a transient failure stays retryable under the same key.
+
+    This guarantee is for SEQUENTIAL requests. Concurrent same-key requests can both miss
+    `get` and both run before either `put`s (the model call sits in the get/put window);
+    atomic reservation for that case is tracked in issue #42.
+    """
+    request_hash = payload_hash(request.model_dump_json().encode())
+    existing = store.get(key)
+    if existing is not None:
+        if existing.payload_sha256 != request_hash:
+            raise ExtractError(
+                ErrorCode.idempotency_conflict,
+                detail="Idempotency-Key was reused with a different request payload",
+            )
+        replayed = ExtractResponse.model_validate_json(existing.response_json)
+        replayed.meta.replayed = True
+        return replayed
+    response = _run_extract(request)
+    store.put(
+        key,
+        StoredResponse(
+            payload_sha256=request_hash,
+            response_json=response.model_dump_json(),
+            status_code=200,
+            created_at_epoch=time.time(),
+        ),
+    )
+    return response
+
+
+def create_app(*, idempotency_store: IdempotencyStore | None = None) -> FastAPI:
+    # The default store is built lazily on first use, so merely importing this module (or
+    # serving requests that never use idempotency) performs no filesystem I/O. An injected
+    # store (tests, smoke) is used as-is.
+    cached_store: IdempotencyStore | None = idempotency_store
+
+    def _store() -> IdempotencyStore:
+        nonlocal cached_store
+        if cached_store is None:
+            cached_store = _store_from_env()
+        return cached_store
+
     app = FastAPI(
         title="extract-api",
         version="0.1.0",
@@ -106,8 +198,12 @@ def create_app() -> FastAPI:
         request: ExtractRequest,
         idempotency_key: Annotated[str | None, Header()] = None,
     ) -> ExtractResponse:
-        # idempotency_key is parsed now but only honored once the store lands (T11/T12).
-        return _run_extract(request)
+        # Without a key, every request runs; with one, the store is consulted before any
+        # model call (replay on match, 409 on a payload mismatch).
+        if idempotency_key is None:
+            return _run_extract(request)
+        key = _validate_idempotency_key(idempotency_key)
+        return _run_extract_idempotent(_store(), key, request)
 
     return app
 
