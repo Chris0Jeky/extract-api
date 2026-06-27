@@ -164,6 +164,23 @@ def test_provider_failures_map_to_502(monkeypatch, exc):
     assert resp.json()["error"] == "provider_error"
 
 
+def test_provider_error_detail_is_sanitized(monkeypatch):
+    # The raw upstream provider/gateway message must not be echoed in the 502 body (#21);
+    # the safe provider name is retained, the secret-bearing detail is not.
+    fake = _FakeClient([ProviderError(provider="fake", detail="SECRET upstream body")])
+    body = _post(_client_with(monkeypatch, fake)).json()
+    assert body["error"] == "provider_error"
+    assert "SECRET" not in body["detail"]
+    assert "fake" in body["detail"]
+
+
+def test_provider_timeout_detail_is_sanitized(monkeypatch):
+    fake = _FakeClient([ProviderTimeout(provider="fake", detail="SECRET timeout body")])
+    body = _post(_client_with(monkeypatch, fake)).json()
+    assert body["error"] == "provider_timeout"
+    assert "SECRET" not in body["detail"]
+
+
 def test_unknown_schema_version_renders_unsupported_doc_type(monkeypatch):
     # A registered doc_type with an unregistered version misses the registry, which
     # raises UnknownSchema BEFORE any provider call -> the taxonomy, not a 500.
