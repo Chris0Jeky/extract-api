@@ -3,7 +3,7 @@
   "doc_type": "invoice",
   "schema_version": "v1",
   "source": "synthetic",
-  "label_status": "DRAFT",
+  "label_status": "REVIEWED",
   "content": "INVOICE\nSeller: Tideway Engineering Ltd (VAT GB987654321)\nBuyer: Pennine Builders\nInvoice number: TE-2207\nIssue date: 2026-04-22\nSite survey\nQuantity: 1 at GBP 1,200.00\nSubtotal: GBP 1,200.00\nVAT 20%: GBP 240.00\nTotal: GBP 1,440.00",
   "expected": {
     "invoice_number": "TE-2207",

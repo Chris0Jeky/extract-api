@@ -3,7 +3,7 @@
   "doc_type": "invoice",
   "schema_version": "v1",
   "source": "synthetic",
-  "label_status": "DRAFT",
+  "label_status": "REVIEWED",
   "content": "Invoice\nMontgomery Lab Supplies\nInvoice #: ML-6634\nDate: 2026-05-19\nDue: 2026-06-18\nReagent A: 2.5 units x USD 80.00 = USD 200.00\nReagent B: 3 units x USD 50.00 = USD 150.00\nSubtotal: USD 350.00\nTax (8%): USD 28.00\nTotal: USD 378.00",
   "expected": {
     "invoice_number": "ML-6634",
