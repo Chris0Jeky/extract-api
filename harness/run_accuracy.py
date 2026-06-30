@@ -110,6 +110,12 @@ def load_reviewed_fixtures(doc_type: str, root: Path | None = None) -> list[dict
     fixtures: list[dict[str, object]] = []
     for path in sorted(base.glob("*.json")):
         data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            # A fixture file that is a JSON array/primitive would make data.get() raise a
+            # cryptic AttributeError; fail loud with the offending file instead.
+            raise ValueError(
+                f"{path.name}: fixture must be a JSON object, not {type(data).__name__}"
+            )
         if data.get("label_status") != "REVIEWED":
             continue  # DRAFT / unlabelled is never scored, wherever it sits
         if data.get("doc_type") != doc_type:

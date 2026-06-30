@@ -303,6 +303,16 @@ def test_load_reviewed_fixtures_fails_loud_on_misplaced_reviewed(tmp_path):
     assert "wrong.json" in str(exc.value)
 
 
+def test_load_reviewed_fixtures_fails_loud_on_non_object_fixture(tmp_path):
+    # A fixture file that is a JSON array/primitive (not an object) is a loud setup error,
+    # not a cryptic AttributeError from data.get().
+    inv = tmp_path / "invoices"
+    inv.mkdir(parents=True, exist_ok=True)
+    (inv / "bad.json").write_text(json.dumps(["not", "an", "object"]), encoding="utf-8")
+    with pytest.raises(ValueError, match="must be a JSON object"):
+        load_reviewed_fixtures("invoice", root=tmp_path)
+
+
 def test_load_reviewed_fixtures_ignores_misplaced_draft(tmp_path):
     # A DRAFT with the wrong doc_type is never scored anyway, so it is excluded, not an error.
     inv = tmp_path / "invoices"
