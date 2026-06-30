@@ -169,6 +169,20 @@ def test_run_accuracy_all_fixtures_skipped_scores_nothing():
     assert report.overall_exact_match_rate == 0.0  # the 0/0 property guard holds
 
 
+def test_run_accuracy_schema_invalid_prediction_is_a_failure():
+    # A 200 with object-but-schema-invalid data ({}) must be a failed extraction, not a crash
+    # in score_record's strict canonicalization (issue #57, codex review).
+    report = run_accuracy(
+        "invoice",
+        "openai",
+        lambda fx: Prediction({}, 0.01, 5.0, "openai"),  # {} is not a valid invoice record
+        fixtures=[_fixture()],
+    )
+    assert report.n_failures == 1
+    assert report.n_fixtures == 1
+    assert report.overall_exact_match_rate == 0.0  # scored as all-missed, run did not crash
+
+
 def test_run_accuracy_labels_report_with_server_resolved_provider():
     # Requested "default", but the server resolved "anthropic"; the report reflects reality.
     report = run_accuracy(
@@ -277,6 +291,16 @@ def test_live_predictor_2xx_overflowing_numeric_is_failure(monkeypatch):
     # ValueError); it must still degrade to a fixture failure, not crash the run (issue #57).
     body = {"data": _BASE, "meta": {"cost_usd": 10**400, "latency_ms": 1.0, "provider": "openai"}}
     monkeypatch.setattr(httpx, "post", lambda *a, **k: _resp(200, body))
+    with pytest.raises(PredictionFailed):
+        live_predictor("http://h", "openai")(_fixture("c"))
+
+
+@pytest.mark.parametrize("over", [{"cost_usd": "nan"}, {"latency_ms": "inf"}, {"cost_usd": "-inf"}])
+def test_live_predictor_non_finite_metric_is_failure(monkeypatch, over):
+    # float("nan")/float("inf") parse without error, so a non-finite 2xx metric would silently
+    # poison the cost total / latency percentiles; it must be a fixture failure (issue #57, codex).
+    meta = {"cost_usd": 0.01, "latency_ms": 1.0, "provider": "openai", **over}
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _resp(200, {"data": _BASE, "meta": meta}))
     with pytest.raises(PredictionFailed):
         live_predictor("http://h", "openai")(_fixture("c"))
 

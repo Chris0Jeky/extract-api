@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pydantic import ValidationError
+
 from harness.scoring import AccuracyReport, aggregate, render_markdown, score_failed, score_record
 from schemas.registry import resolve
 
@@ -163,7 +165,17 @@ def run_accuracy(
             failures += 1
             continue
         resolved_provider = prediction.provider  # the provider the server actually used
-        scored.append(score_record(model_cls, prediction.record, expected))
+        try:
+            outcomes = score_record(model_cls, prediction.record, expected)
+        except ValidationError:
+            # A schema-invalid predicted record (an older/broken endpoint returning a 200 with
+            # object-but-invalid `data`, e.g. {}) is a failed extraction, not a crash. `expected`
+            # is validated upstream (fixtures-validate + the REVIEWED gate), so a ValidationError
+            # here is the prediction's, not the fixture's (issue #57).
+            scored.append(score_failed(model_cls, expected))
+            failures += 1
+            continue
+        scored.append(outcomes)
         costs.append(prediction.cost_usd)
         latencies.append(prediction.latency_ms)
     return aggregate(
@@ -233,6 +245,10 @@ def live_predictor(base_url: str, provider: str, *, timeout: float = 120.0) -> P
             ) from exc
         if not isinstance(record, dict):
             raise PredictionFailed(f"{fixture_id}: 2xx 'data' is not a JSON object")
+        if not (math.isfinite(cost_usd) and math.isfinite(latency_ms)):
+            # float("nan")/float("inf") parse without error, so a 2xx metric of "nan"/"inf"
+            # would silently poison the cost total and latency percentiles; reject it (issue #57).
+            raise PredictionFailed(f"{fixture_id}: 2xx cost/latency is not a finite number")
         return Prediction(
             record=record, cost_usd=cost_usd, latency_ms=latency_ms, provider=server_provider
         )
