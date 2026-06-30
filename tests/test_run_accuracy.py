@@ -11,6 +11,7 @@ import pytest
 
 from harness.run_accuracy import (
     ControlPlaneRejection,
+    MisplacedFixture,
     Prediction,
     PredictionFailed,
     _response_error_code,
@@ -39,13 +40,13 @@ def _fixture(content: str = "x") -> dict[str, object]:
     return {"doc_type": "invoice", "schema_version": "v1", "content": content, "expected": _BASE}
 
 
-def _write(directory, name: str, status: str) -> None:
+def _write(directory, name: str, status: str, doc_type: str = "invoice") -> None:
     directory.mkdir(parents=True, exist_ok=True)
     (directory / name).write_text(
         json.dumps(
             {
                 "fixture_id": name,
-                "doc_type": "invoice",
+                "doc_type": doc_type,
                 "schema_version": "v1",
                 "label_status": status,
                 "content": "doc text",
@@ -242,6 +243,66 @@ def test_response_error_code_none_for_non_dict_or_uncoded_body():
     assert _response_error_code(html) is None
 
 
+# --- issue #57: --live robustness (malformed 2xx, configurable timeout, misplaced fixtures) ---
+
+
+def test_live_predictor_malformed_2xx_missing_keys_is_failure(monkeypatch):
+    # A 200 that is not a valid ExtractResponse (missing data/meta) is a fixture failure,
+    # not an uncaught KeyError that aborts the whole run (issue #57).
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _resp(200, {"unexpected": "shape"}))
+    with pytest.raises(PredictionFailed):
+        live_predictor("http://h", "openai")({**_fixture("c"), "fixture_id": "f1"})
+
+
+def test_live_predictor_non_json_2xx_is_failure(monkeypatch):
+    # A 200 whose body is not JSON (a gateway login/HTML page) is a fixture failure, not a crash.
+    html = httpx.Response(
+        200, request=httpx.Request("POST", "http://x/v1/extract"), text="<html>login</html>"
+    )
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: html)
+    with pytest.raises(PredictionFailed):
+        live_predictor("http://h", "openai")(_fixture("c"))
+
+
+def test_live_predictor_2xx_data_not_object_is_failure(monkeypatch):
+    # A 200 whose `data` is not a JSON object would break scoring downstream; fail the fixture.
+    body = {"data": "not-an-object", "meta": _ok_body()["meta"]}
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _resp(200, body))
+    with pytest.raises(PredictionFailed):
+        live_predictor("http://h", "openai")(_fixture("c"))
+
+
+def test_live_predictor_respects_configurable_timeout(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def fake_post(url, *, json, timeout):
+        captured["timeout"] = timeout
+        return _resp(200, _ok_body())
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    live_predictor("http://h", "openai", timeout=7.5)(_fixture("c"))
+    assert captured["timeout"] == 7.5  # the configured timeout is passed through, not a fixed 120
+
+
+def test_load_reviewed_fixtures_fails_loud_on_misplaced_reviewed(tmp_path):
+    # A REVIEWED fixture filed under the wrong doc-type directory is a loud setup error.
+    inv = tmp_path / "invoices"
+    _write(inv, "ok.json", "REVIEWED")
+    _write(inv, "wrong.json", "REVIEWED", doc_type="uk_job_posting")
+    with pytest.raises(MisplacedFixture) as exc:
+        load_reviewed_fixtures("invoice", root=tmp_path)
+    assert "wrong.json" in str(exc.value)
+
+
+def test_load_reviewed_fixtures_ignores_misplaced_draft(tmp_path):
+    # A DRAFT with the wrong doc_type is never scored anyway, so it is excluded, not an error.
+    inv = tmp_path / "invoices"
+    _write(inv, "ok.json", "REVIEWED")
+    _write(inv, "amisplaceddraft.json", "DRAFT", doc_type="uk_job_posting")
+    loaded = load_reviewed_fixtures("invoice", root=tmp_path)
+    assert [d["fixture_id"] for d in loaded] == ["ok.json"]
+
+
 def test_main_no_reviewed_fixtures_exits_1(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr("harness.run_accuracy._FIXTURES_ROOT", tmp_path)
     _write(tmp_path / "invoices", "a.json", "DRAFT")  # only DRAFT -> nothing to score
@@ -265,3 +326,23 @@ def test_main_live_renders_and_writes_report(tmp_path, monkeypatch, capsys):
     assert "### invoice / openai" in capsys.readouterr().out
     assert out.exists()
     assert "overall exact-match: 100.0%" in out.read_text(encoding="utf-8")
+
+
+def test_main_rejects_nonpositive_timeout():
+    # A non-positive --live timeout is nonsensical; fail loud (argparse exit) rather than run.
+    with pytest.raises(SystemExit):
+        main(["--doc-type", "invoice", "--live", "--timeout", "0"])
+
+
+def test_main_live_passes_timeout_through(tmp_path, monkeypatch):
+    monkeypatch.setattr("harness.run_accuracy._FIXTURES_ROOT", tmp_path)
+    _write(tmp_path / "invoices", "a.json", "REVIEWED")
+    captured: dict[str, object] = {}
+
+    def fake_post(url, *, json, timeout):
+        captured["timeout"] = timeout
+        return _resp(200, _ok_body())
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    assert main(["--doc-type", "invoice", "--live", "--timeout", "33"]) == 0
+    assert captured["timeout"] == 33.0  # the CLI flag reaches the HTTP client
