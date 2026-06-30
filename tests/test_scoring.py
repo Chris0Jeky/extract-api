@@ -100,3 +100,21 @@ def test_render_markdown_has_summary_and_per_field_table():
     assert "latency p50/p95 (successful):" in md  # honest: success-only latency
     assert "| field | exact-match | mismatch | missed | hallucinated |" in md
     assert "`invoice_number`" in md
+    assert "skipped (control-plane" not in md  # no skip line when nothing was skipped
+
+
+def test_aggregate_carries_skipped_count():
+    report = aggregate("invoice", "openai", [score_failed(_MODEL, _rec())], [], [], n_skipped=2)
+    assert report.n_skipped == 2
+    assert report.n_failures == 0
+
+
+def test_render_markdown_surfaces_skipped_control_plane_fixtures():
+    # A skipped fixture is excluded from the denominator but must be surfaced loudly so the
+    # numbers are not misread as covering the whole corpus (issue #52).
+    report = aggregate(
+        "invoice", "openai", [score_record(_MODEL, _rec(), _rec())], [0.01], [12.0], n_skipped=3
+    )
+    md = render_markdown(report)
+    assert "skipped (control-plane, not scored): 3" in md
+    assert "scored subset only" in md

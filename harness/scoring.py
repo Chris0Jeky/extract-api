@@ -12,9 +12,12 @@ in their canonical form, not as raw strings). Each field gets one outcome:
 
 Aggregation reports per-field exact-match rate, the hallucinated-field rate, plus total
 cost and success-only p50/p95 latency (failed extractions are counted as n_failures but do
-not contribute a latency sample). A dedicated null-handling-correctness rate over
-expected-null fields is pending issue #46. Pure and dependency-light, so it is trivially
-testable and never touches the network.
+not contribute a latency sample). Control-plane rejections (a budget_exceeded 402 or
+idempotency_conflict 409 that never reached the model) are counted as n_skipped and kept
+out of the per-field denominator entirely, so they cannot deflate the headline numbers
+(issue #52). A dedicated null-handling-correctness rate over expected-null fields is pending
+issue #46. Pure and dependency-light, so it is trivially testable and never touches the
+network.
 """
 
 from __future__ import annotations
@@ -98,6 +101,9 @@ class AccuracyReport:
     latency_p50_ms: float = 0.0
     latency_p95_ms: float = 0.0
     n_failures: int = 0  # fixtures whose extraction failed entirely (no record produced)
+    # fixtures a control-plane guard rejected before any model call (budget_exceeded 402 /
+    # idempotency_conflict 409); never scored, so excluded from the per-field denominator (#52).
+    n_skipped: int = 0
 
     @property
     def total_fields(self) -> int:
@@ -136,10 +142,15 @@ def aggregate(
     latencies_ms: list[float],
     *,
     n_failures: int = 0,
+    n_skipped: int = 0,
 ) -> AccuracyReport:
     """Fold per-fixture field outcomes + cost/latency into one report."""
     report = AccuracyReport(
-        doc_type=doc_type, provider=provider, n_fixtures=len(scored), n_failures=n_failures
+        doc_type=doc_type,
+        provider=provider,
+        n_fixtures=len(scored),
+        n_failures=n_failures,
+        n_skipped=n_skipped,
     )
     for outcomes in scored:
         for key, outcome in outcomes.items():
@@ -165,7 +176,17 @@ def render_markdown(report: AccuracyReport) -> str:
     lines = [
         f"### {report.doc_type} / {report.provider}",
         "",
-        f"- fixtures: {report.n_fixtures} ({report.n_failures} failed extraction(s))",
+        f"- fixtures scored: {report.n_fixtures} ({report.n_failures} failed extraction(s))",
+    ]
+    if report.n_skipped:
+        # A control-plane rejection (budget_exceeded/idempotency_conflict) never reached the
+        # model, so it is excluded from the accuracy denominator; surface it loudly so the
+        # numbers below are not misread as covering the whole corpus (issue #52).
+        lines.append(
+            f"- skipped (control-plane, not scored): {report.n_skipped} "
+            "(accuracy below covers the scored subset only)"
+        )
+    lines += [
         f"- overall exact-match: {report.overall_exact_match_rate:.1%} "
         f"({report.total_matches}/{report.total_fields})",
         f"- hallucinated-field rate: {report.hallucinated_field_rate:.1%} "

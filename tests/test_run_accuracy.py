@@ -10,8 +10,10 @@ import httpx
 import pytest
 
 from harness.run_accuracy import (
+    ControlPlaneRejection,
     Prediction,
     PredictionFailed,
+    _response_error_code,
     live_predictor,
     load_reviewed_fixtures,
     main,
@@ -114,6 +116,45 @@ def test_run_accuracy_records_a_failed_extraction_and_continues():
     assert report.cost_usd_total == pytest.approx(0.02)  # only the successful call's cost
 
 
+def test_run_accuracy_skips_control_plane_rejection_out_of_denominator():
+    # A budget/idempotency rejection never reached the model, so the fixture is skipped, NOT
+    # scored as all-missed; it must not appear in the per-field denominator (issue #52).
+    fixtures = [_fixture("a"), _fixture("b")]
+    seen = {"n": 0}
+
+    def predict(fx):
+        seen["n"] += 1
+        if seen["n"] == 1:
+            raise ControlPlaneRejection("budget exhausted")
+        return Prediction(fx["expected"], 0.02, 8.0, "openai")
+
+    report = run_accuracy("invoice", "openai", predict, fixtures=fixtures)
+    assert report.n_skipped == 1
+    assert report.n_failures == 0
+    assert report.n_fixtures == 1  # only the scored fixture is in the denominator
+    assert report.overall_exact_match_rate == 1.0  # the one scored fixture was perfect
+    assert report.cost_usd_total == pytest.approx(0.02)  # the skipped fixture contributes no cost
+
+
+def test_run_accuracy_skip_is_distinct_from_failure():
+    # success scored, a quality failure scored as all-missed, a control-plane rejection skipped.
+    fixtures = [_fixture("a"), _fixture("b"), _fixture("c")]
+    seen = {"n": 0}
+
+    def predict(fx):
+        seen["n"] += 1
+        if seen["n"] == 2:
+            raise PredictionFailed("provider_error")
+        if seen["n"] == 3:
+            raise ControlPlaneRejection("budget exhausted")
+        return Prediction(fx["expected"], 0.05, 8.0, "openai")
+
+    report = run_accuracy("invoice", "openai", predict, fixtures=fixtures)
+    assert (report.n_failures, report.n_skipped) == (1, 1)
+    assert report.n_fixtures == 2  # success + failure scored; the skip is excluded
+    assert 0.0 < report.overall_exact_match_rate < 1.0
+
+
 def test_run_accuracy_labels_report_with_server_resolved_provider():
     # Requested "default", but the server resolved "anthropic"; the report reflects reality.
     report = run_accuracy(
@@ -155,6 +196,37 @@ def test_live_predictor_transport_error_raises_prediction_failed(monkeypatch):
     monkeypatch.setattr(httpx, "post", boom)
     with pytest.raises(PredictionFailed):
         live_predictor("http://h", "openai")(_fixture("c"))
+
+
+@pytest.mark.parametrize(
+    ("status", "code"),
+    [(402, "budget_exceeded"), (409, "idempotency_conflict")],
+)
+def test_live_predictor_control_plane_rejection_is_skipped(monkeypatch, status, code):
+    # A coded control-plane non-2xx is a ControlPlaneRejection (skipped), not a quality failure.
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _resp(status, {"error": code}))
+    with pytest.raises(ControlPlaneRejection):
+        live_predictor("http://h", "openai")({**_fixture("c"), "fixture_id": "f1"})
+
+
+def test_live_predictor_unclassifiable_4xx_is_a_quality_failure(monkeypatch):
+    # A 402 whose body carries no recognizable control-plane code is treated as a failure, not
+    # silently skipped: we only skip what we can positively classify as control-plane (#52).
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _resp(402, {"error": "mystery"}))
+    with pytest.raises(PredictionFailed):
+        live_predictor("http://h", "openai")(_fixture("c"))
+
+
+def test_response_error_code_reads_taxonomy_code():
+    assert _response_error_code(_resp(402, {"error": "budget_exceeded"})) == "budget_exceeded"
+
+
+def test_response_error_code_none_for_non_dict_or_uncoded_body():
+    assert _response_error_code(_resp(402, {})) is None  # no `error` key
+    assert _response_error_code(_resp(402, ["budget_exceeded"])) is None  # not an object
+    # A non-JSON body (e.g. a gateway HTML page) yields None rather than raising.
+    html = httpx.Response(402, request=httpx.Request("POST", "http://x"), text="<html>nope</html>")
+    assert _response_error_code(html) is None
 
 
 def test_main_no_reviewed_fixtures_exits_1(tmp_path, monkeypatch, capsys):
