@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -219,7 +220,8 @@ def live_predictor(base_url: str, provider: str, *, timeout: float = 120.0) -> P
             cost_usd = float(meta["cost_usd"])
             latency_ms = float(meta["latency_ms"])
             server_provider = str(meta["provider"])  # the provider the server resolved
-        except (ValueError, TypeError, KeyError) as exc:
+        except (ValueError, TypeError, KeyError, ArithmeticError) as exc:
+            # ArithmeticError covers OverflowError from float() of an out-of-range JSON integer.
             raise PredictionFailed(
                 f"{fixture_id}: malformed 2xx response ({type(exc).__name__})"
             ) from exc
@@ -246,8 +248,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--out", default=None, help="write the markdown report to this path")
     args = parser.parse_args(argv)
-    if args.timeout <= 0:
-        parser.error("--timeout must be a positive number of seconds")
+    # `<= 0` alone would let NaN through (every NaN comparison is False) and inf would mean
+    # "no effective timeout"; require a positive, finite value so a bad flag fails loud.
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        parser.error("--timeout must be a positive, finite number of seconds")
 
     fixtures = load_reviewed_fixtures(args.doc_type)
     if not fixtures:

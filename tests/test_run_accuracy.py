@@ -272,6 +272,15 @@ def test_live_predictor_2xx_data_not_object_is_failure(monkeypatch):
         live_predictor("http://h", "openai")(_fixture("c"))
 
 
+def test_live_predictor_2xx_overflowing_numeric_is_failure(monkeypatch):
+    # float() of an out-of-range JSON integer raises OverflowError (an ArithmeticError, not a
+    # ValueError); it must still degrade to a fixture failure, not crash the run (issue #57).
+    body = {"data": _BASE, "meta": {"cost_usd": 10**400, "latency_ms": 1.0, "provider": "openai"}}
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _resp(200, body))
+    with pytest.raises(PredictionFailed):
+        live_predictor("http://h", "openai")(_fixture("c"))
+
+
 def test_live_predictor_respects_configurable_timeout(monkeypatch):
     captured: dict[str, object] = {}
 
@@ -328,10 +337,12 @@ def test_main_live_renders_and_writes_report(tmp_path, monkeypatch, capsys):
     assert "overall exact-match: 100.0%" in out.read_text(encoding="utf-8")
 
 
-def test_main_rejects_nonpositive_timeout():
-    # A non-positive --live timeout is nonsensical; fail loud (argparse exit) rather than run.
+@pytest.mark.parametrize("bad", ["0", "-5", "nan", "inf"])
+def test_main_rejects_non_positive_or_non_finite_timeout(bad):
+    # A non-positive OR non-finite --live timeout is nonsensical; fail loud rather than let it
+    # reach httpx (NaN slips past a bare `<= 0` guard, inf means no effective timeout).
     with pytest.raises(SystemExit):
-        main(["--doc-type", "invoice", "--live", "--timeout", "0"])
+        main(["--doc-type", "invoice", "--live", "--timeout", bad])
 
 
 def test_main_live_passes_timeout_through(tmp_path, monkeypatch):
