@@ -56,8 +56,9 @@ def _write(directory, name: str, status: str) -> None:
     )
 
 
-def _resp(status: int, body: dict[str, object]) -> httpx.Response:
+def _resp(status: int, body: object) -> httpx.Response:
     # A real httpx.Response so raise_for_status() behaves authentically (raises on >= 400).
+    # `body` is `object` (not dict) so negative tests can pass a JSON array/primitive too.
     return httpx.Response(status, request=httpx.Request("POST", "http://x/v1/extract"), json=body)
 
 
