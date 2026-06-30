@@ -186,11 +186,13 @@ def render_markdown(report: AccuracyReport) -> str:
             f"- skipped (control-plane, not scored): {report.n_skipped} "
             "(accuracy below covers the scored subset only)"
         )
+    # When nothing was scored (an empty corpus, or every fixture skipped as control-plane),
+    # 0/0 is not 0%: show "n/a" so the headline never claims a measured rate it does not have.
+    overall = f"{report.overall_exact_match_rate:.1%}" if report.total_fields else "n/a"
+    halluc = f"{report.hallucinated_field_rate:.1%}" if report.total_fields else "n/a"
     lines += [
-        f"- overall exact-match: {report.overall_exact_match_rate:.1%} "
-        f"({report.total_matches}/{report.total_fields})",
-        f"- hallucinated-field rate: {report.hallucinated_field_rate:.1%} "
-        f"({report.total_hallucinated}/{report.total_fields})",
+        f"- overall exact-match: {overall} ({report.total_matches}/{report.total_fields})",
+        f"- hallucinated-field rate: {halluc} ({report.total_hallucinated}/{report.total_fields})",
         f"- cost: ${report.cost_usd_total:.4f} | latency p50/p95 (successful): "
         f"{report.latency_p50_ms:.0f}/{report.latency_p95_ms:.0f} ms",
         "",

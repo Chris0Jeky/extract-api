@@ -155,6 +155,19 @@ def test_run_accuracy_skip_is_distinct_from_failure():
     assert 0.0 < report.overall_exact_match_rate < 1.0
 
 
+def test_run_accuracy_all_fixtures_skipped_scores_nothing():
+    # If every fixture is a control-plane rejection (e.g. a budget cap set below corpus cost),
+    # the run scores nothing rather than reporting a misleading all-missed corpus (issue #52).
+    def predict(fx):
+        raise ControlPlaneRejection("budget exhausted")
+
+    report = run_accuracy("invoice", "openai", predict, fixtures=[_fixture("a"), _fixture("b")])
+    assert report.n_skipped == 2
+    assert report.n_fixtures == 0
+    assert report.total_fields == 0
+    assert report.overall_exact_match_rate == 0.0  # the 0/0 property guard holds
+
+
 def test_run_accuracy_labels_report_with_server_resolved_provider():
     # Requested "default", but the server resolved "anthropic"; the report reflects reality.
     report = run_accuracy(

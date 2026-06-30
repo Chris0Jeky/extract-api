@@ -118,3 +118,21 @@ def test_render_markdown_surfaces_skipped_control_plane_fixtures():
     md = render_markdown(report)
     assert "skipped (control-plane, not scored): 3" in md
     assert "scored subset only" in md
+
+
+def test_render_markdown_all_skipped_is_honest_not_zero_percent():
+    # Every fixture was a control-plane rejection: nothing was scored, so the headline must
+    # read n/a (not a misleading 0.0%) while the skip banner explains why (issue #52).
+    report = aggregate("invoice", "openai", [], [], [], n_skipped=4)
+    md = render_markdown(report)
+    assert "skipped (control-plane, not scored): 4" in md
+    assert "overall exact-match: n/a (0/0)" in md
+    assert "hallucinated-field rate: n/a (0/0)" in md
+    assert "0.0%" not in md  # nothing was scored, so no percentage is claimed
+
+
+def test_render_markdown_empty_run_shows_na_not_zero_percent():
+    # An empty corpus (no skips either) is likewise n/a, not a measured 0%.
+    md = render_markdown(aggregate("invoice", "openai", [], [], []))
+    assert "overall exact-match: n/a (0/0)" in md
+    assert "skipped (control-plane" not in md
