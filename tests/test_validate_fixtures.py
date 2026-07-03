@@ -49,6 +49,22 @@ _VALID_EXPECTED = {
 }
 
 
+_VALID_JOB_EXPECTED = {
+    "title": "Engineer",
+    "company": None,
+    "location": None,
+    "remote_policy": "unspecified",
+    "salary_min": None,
+    "salary_max": None,
+    "salary_currency": None,
+    "salary_period": "unspecified",
+    "employment_type": "unspecified",
+    "seniority": "unspecified",
+    "visa_sponsorship": "unspecified",
+    "posted_date": None,
+}
+
+
 def _fixture(**overrides):
     base = {
         "fixture_id": "f0001",
@@ -61,6 +77,14 @@ def _fixture(**overrides):
     }
     base.update(overrides)
     return base
+
+
+def _write(dir_path, name, fixture):
+    """Write a fixture into a named directory so validate_file sees a realistic parent dir."""
+    dir_path.mkdir(parents=True, exist_ok=True)
+    path = dir_path / name
+    path.write_text(json.dumps(fixture), encoding="utf-8")
+    return path
 
 
 def test_null_content_reported(tmp_path):
@@ -90,3 +114,58 @@ def test_non_string_metadata_reported_not_crashed(tmp_path):
     errs = validate_fixtures.validate_file(path)
     assert any("source must be one of" in e for e in errs)
     assert any("label_status must be one of" in e for e in errs)
+
+
+# --- corpus-wide placement invariant (issue #63) ---
+
+
+def test_reviewed_fixture_in_correct_dir_passes(tmp_path):
+    path = _write(tmp_path / "invoices", "invoice_x.json", _fixture(label_status="REVIEWED"))
+    assert validate_fixtures.validate_file(path) == []
+
+
+def test_reviewed_invoice_in_job_postings_dir_flagged(tmp_path):
+    # A REVIEWED invoice misfiled under job_postings/ is invisible to a --doc-type invoice run
+    # (silent under-count); the corpus-wide validator must flag it from this direction too.
+    path = _write(tmp_path / "job_postings", "invoice_x.json", _fixture(label_status="REVIEWED"))
+    errs = validate_fixtures.validate_file(path)
+    assert any("belongs in invoices/ but sits in job_postings/" in e for e in errs)
+
+
+def test_reviewed_job_posting_in_invoices_dir_flagged(tmp_path):
+    fixture = _fixture(
+        doc_type="uk_job_posting", label_status="REVIEWED", expected=_VALID_JOB_EXPECTED
+    )
+    path = _write(tmp_path / "invoices", "job_x.json", fixture)
+    errs = validate_fixtures.validate_file(path)
+    assert any("belongs in job_postings/ but sits in invoices/" in e for e in errs)
+
+
+def test_draft_misplaced_fixture_not_flagged(tmp_path):
+    # DRAFT fixtures are never scored, so placement is not enforced for them (mirrors the harness).
+    path = _write(tmp_path / "job_postings", "invoice_x.json", _fixture(label_status="DRAFT"))
+    assert validate_fixtures.validate_file(path) == []
+
+
+def test_reviewed_fixture_outside_doc_type_dir_flagged(tmp_path):
+    # A REVIEWED fixture not under any doc-type directory (loose or nested) is also misplaced.
+    path = _write(tmp_path / "loose", "invoice_x.json", _fixture(label_status="REVIEWED"))
+    errs = validate_fixtures.validate_file(path)
+    assert any("belongs in invoices/ but sits in loose/" in e for e in errs)
+
+
+def test_reviewed_fixture_relative_path_resolves_parent(tmp_path, monkeypatch):
+    # A bare/relative path (e.g. the validator invoked from inside the fixtures dir) must resolve
+    # to its real parent directory, not spuriously flag a correctly-placed fixture (PR #64 review).
+    _write(tmp_path / "invoices", "invoice_x.json", _fixture(label_status="REVIEWED"))
+    monkeypatch.chdir(tmp_path / "invoices")
+    assert validate_fixtures.validate_file(Path("invoice_x.json")) == []
+
+
+def test_registry_dirs_drift_reported_not_crashed(tmp_path, monkeypatch):
+    # Defensive: if the schema registry and FIXTURE_DIRS ever drift so a registered doc_type has
+    # no fixtures directory, a REVIEWED fixture must report that loudly, not KeyError-crash.
+    monkeypatch.setattr(validate_fixtures, "FIXTURE_DIRS", {})
+    path = _write(tmp_path / "invoices", "invoice_x.json", _fixture(label_status="REVIEWED"))
+    errs = validate_fixtures.validate_file(path)
+    assert any("no fixtures directory mapping" in e for e in errs)
