@@ -152,3 +152,12 @@ def test_reviewed_fixture_outside_doc_type_dir_flagged(tmp_path):
     path = _write(tmp_path / "loose", "invoice_x.json", _fixture(label_status="REVIEWED"))
     errs = validate_fixtures.validate_file(path)
     assert any("belongs in invoices/ but sits in loose/" in e for e in errs)
+
+
+def test_registry_dirs_drift_reported_not_crashed(tmp_path, monkeypatch):
+    # Defensive: if the schema registry and FIXTURE_DIRS ever drift so a registered doc_type has
+    # no fixtures directory, a REVIEWED fixture must report that loudly, not KeyError-crash.
+    monkeypatch.setattr(validate_fixtures, "FIXTURE_DIRS", {})
+    path = _write(tmp_path / "invoices", "invoice_x.json", _fixture(label_status="REVIEWED"))
+    errs = validate_fixtures.validate_file(path)
+    assert any("no fixtures directory mapping" in e for e in errs)

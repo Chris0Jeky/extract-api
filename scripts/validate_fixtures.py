@@ -78,7 +78,7 @@ def validate_file(path: Path) -> list[str]:
     # single-doc-type run silently under-counts a misfiled fixture (an invoice saved under
     # job_postings/ is invisible to --doc-type invoice). Enforcing it here, corpus-wide on every
     # CI run, catches misplacement from both directions independent of any harness run. DRAFT and
-    # unlabelled fixtures are exempt: they are never scored, wherever they sit (mirrors the harness).
+    # unlabelled fixtures are exempt: they are never scored, wherever they sit (as in the harness).
     if data["label_status"] == "REVIEWED":
         # doc_type resolved above (an unknown doc_type returned early), so it is a registered type
         # and normally mapped; a missing mapping means the registry and FIXTURE_DIRS have drifted,
