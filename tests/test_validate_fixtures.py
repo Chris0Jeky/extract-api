@@ -154,6 +154,14 @@ def test_reviewed_fixture_outside_doc_type_dir_flagged(tmp_path):
     assert any("belongs in invoices/ but sits in loose/" in e for e in errs)
 
 
+def test_reviewed_fixture_relative_path_resolves_parent(tmp_path, monkeypatch):
+    # A bare/relative path (e.g. the validator invoked from inside the fixtures dir) must resolve
+    # to its real parent directory, not spuriously flag a correctly-placed fixture (PR #64 review).
+    _write(tmp_path / "invoices", "invoice_x.json", _fixture(label_status="REVIEWED"))
+    monkeypatch.chdir(tmp_path / "invoices")
+    assert validate_fixtures.validate_file(Path("invoice_x.json")) == []
+
+
 def test_registry_dirs_drift_reported_not_crashed(tmp_path, monkeypatch):
     # Defensive: if the schema registry and FIXTURE_DIRS ever drift so a registered doc_type has
     # no fixtures directory, a REVIEWED fixture must report that loudly, not KeyError-crash.

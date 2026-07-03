@@ -84,15 +84,19 @@ def validate_file(path: Path) -> list[str]:
         # and normally mapped; a missing mapping means the registry and FIXTURE_DIRS have drifted,
         # which is itself a loud setup error rather than something to skip silently.
         expected_dir = FIXTURE_DIRS.get(data["doc_type"])
+        # resolve() first so a relative path or bare filename (e.g. invoked from inside the
+        # fixtures directory) still yields the real parent directory, not an empty/relative name
+        # that would read as a spurious placement error.
+        actual_dir = path.resolve().parent.name
         if expected_dir is None:
             errs.append(
                 f"{path.name}: REVIEWED fixture doc_type {data['doc_type']!r} has no fixtures "
                 "directory mapping (registry and FIXTURE_DIRS have drifted)"
             )
-        elif path.parent.name != expected_dir:
+        elif actual_dir != expected_dir:
             errs.append(
                 f"{path.name}: REVIEWED fixture doc_type {data['doc_type']!r} belongs in "
-                f"{expected_dir}/ but sits in {path.parent.name}/"
+                f"{expected_dir}/ but sits in {actual_dir}/"
             )
     return errs
 
