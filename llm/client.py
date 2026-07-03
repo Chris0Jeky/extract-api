@@ -458,4 +458,10 @@ def get_client(provider: str) -> LLMClient:
         return OpenAIClient()
     if resolved == "anthropic":
         return AnthropicClient()
-    raise ValueError(f"unknown provider: {provider!r}")
+    # Name the EFFECTIVE bad value (`resolved`), not `provider`: on the "default" path `provider`
+    # is the literal "default" (a valid request value) while `resolved` holds the actual offending
+    # token, so interpolating `provider` would send a misconfigured LLM_DEFAULT_PROVIDER diagnosis
+    # to the wrong place. Surface the env source on that path so the operator checks the right knob.
+    if provider == "default":
+        raise ValueError(f"unknown provider: {resolved!r} (from LLM_DEFAULT_PROVIDER)")
+    raise ValueError(f"unknown provider: {resolved!r}")
