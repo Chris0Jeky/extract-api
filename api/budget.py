@@ -2,7 +2,8 @@
 
 Caps cumulative LLM spend for the running process against EXTRACT_BUDGET_USD. Once the
 committed total reaches the cap, further extractions fail loud with `budget_exceeded` (402)
-*before* spending more. Opt-in: an unset or non-positive cap disables the guard.
+*before* spending more. Opt-in: an unset cap or 0 disables the guard; a negative value is a
+misconfiguration and fails loud (it would otherwise silently disable the money guard).
 
 Reserve-reconcile NOTE (a deliberate v1 simplification, flagged for review): this guard
 checks the COMMITTED total before a call and adds the actual cost after (the "reconcile"
@@ -60,7 +61,7 @@ class BudgetGuard:
 
 
 def budget_from_env() -> BudgetGuard:
-    """Build a BudgetGuard from EXTRACT_BUDGET_USD (unset/non-positive -> disabled)."""
+    """Build a BudgetGuard from EXTRACT_BUDGET_USD (unset or 0 -> disabled; negative -> error)."""
     raw = os.environ.get("EXTRACT_BUDGET_USD", "")
     if not raw:
         return BudgetGuard(0.0)
@@ -68,8 +69,10 @@ def budget_from_env() -> BudgetGuard:
         cap = float(raw)
     except ValueError as exc:
         raise ValueError(f"env EXTRACT_BUDGET_USD={raw!r} is not a valid float") from exc
-    if not math.isfinite(cap):
-        # nan/inf parse fine but would silently disable (nan: not > 0) or never trip (inf)
-        # the guard; an explicitly-configured cap must be a finite number -> fail loud.
-        raise ValueError(f"env EXTRACT_BUDGET_USD={raw!r} must be a finite number")
+    if not math.isfinite(cap) or cap < 0:
+        # nan/inf parse fine but would silently disable (nan: not > 0) or never trip (inf) the
+        # guard; a finite negative ALSO silently disables it (enabled is cap > 0). An
+        # explicitly-configured cap must be a finite, non-negative number -> fail loud (mirroring
+        # llm.client._float_env_required, issue #66). 0 (or unset) stays the explicit disable knob.
+        raise ValueError(f"env EXTRACT_BUDGET_USD={raw!r} must be a finite, non-negative number")
     return BudgetGuard(cap)
