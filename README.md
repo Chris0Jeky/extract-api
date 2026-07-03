@@ -112,5 +112,7 @@ docker compose up -d      # builds the image, serves on :8200, healthcheck hits 
 The image is `python:3.13-slim` with the pinned project metadata (no OCR system libraries by
 design). Provider routing is env-only, so the future gateway migration is a change to `.env`
 (`LLM_BASE_URL` + `LLM_API_KEY`), not to the image or compose file. For a paid-call-free check,
-set `LLM_PROVIDER_MODE=fixture` + `FIXTURE_CANNED_TEXT=<a valid record>` in `.env` and the
-container serves `/v1/extract` deterministically offline.
+set `LLM_PROVIDER_MODE=fixture` + `FIXTURE_CANNED_TEXT=<canned model output>` in `.env` and the
+container serves `/v1/extract` deterministically offline. `FIXTURE_CANNED_TEXT` must be a JSON
+string that validates against the requested `doc_type`/`schema_version` (e.g. a valid `invoice.v1`
+object); arbitrary text will fail the validation-retry loop and return a 422, by design.
