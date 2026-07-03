@@ -49,10 +49,23 @@ def test_get_client_fixture_mode_reads_canned_text(monkeypatch):
     assert result.text == '{"hello": "world"}'
 
 
-def test_get_client_unknown_provider_raises(monkeypatch):
+def test_get_client_unknown_provider_names_request_value(monkeypatch):
+    # An explicit unknown provider names the request value itself (provider == resolved here).
     monkeypatch.delenv("LLM_PROVIDER_MODE", raising=False)
-    with pytest.raises(ValueError, match="unknown provider"):
+    with pytest.raises(ValueError, match=r"unknown provider: 'telepathy'"):
         get_client("telepathy")
+
+
+def test_get_client_default_bad_env_names_resolved_value(monkeypatch):
+    # A misconfigured LLM_DEFAULT_PROVIDER (e.g. a typo) with provider="default" must name the
+    # OFFENDING env value and its source, not the literal "default" (a valid request value), so the
+    # operator inspects the right knob, not the request payload (llm/client.py audit finding).
+    monkeypatch.delenv("LLM_PROVIDER_MODE", raising=False)
+    monkeypatch.setenv("LLM_DEFAULT_PROVIDER", "anthropc")
+    with pytest.raises(
+        ValueError, match=r"unknown provider: 'anthropc' \(from LLM_DEFAULT_PROVIDER\)"
+    ):
+        get_client("default")
 
 
 def test_fixture_client_returns_canned_text_at_zero_cost():
