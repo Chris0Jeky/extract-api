@@ -14,6 +14,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from harness.run_accuracy import FIXTURE_DIRS
 from schemas.registry import UnknownSchema, resolve
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -71,6 +72,28 @@ def validate_file(path: Path) -> list[str]:
             f"{path.name}: expected label fails {data['doc_type']}.{data['schema_version']}: "
             f"{exc.error_count()} error(s)"
         )
+
+    # Placement invariant (issue #63): a REVIEWED fixture must sit in the directory its doc_type
+    # maps to. The accuracy harness only checks placement for the doc_type it is run for, so a
+    # single-doc-type run silently under-counts a misfiled fixture (an invoice saved under
+    # job_postings/ is invisible to --doc-type invoice). Enforcing it here, corpus-wide on every
+    # CI run, catches misplacement from both directions independent of any harness run. DRAFT and
+    # unlabelled fixtures are exempt: they are never scored, wherever they sit (mirrors the harness).
+    if data["label_status"] == "REVIEWED":
+        # doc_type resolved above (an unknown doc_type returned early), so it is a registered type
+        # and normally mapped; a missing mapping means the registry and FIXTURE_DIRS have drifted,
+        # which is itself a loud setup error rather than something to skip silently.
+        expected_dir = FIXTURE_DIRS.get(data["doc_type"])
+        if expected_dir is None:
+            errs.append(
+                f"{path.name}: REVIEWED fixture doc_type {data['doc_type']!r} has no fixtures "
+                "directory mapping (registry and FIXTURE_DIRS have drifted)"
+            )
+        elif path.parent.name != expected_dir:
+            errs.append(
+                f"{path.name}: REVIEWED fixture doc_type {data['doc_type']!r} belongs in "
+                f"{expected_dir}/ but sits in {path.parent.name}/"
+            )
     return errs
 
 
