@@ -4,6 +4,23 @@ Living snapshot for starting a new session strong. Last updated 2026-07-03.
 Authoritative detail lives in `AGENTS.md` (rules), `tasks/BACKLOG.md` (tasks),
 `docs/plan/PLAN.md` + `docs/adr/` (decisions). This file is the orientation.
 
+## Start here (next session)
+
+Engineering is complete through M3 + Docker (T19). Nothing below is blocked on code you cannot
+write; the remaining gates are Chris's fixture labels and paid provider calls. Priority order:
+
+1. **#6 uv.lock + frozen CI** - now unblocked (`pip install uv` works; CI/Linux has `uv`). Clean,
+   offline, no paid calls. The single best next autonomous slice.
+2. **T15** - more labeled fixtures (Chris's labels), then
+3. **T17** - two-provider accuracy table. This needs PAID `--live` runs AND two small code changes
+   first: the #46 null-handling/hallucination-denominator metric and #57 item 1 (`cost_usd` in the
+   422 body, contract pre-approved). Do the code, then the paid run, then
+4. **T20** (README numbers, replaces the "Numbers pending" block) and **T21** (gateway trace).
+
+Tidy-up left for the next loop: prune the merged remote branches (`feat/t09..t18`, `fix/*`); the
+git-excluded `ORCHESTRATOR.md` at repo root is the detailed working log. Owner product calls
+(#35/#54 -> invoice.v2; #42/#32 documented-scope; #13 sensitive) are recorded on each issue.
+
 ## Merged to `main` (gate-green)
 
 Engineering-complete through M3, and deployable. main HEAD is `fab9042` plus the 2026-07-03
