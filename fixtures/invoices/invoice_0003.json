@@ -3,7 +3,7 @@
   "doc_type": "invoice",
   "schema_version": "v1",
   "source": "synthetic",
-  "label_status": "DRAFT",
+  "label_status": "REVIEWED",
   "content": "RECHNUNG\nVerkaeufer: Alpine GmbH\nRechnungsnummer: AG-7781\nRechnungsdatum: 2026-02-20\nKaeufer: Meridian Retail\nZwischensumme: EUR 800,00\nMwSt 19%: EUR 152,00\nGesamt: EUR 952,00",
   "expected": {
     "invoice_number": "AG-7781",
