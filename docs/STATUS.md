@@ -29,7 +29,9 @@ silent default that would mis-bill); retry = 1 retry / 2 attempts.
 
 ## Next up (gated on Chris labels / paid runs)
 
-The code path to the published numbers is merged; what remains needs data or money, not code:
+Most of the published-numbers path is merged; what remains is chiefly Chris's labels + paid runs,
+plus two small code changes that land WITH T17 (the #46 null-handling / hallucination-denominator
+metric and #57 item 1's `cost_usd` in the 422 body) - do not spend paid runs before those land:
 
 - **T15** more labeled fixtures (30-50 each doc type) - blocks on Chris's labels.
 - **T17** two-provider accuracy table - needs T15 + paid `--live` runs; folds in the
@@ -54,11 +56,13 @@ Chris directed "take a stance yourself and call the shots". Recorded stances:
 - **#13** (hook hardening): will NOT be auto-edited - these are the agent's own safety hooks;
   left for Chris's direct review.
 - **#10** (ISO-4217 refresh): low-urgency maintenance (snapshot is recent). Kept open.
-- **#6** (uv.lock / frozen CI): still blocked - `uv` is absent in this environment.
+- **#6** (uv.lock / frozen CI): now actionable - `uv` is not on the Windows dev PATH but is
+  pip-installable (`pip install uv` -> uv 0.11.26), and CI (Linux) has it. Generating `uv.lock` +
+  switching CI to a frozen install is a clean follow-up slice.
 
 ## Open tracked issues
 
-- **#6** commit `uv.lock` + frozen CI install (needs `uv`, absent).
+- **#6** commit `uv.lock` + frozen CI install (uv is pip-installable; now actionable).
 - **#10** periodic ISO-4217 refresh (external data).
 - **#13** hook-hardening backlog (sensitive: edits the agent safety hooks).
 - **#32** degrade-branch masks future non-404/405 HTTPExceptions (owner taxonomy call; unreachable today).
