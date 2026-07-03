@@ -81,8 +81,16 @@ gateway owns keys and budgets).
 
 ## Status
 
-Pre-product scaffolding (M0 kickoff). Build sequence and tasks live in
-`tasks/BACKLOG.md`; the plan and decisions live in `docs/`.
+Engineering-complete through M3 and deployable. The invoice and job-posting paths are live
+end-to-end for both providers (OpenAI + Anthropic) behind the `llm/client.py` seam, with the
+validation-retry loop, idempotency (SQLite), PDF text extraction (PyMuPDF, no OCR), full error
+taxonomy, a per-run USD budget guard, and the deterministic accuracy harness. The container
+builds and `docker compose up` serves `/v1/extract` with a green healthcheck (verified offline).
+
+What is still **pending**: the published accuracy table needs human-reviewed fixtures and paid
+`--live` runs against both providers, so the "Numbers pending" block above stays until then.
+Build sequence and tasks live in `tasks/BACKLOG.md`; the plan and decisions live in `docs/`; the
+living status snapshot is `docs/STATUS.md`.
 
 ## Development
 
@@ -93,3 +101,16 @@ make test        # pytest with coverage
 make typecheck   # mypy strict
 make smoke       # deterministic offline smoke (no paid model calls)
 ```
+
+## Deploy (Docker)
+
+```
+cp .env.example .env      # fill in provider keys + per-model prices (never commit .env)
+docker compose up -d      # builds the image, serves on :8200, healthcheck hits /healthz
+```
+
+The image is `python:3.13-slim` with the pinned project metadata (no OCR system libraries by
+design). Provider routing is env-only, so the future gateway migration is a change to `.env`
+(`LLM_BASE_URL` + `LLM_API_KEY`), not to the image or compose file. For a paid-call-free check,
+set `LLM_PROVIDER_MODE=fixture` + `FIXTURE_CANNED_TEXT=<a valid record>` in `.env` and the
+container serves `/v1/extract` deterministically offline.
