@@ -46,50 +46,59 @@ resolved, green CI, aged, with a newer PR above it. Small conventional commits.
 - [x] **T06 `harness/normalize.py`.** (PR #26) date->ISO and money->minor-units with a
   currency minor-digit table; tests on GBP/USD/JPY (0 digits) and bad input
   raising, not coercing.
-- **T07 Flip 10 invoice fixtures to REVIEWED + passing.** DoD: human-cleared
-  labels; `make accuracy-run` scores invoice/OpenAI and all 10 match. (Blocks on
-  Chris.)
+- [x] **T07 Flip 10 invoice fixtures to REVIEWED + passing.** (PR #68, supersedes #36)
+  All 10 flipped DRAFT -> REVIEWED; `fixtures-validate` + the corpus-wide placement check
+  (#63) pass; the harness finds 10 REVIEWED. The `accuracy-run` scoring half is the paid
+  `--live` run (T17). Review-thread dispositions (0006 inferred line item kept; 0007/0008
+  total-only subtotal = #35) recorded on #68.
 
 ## M2 - job-posting path + idempotency + full taxonomy
 
 - [x] **T08 Job-posting schema completeness + tests.** (PR #31) enum + cross-field edge
   tests (the `competitive` and inverted-range cases); explicit-null keys + salary
   currency-when-present (closed #4, #8). Base model existed from M0.
-- **T09 `llm/client.py` Anthropic path (`messages.parse`).** DoD: structured
-  output behind the seam; `stop_reason` refusal/`max_tokens` mapped; strict-tool
-  fallback stubbed; mocked-response test.
-- **T10 Provider selection + `default` routing.** DoD: `provider` selects the
-  client; `default` resolves via env; test covers all three. (Routing exists from
-  M0; this wires it into the pipeline.)
-- **T11 `api/idempotency.py` + SQLite store.** DoD: key+sha256 storage; replay on
-  match (`replayed:true`, no model call); 409 on hash mismatch; 24h TTL sweep;
-  tests for replay, conflict, expiry.
-- **T12 Wire idempotency into the endpoint + extend smoke.** DoD: store checked
+- [x] **T09 `llm/client.py` Anthropic path.** (PR #37) structured output behind the seam
+  via the modern Anthropic structured-outputs API (native `json_schema`, mirror of T02),
+  NOT the legacy `messages.parse`/strict-tool-fallback the DoD assumed; `stop_reason`
+  refusal/`max_tokens` mapped; mocked-response test.
+- [x] **T10 Provider selection + `default` routing.** (PR #39) `provider` selects the
+  client; `default` resolves via env; test covers openai/anthropic/default end-to-end.
+- [x] **T11 `api/idempotency.py` + SQLite store.** (PR #40) key+sha256 storage (WAL,
+  first-writer-wins); replay on match (`replayed:true`, no model call); 409 on hash
+  mismatch; 24h TTL (lazy expiry + `sweep()`); tests for replay, conflict, expiry.
+- [x] **T12 Wire idempotency into the endpoint + extend smoke.** (PR #41) store checked
   before any model call; integration test for one-call-then-replayed and the 409;
   `make smoke` extended with the replay + 409 assertions.
-- **T13 Full error taxonomy coverage.** DoD: every taxonomy member reachable and
-  tested; README taxonomy table rows exist (frequencies TBD).
-- **T14 PDF text extraction (PyMuPDF).** DoD: base64 pdf -> `get_text()`; no OCR;
-  oversized/garbled input handled loudly; test on a small text-based PDF.
+- [x] **T13 Full error taxonomy coverage.** (PR #43) every taxonomy member reachable and
+  tested; README taxonomy table rows exist (frequencies TBD until T17).
+- [x] **T14 PDF text extraction (PyMuPDF).** (PR #44) base64 pdf -> `get_text()`; no OCR;
+  oversized/garbled input handled loudly (page/size caps); test on a small text-based PDF.
 
 ## M3 - accuracy harness, both providers, table committed
 
 - **T15 30-50 invoice + 30-50 job fixtures (50/50 real/synthetic, labeled).**
   DoD: ADR 0003 labeling; `fixtures-validate` passes; DRAFT excluded from scoring.
   (Blocks on Chris.)
-- **T16 `harness/run_accuracy.py` scoring.** DoD: per-field exact-match (after
-  normalization), null-handling correctness, hallucinated-field rate;
-  deterministic, no LLM judge; `--live` mode against the serving endpoint.
+- [x] **T16 `harness/run_accuracy.py` scoring.** (PR #45) per-field exact-match (after
+  normalization), hallucinated-field rate; deterministic, no LLM judge; `--live` mode
+  against the serving endpoint. Hardened since: control-plane skip (#52), malformed-2xx /
+  `--timeout` / misplaced-fixture (#57 items 2-4), corpus-wide placement (#63).
+  Null-handling-correctness rate is deferred to T17 (#46).
 - **T17 Two-provider accuracy table + cost/latency.** DoD: markdown table in
   `evals/reports/` with per-field accuracy + hallucinated-field rate + cost +
   p50/p95 latency, per doc type per provider; re-runnable via `make accuracy-run`.
-- **T18 Budget guard.** DoD: per-run USD cap (reuse Hero 1 reserve-reconcile);
-  exceeding it raises `budget_exceeded`; test forces the cap.
+  (Blocks on paid `--live` runs; folds in #46 + #57 item 1.)
+- [x] **T18 Budget guard.** (PR #50) per-run USD cap; exceeding it raises `budget_exceeded`
+  (402, control-plane); check-before-spend + reconcile-after (incl. failed-call cost);
+  test forces the cap. Negative-cap now fails loud (#66). Reserve-reconcile is a documented
+  v1 simplification (concurrency overshoot bounded; #42).
 
 ## M4 - deploy + README with numbers
 
-- **T19 Compose service live.** DoD: image builds; `docker compose up` serves
-  `/v1/extract`; healthcheck green; `.env.example` complete, no secrets.
+- [x] **T19 Compose service live.** (2026-07-03) image builds (`python:3.13-slim`);
+  `docker compose up` serves `/v1/extract` (verified offline in fixture mode: /healthz 200,
+  /v1/extract 200 + validated data); healthcheck green; `.env.example` complete, no secrets.
+  README "Deploy (Docker)" section added.
 - **T20 README with numbers.** DoD: the accuracy table's lead sentence replaces
   "Numbers pending"; taxonomy table with observed frequencies; non-goals; the
   heuristic-confidence note.
