@@ -70,3 +70,18 @@ def test_budget_from_env_rejects_non_finite(monkeypatch, bad):
     monkeypatch.setenv("EXTRACT_BUDGET_USD", bad)
     with pytest.raises(ValueError, match="finite"):
         budget_from_env()
+
+
+@pytest.mark.parametrize("bad", ["-5", "-0.01", "-1000"])
+def test_budget_from_env_rejects_negative(monkeypatch, bad):
+    # A finite negative cap silently disables the money guard (enabled is cap > 0); a mistyped
+    # negative must fail loud, not turn cost enforcement off (issue #66).
+    monkeypatch.setenv("EXTRACT_BUDGET_USD", bad)
+    with pytest.raises(ValueError, match="non-negative"):
+        budget_from_env()
+
+
+def test_budget_from_env_zero_is_disabled(monkeypatch):
+    # 0 stays the explicit disable sentinel (distinct from a mistyped negative, which errors).
+    monkeypatch.setenv("EXTRACT_BUDGET_USD", "0")
+    assert not budget_from_env().enabled
