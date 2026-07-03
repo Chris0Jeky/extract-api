@@ -5,6 +5,7 @@
 # the venv. Override directly, e.g. `make PYTHON=.venv/Scripts/python test`.
 PYTHON ?= python
 PORT ?= 8200
+BASE_URL ?= http://localhost:$(PORT)
 
 .DEFAULT_GOAL := help
 
@@ -34,8 +35,10 @@ ci-quick: lint typecheck test ## Pre-push gate: lint + types + tests
 smoke: ## Deterministic offline smoke (no paid model calls)
 	$(PYTHON) scripts/smoke.py
 
-accuracy-run: ## Run the accuracy harness (pending M3: T16/T17)
-	@echo "accuracy-run: pending M3 (T16/T17); no REVIEWED fixtures scored yet."
+accuracy-run: ## Score REVIEWED invoice fixtures against a live endpoint + emit the table (paid; start the API first via `make dev` or `docker compose up`). Override BASE_URL; add ARGS='--doc-type uk_job_posting --out evals/reports/x.md'.
+	@$(PYTHON) -c "import urllib.request; urllib.request.urlopen('$(BASE_URL)/healthz', timeout=5)" \
+		|| { echo "accuracy-run: no serving endpoint at $(BASE_URL) - start it first (make dev / docker compose up)"; exit 1; }
+	$(PYTHON) -m harness.run_accuracy --doc-type invoice --live --base-url $(BASE_URL) $(ARGS)
 
 fixtures-validate: ## Validate fixtures against their schema + label rules
 	$(PYTHON) scripts/validate_fixtures.py

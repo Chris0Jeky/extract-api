@@ -3,7 +3,7 @@
   "doc_type": "invoice",
   "schema_version": "v1",
   "source": "synthetic",
-  "label_status": "DRAFT",
+  "label_status": "REVIEWED",
   "content": "Factuur\nLeverancier: Lowlands Media BV\nFactuurnummer: LM-9001\nDatum: 2026-02-09\nTotaal: EUR 430,00",
   "expected": {
     "invoice_number": "LM-9001",

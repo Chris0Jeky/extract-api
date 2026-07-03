@@ -3,7 +3,7 @@
   "doc_type": "invoice",
   "schema_version": "v1",
   "source": "synthetic",
-  "label_status": "DRAFT",
+  "label_status": "REVIEWED",
   "content": "INVOICE\nSakura Trading K.K.\nInvoice No: ST-3310\nDate: 2026-04-10\nDisplay units x2 at JPY 45,000\nSubtotal: JPY 90,000\nConsumption tax (10%): JPY 9,000\nTotal: JPY 99,000",
   "expected": {
     "invoice_number": "ST-3310",

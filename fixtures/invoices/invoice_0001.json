@@ -3,7 +3,7 @@
   "doc_type": "invoice",
   "schema_version": "v1",
   "source": "synthetic",
-  "label_status": "DRAFT",
+  "label_status": "REVIEWED",
   "content": "INVOICE\nNorthwind Supplies Ltd\n72 Maple Road, Bristol BS1 4ND\nInvoice number: NW-1001\nIssue date: 15 January 2026\nDue date: 14 February 2026\nOffice chairs x4 at GBP 125.00\nSubtotal: GBP 500.00\nVAT (20%): GBP 100.00\nTotal due: GBP 600.00",
   "expected": {
     "invoice_number": "NW-1001",
