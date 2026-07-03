@@ -16,8 +16,6 @@
     "vendor_name": "Harbor Freight Solutions",
     "vendor_tax_id": null,
     "buyer_name": null,
-    "line_items": [
-      {"description": "Logistics audit", "quantity": 1, "unit_price_minor": 340000, "amount_minor": 340000}
-    ]
+    "line_items": null
   }
 }
