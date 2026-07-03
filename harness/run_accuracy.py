@@ -75,7 +75,10 @@ class MisplacedFixture(Exception):
 # testable offline; --live supplies the real endpoint-backed implementation.
 Predictor = Callable[[dict[str, object]], Prediction]
 
-_FIXTURE_DIRS = {"invoice": "invoices", "uk_job_posting": "job_postings"}
+# The canonical doc_type -> fixtures subdirectory map (single source of truth for the corpus
+# layout). Public so scripts/validate_fixtures.py can enforce the same placement invariant
+# corpus-wide (issue #63) instead of duplicating a map that could drift from the harness.
+FIXTURE_DIRS = {"invoice": "invoices", "uk_job_posting": "job_postings"}
 _PROVIDERS = ("openai", "anthropic", "default")
 _FIXTURES_ROOT = Path(__file__).resolve().parent.parent / "fixtures"
 # Taxonomy codes that mean "rejected by a control-plane guard before any model call"; these
@@ -108,7 +111,7 @@ def load_reviewed_fixtures(doc_type: str, root: Path | None = None) -> list[dict
     ground-truth file: fail loud (MisplacedFixture) rather than silently dropping or mis-scoring
     it (issue #57). DRAFT fixtures are skipped regardless of placement.
     """
-    base = (root or _FIXTURES_ROOT) / _FIXTURE_DIRS[doc_type]
+    base = (root or _FIXTURES_ROOT) / FIXTURE_DIRS[doc_type]
     fixtures: list[dict[str, object]] = []
     for path in sorted(base.glob("*.json")):
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -123,7 +126,7 @@ def load_reviewed_fixtures(doc_type: str, root: Path | None = None) -> list[dict
         if data.get("doc_type") != doc_type:
             raise MisplacedFixture(
                 f"{path.name}: REVIEWED fixture has doc_type={data.get('doc_type')!r} but sits "
-                f"under the {doc_type!r} directory ({_FIXTURE_DIRS[doc_type]}/); "
+                f"under the {doc_type!r} directory ({FIXTURE_DIRS[doc_type]}/); "
                 "move it or fix its label"
             )
         fixtures.append(data)
@@ -258,7 +261,7 @@ def live_predictor(base_url: str, provider: str, *, timeout: float = 120.0) -> P
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Deterministic accuracy harness (no LLM judge).")
-    parser.add_argument("--doc-type", required=True, choices=sorted(_FIXTURE_DIRS))
+    parser.add_argument("--doc-type", required=True, choices=sorted(FIXTURE_DIRS))
     parser.add_argument("--provider", default="openai", choices=_PROVIDERS)
     parser.add_argument("--live", action="store_true", help="POST fixtures to a live endpoint")
     parser.add_argument("--base-url", default="http://localhost:8200")
