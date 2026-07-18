@@ -58,7 +58,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"$CLAUDE_PROJECT_DIR/scripts/agent_hooks/pre_tool_use.py\""
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/dispatch.py\" --event pre"
           }
         ]
       }

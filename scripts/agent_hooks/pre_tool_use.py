@@ -1,5 +1,11 @@
 """PreToolUse safety hook: block destructive or secret-leaking shell commands.
 
+DEPRECATED as the runtime floor: the wired PreToolUse hook is now the shared,
+tier-aware cross-runtime deny floor `.claude/hooks/dispatch.py` (canonical bytes
+from agent-harness). This bespoke regex floor is no longer invoked at runtime and
+is retained only so its decide()/redaction tests keep passing pending full
+retirement (see follow-up issue). Do not re-wire it without cause.
+
 Reads the Claude Code tool-call JSON on stdin and prints a deny decision when a
 Bash command is dangerous. The decision logic lives in decide() so smoke_test.py
 can verify it directly. Defense in depth: this runs even under bypassPermissions.
