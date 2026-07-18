@@ -1,7 +1,9 @@
 # Git workflow (safe vs blocked)
 
-Solo repo, agent-driven. The harness enforces most of this via
-`scripts/agent_hooks/pre_tool_use.py`; the table is the rationale.
+Solo repo, agent-driven. The runtime PreToolUse floor is the shared cross-runtime
+deny floor `.claude/hooks/dispatch.py` (canonical: agent-harness, tier-aware); the
+legacy `scripts/agent_hooks/pre_tool_use.py` regex floor is retained only for its
+tests pending retirement. The table below is the rationale.
 
 | Action | Status | Note |
 | --- | --- | --- |

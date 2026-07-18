@@ -37,6 +37,9 @@ packages = ["api", "schemas", "llm", "harness"]
 line-length = 100
 target-version = "py312"
 src = ["api", "schemas", "llm", "harness", "tests"]
+# Vendored shared deny floor tracks agent-harness canonical bytes verbatim
+# (Black-formatted, self-counting smoke matrix); do not lint/format-check locally.
+extend-exclude = [".claude/hooks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
