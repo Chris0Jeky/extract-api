@@ -34,7 +34,7 @@ import sys
 import tempfile
 import time
 
-FLOOR_VERSION = "1.5.2 (2026-07-19)"
+FLOOR_VERSION = "1.6.0 (2026-07-24)"
 
 # --- helpers ---------------------------------------------------------------
 
@@ -1702,6 +1702,228 @@ def strip_quoted_heredoc_bodies(command: str) -> str:
     return "".join(result)
 
 
+def windows_operator_segments(
+    command: str, *, single_quotes_are_inert: bool = True
+) -> list[tuple[str, str]]:
+    """Split Windows command operators without splitting quoted inert text."""
+    result: list[tuple[str, str]] = []
+    current: list[str] = []
+    quote: str | None = None
+    index = 0
+    while index < len(command):
+        char = command[index]
+        if quote:
+            if char == quote and (index == 0 or command[index - 1] != "`"):
+                quote = None
+            current.append(char)
+            index += 1
+            continue
+        if char == '"' or (char == "'" and single_quotes_are_inert):
+            quote = char
+            current.append(char)
+        elif char in ";&|\n":
+            operator = char
+            if index + 1 < len(command) and (
+                command[index + 1] == char
+                or (char == "|" and command[index + 1] == "&")
+            ):
+                operator += command[index + 1]
+                index += 1
+            segment = "".join(current).strip()
+            if segment:
+                result.append((segment, operator))
+            current = []
+        else:
+            current.append(char)
+        index += 1
+    segment = "".join(current).strip()
+    if segment:
+        result.append((segment, ""))
+    return result
+
+
+_POWERSHELL_PATH_PARAMETER_PREFIXES = sorted(
+    {
+        name[:length]
+        for name in ("path", "literalpath")
+        for length in range(1, len(name) + 1)
+    },
+    key=len,
+    reverse=True,
+)
+_POWERSHELL_BOUND_WINDOWS_QUOTE = re.compile(
+    rf'(?i)(?P<prefix>-(?:{"|".join(_POWERSHELL_PATH_PARAMETER_PREFIXES)}):)'
+    r'"(?P<value>[^"\r\n]*\\)"(?=$|[\s;&|])'
+)
+
+
+def windows_fallback_tokens(candidate: str) -> list[str]:
+    """Recover argv using Windows quote semantics after POSIX shlex rejects it."""
+    space_marker = "__HARNESS_WINDOWS_BOUND_SPACE__"
+    while space_marker in candidate:
+        space_marker += "_"
+
+    def protect_bound_path(match: "re.Match[str]") -> str:
+        return match.group("prefix") + match.group("value").replace(" ", space_marker)
+
+    candidate = _POWERSHELL_BOUND_WINDOWS_QUOTE.sub(protect_bound_path, candidate)
+    try:
+        recovered = shlex.split(candidate, posix=False)
+    except ValueError:
+        recovered = shlex.split(candidate.rstrip("\"'"), posix=False)
+    return [
+        (
+            token[1:-1]
+            if len(token) >= 2 and (token[0], token[-1]) in {('"', '"'), ("'", "'")}
+            else token
+        ).replace(space_marker, " ")
+        for token in recovered
+    ]
+
+
+def strip_windows_execution_prefix(candidate: str) -> str:
+    """Expose a Windows command after inert control and redirect prefixes."""
+    candidate = re.sub(r"^[\s\"'({}&@]+", "", candidate)
+    redirect = re.compile(
+        r"(?is)^(?:\d+)?(?:>>?|<)\s*" r"(?:&\d+|\"[^\"]*\"|'[^']*'|[^\s]+)\s+"
+    )
+    while match := redirect.match(candidate):
+        candidate = candidate[match.end() :].lstrip()
+    return candidate
+
+
+def normalize_windows_shell_head(candidate: str) -> str:
+    """Reduce a path-qualified cmd/PowerShell executable to its known head."""
+    match = re.match(
+        r"(?is)^(?:[A-Za-z]:[\\/]|\\\\)(?:"
+        r'[^"\r\n]*[\\/](?P<quoted>cmd|powershell|pwsh)(?:\.exe)?"'
+        r"|[^\s\"\r\n]*[\\/](?P<bare>cmd|powershell|pwsh)(?:\.exe)?"
+        r")(?=\s|$)",
+        candidate,
+    )
+    if not match:
+        return candidate
+    return (match.group("quoted") or match.group("bare")) + candidate[match.end() :]
+
+
+def unparseable_recursive_delete(command: str) -> list[list[str]]:
+    """Recover recursive deletes hidden by non-POSIX Windows quoting.
+
+    A trailing backslash in a double-quoted Windows path is valid to cmd and
+    PowerShell but makes POSIX shlex reject the whole command. Peel only
+    wrappers that execute their child text; inert commands such as echo and
+    Write-Output deliberately stop the walk.
+    """
+    candidates = [segment for segment, _operator in windows_operator_segments(command)]
+    seen: set[str] = set()
+    recovered_deletes: list[list[str]] = []
+
+    # Every recognized wrapper peel shortens the candidate, and ``seen``
+    # prevents duplicate work. Do not impose a traversal count that turns a
+    # sufficiently deep but still executable wrapper chain into an allow.
+    while candidates:
+        candidate = candidates.pop(0).lstrip()
+        candidate = strip_windows_execution_prefix(candidate)
+        candidate = normalize_windows_shell_head(candidate)
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+
+        delete_head = re.match(
+            r"(?i)(?:[A-Za-z0-9_.-]+\\)?"
+            r"(?P<head>remove-item|ri|rm|del|erase|rd|rmdir)"
+            r"(?=$|[\s;/\"'])",
+            candidate,
+        )
+        if delete_head:
+            delete_name = delete_head.group("head").lower()
+            delete_tail = candidate[delete_head.end("head") :].lstrip("\"'")
+            option_tokens = re.findall(r"(?<!\S)-[^\s\"']+", delete_tail)
+            powershell_recurse = any(
+                is_powershell_recurse_flag(token) for token in option_tokens
+            )
+            posix_recurse = delete_name == "rm" and any(
+                token.startswith("-")
+                and not token.startswith("--")
+                and "r" in token[1:].lower()
+                for token in option_tokens
+            )
+            cmd_recurse = delete_name in {"del", "erase", "rd", "rmdir"} and bool(
+                re.search(r"(?i)(?:^|/)s(?=/|\s|$)", delete_tail)
+            )
+            if powershell_recurse or posix_recurse or cmd_recurse:
+                executable = candidate[: delete_head.end("head")]
+                recovered_deletes.append(
+                    windows_fallback_tokens(f"{executable} {delete_tail}")
+                )
+            continue
+
+        try:
+            candidate_tokens = windows_fallback_tokens(candidate)
+        except ValueError:
+            recovered_deletes.append(["__HARNESS_UNPARSEABLE_QUOTING__"])
+            continue
+        candidate_head, normalized_tokens = command_head(candidate_tokens)
+        if candidate_head in {"start-process", "saps"}:
+            child, _error = powershell_start_process_command(normalized_tokens)
+            if child is None:
+                recovered_deletes.append(["__HARNESS_UNPARSEABLE_QUOTING__"])
+            else:
+                candidates.append(child)
+            continue
+        if candidate_head in {"start-job", "sajb", "start-threadjob"}:
+            scripts, _error = powershell_job_scriptblocks(normalized_tokens)
+            if scripts is None:
+                recovered_deletes.append(["__HARNESS_UNPARSEABLE_QUOTING__"])
+            else:
+                candidates.extend(scripts)
+            continue
+
+        start_switch = (
+            r"\s+/(?:d|node|affinity|machine)\s+(?:\"[^\"]*\"|\S+)"
+            r"|\s+/(?:b|i|min|max|separate|shared|low|normal|high|"
+            r"realtime|abovenormal|belownormal|wait)"
+        )
+        cmd_wrapper = re.match(
+            r"(?is)^cmd(?:\.exe)?\b.*?\s/[ck](?:\s+|$)(?P<child>.+)$",
+            candidate,
+        )
+        wrapper = cmd_wrapper
+        if not wrapper:
+            wrapper = re.match(
+                r"(?is)^(?:powershell|pwsh)(?:\.exe)?\b.*?"
+                r"\s[-/](?:command|c)(?:\s+|$)(?P<child>.+)$",
+                candidate,
+            )
+        if not wrapper:
+            wrapper = re.match(r"(?is)^call\s+(?P<child>.+)$", candidate)
+        if not wrapper:
+            wrapper = re.match(
+                r"(?is)^start\b"
+                rf"(?:{start_switch})*"
+                r"(?:\s+\"[^\"]*\")?"
+                rf"(?:{start_switch})*\s+(?P<child>.+)$",
+                candidate,
+            )
+        if not wrapper:
+            wrapper = re.match(
+                r"(?is)^if\s+(?:/i\s+)?(?:not\s+)?(?:\S+\s+){1,3}"
+                r"(?P<child>(?:[\"'&@({\s])*(?:cmd|powershell|pwsh|call|start|"
+                r"remove-item|ri|rm|del|erase|rd|rmdir)\b.+)$",
+                candidate,
+            )
+        if not wrapper:
+            wrapper = re.match(r"(?is)^for\b.+?\s+do\s+(?P<child>.+)$", candidate)
+        if wrapper:
+            child = re.sub(r"^[\s\"'({}&@]+", "", wrapper.group("child"))
+            child_segments = windows_operator_segments(
+                child, single_quotes_are_inert=cmd_wrapper is None
+            )
+            candidates.extend(segment for segment, _operator in child_segments)
+
+    return recovered_deletes
+
+
 def quote_aware_segments_with_operators(command: str) -> list[tuple[list[str], str]]:
     """Tokenize executable argv while protecting quoted operator characters.
 
@@ -1741,15 +1963,43 @@ def quote_aware_segments_with_operators(command: str) -> list[tuple[list[str], s
         quoted[placeholder] = value
         return placeholder
 
+    bound_windows_delete = []
+    if _POWERSHELL_BOUND_WINDOWS_QUOTE.search(command):
+        bound_windows_delete = unparseable_recursive_delete(command)
+
     protected = _QUOTED.sub(protect, command)
     lexer = shlex.shlex(protected, posix=True, punctuation_chars=";&|<>\n")
     lexer.whitespace = " \t\r"
     lexer.whitespace_split = True
     lexer.commenters = ""
     try:
+        if bound_windows_delete:
+            raise ValueError("PowerShell-bound Windows path needs fallback parsing")
         raw_tokens = list(lexer)
     except ValueError:
-        return []
+        # POSIX shlex treats a final backslash inside a double-quoted Windows
+        # path as escaping the closing quote. PowerShell does not, so this can
+        # hide an otherwise recognizable recursive delete. Fail closed only
+        # for that irreversible surface; benign PowerShell scriptblocks can
+        # also be intentionally non-POSIX and remain inspectable by the other
+        # normalization passes below.
+        windows_segments = windows_operator_segments(command)
+        recovered_segments: list[tuple[list[str], str]] = []
+        if len(windows_segments) > 1:
+            try:
+                recovered_segments.extend(
+                    (windows_fallback_tokens(segment), operator)
+                    for segment, operator in windows_segments
+                )
+            except ValueError:
+                return [(["__HARNESS_UNPARSEABLE_QUOTING__"], "")]
+        recovered_segments.extend(
+            (segment, "")
+            for segment in (
+                bound_windows_delete or unparseable_recursive_delete(command)
+            )
+        )
+        return recovered_segments
 
     separators = set(";&|\n")
     result: list[tuple[list[str], str]] = []
@@ -3651,8 +3901,124 @@ def git_editor_edit_is_forced(args: list[str]) -> bool:
     )
 
 
+_GIT_SEQUENCER_TERMINAL_SUBCOMMANDS = {
+    "am",
+    "cherry-pick",
+    "merge",
+    "rebase",
+    "revert",
+}
+
+
+_GIT_SEQUENCER_REQUIRED_VALUE_SHORT_OPTIONS = {
+    "am": {"C", "p"},
+    "cherry-pick": {"m", "X"},
+    "merge": {"m", "F", "s", "X"},
+    "rebase": {"C", "x", "s", "X"},
+    "revert": {"m", "X"},
+}
+
+
+_GIT_SEQUENCER_REQUIRED_VALUE_LONG_OPTIONS = {
+    "am": {
+        "--directory",
+        "--empty",
+        "--exclude",
+        "--include",
+        "--patch-format",
+        "--quoted-cr",
+        "--resolvemsg",
+        "--whitespace",
+    },
+    "cherry-pick": {
+        "--cleanup",
+        "--empty",
+        "--mainline",
+        "--strategy",
+        "--strategy-option",
+    },
+    "merge": {
+        "--cleanup",
+        "--file",
+        "--into-name",
+        "--message",
+        "--strategy",
+        "--strategy-option",
+    },
+    "rebase": {
+        "--empty",
+        "--exec",
+        "--onto",
+        "--strategy",
+        "--strategy-option",
+        "--whitespace",
+    },
+    "revert": {
+        "--cleanup",
+        "--mainline",
+        "--strategy",
+        "--strategy-option",
+    },
+}
+
+
+def git_sequencer_flow_is_terminal(subcommand: str, args: list[str]) -> bool:
+    """Return whether --abort/--quit terminates the operation editor-free.
+
+    Abort and quit tear down in-progress sequencer/merge state and never
+    consult an editor; Git rejects them combined with message/edit options
+    rather than launching one. --continue and --skip stay editor-reachable
+    (both can open the message editor for the commit being finalized). Skip
+    operands consumed by required-value options before interpreting a token
+    as a terminal flag. ``-S`` takes only an attached optional value, so a
+    following terminal flag remains active. Tokens after an unconsumed bare
+    ``--`` or exact ``--end-of-options`` are positionals and never options,
+    so the scan stops there.
+    """
+    required_short = _GIT_SEQUENCER_REQUIRED_VALUE_SHORT_OPTIONS[subcommand]
+    required_long = _GIT_SEQUENCER_REQUIRED_VALUE_LONG_OPTIONS[subcommand]
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token in {"--", "--end-of-options"}:
+            return False
+        if token.startswith("--"):
+            name = token.lower().split("=", 1)[0]
+            if git_option_abbreviates(name, "--abort") or git_option_abbreviates(
+                name, "--quit"
+            ):
+                return True
+            if "=" not in token and _is_launcher_value_long(name, required_long):
+                index += 2
+            else:
+                index += 1
+            continue
+        if token.startswith("-") and len(token) > 1:
+            cluster = token[1:]
+            for position, option in enumerate(cluster):
+                if option == "S":
+                    # -S has an optional argument only when text is attached.
+                    index += 1
+                    break
+                if option in required_short:
+                    # A required-value option consumes the cluster tail when
+                    # present, otherwise it consumes the following token.
+                    index += 2 if position == len(cluster) - 1 else 1
+                    break
+            else:
+                index += 1
+            continue
+        index += 1
+    return False
+
+
 def git_editor_is_reachable(subcommand: str, args: list[str]) -> bool:
     """Return whether Git can launch the editor selected by GIT_EDITOR."""
+    if (
+        subcommand in _GIT_SEQUENCER_TERMINAL_SUBCOMMANDS
+        and git_sequencer_flow_is_terminal(subcommand, args)
+    ):
+        return False
     lowered = [token.lower().split("=", 1)[0] for token in args]
     if subcommand == "add":
         return any(
@@ -3726,8 +4092,10 @@ def inherited_git_process_environment_is_reachable(
     if name == "GIT_EDITOR":
         return git_editor_is_reachable(subcommand, args)
     if name == "GIT_SEQUENCE_EDITOR":
-        return subcommand == "rebase" and any(
-            token.lower() in {"-i", "--interactive"} for token in args
+        return (
+            subcommand == "rebase"
+            and any(token.lower() in {"-i", "--interactive"} for token in args)
+            and not git_sequencer_flow_is_terminal(subcommand, args)
         )
     if name == "GIT_EXTERNAL_DIFF":
         return git_external_diff_is_reachable(subcommand, args)
@@ -4248,7 +4616,8 @@ def parse_git_config_args(
             # Git's parser stops option processing at the first real operand.
             operands.extend(item.lower() for item in args[index:])
             break
-        options.append(lowered)
+        option_name = lowered.split("=", 1)[0]
+        options.append(option_name)
         if (
             lowered.startswith("-f")
             and not lowered.startswith("--")
@@ -4257,7 +4626,18 @@ def parse_git_config_args(
             file_targets.append(token[2:])
             index += 1
             continue
-        option_name = lowered.split("=", 1)[0]
+        section_option = next(
+            (
+                option
+                for option in {"--remove-section", "--rename-section"}
+                if option_name == option or git_option_abbreviates(option_name, option)
+            ),
+            None,
+        )
+        if section_option is not None and "=" in token:
+            operands.append(token.split("=", 1)[1].lower())
+            index += 1
+            continue
         value_option = next(
             (
                 option
@@ -4290,7 +4670,10 @@ def parse_git_config_args(
 def protected_git_config_section(section: str) -> bool:
     """Return whether a section can alter push destinations or inject config."""
     lowered = section.lower()
-    return lowered.startswith(("remote.", "url.", "includeif.")) or lowered == "include"
+    return lowered.startswith(("remote.", "url.", "includeif.")) or lowered in {
+        "include",
+        "push",
+    }
 
 
 def executable_git_config_section(section: str) -> bool:
@@ -4394,7 +4777,7 @@ def protected_git_config_key(token: str) -> bool:
         or re.fullmatch(r"url\..+\.(?:insteadof|pushinsteadof)", token)
         or re.fullmatch(r"include(?:if)?\..+", token)
         or re.fullmatch(r"submodule\..+\.url", token)
-        or token == "push.recursesubmodules"
+        or token.startswith("push.")
         or executable_git_config_key(token)
     )
 
@@ -5050,6 +5433,113 @@ def push_remotes(
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
+def configured_bare_push_is_dangerous(
+    project_dir: str,
+    git_globals: list[str] | None = None,
+    command_runner=command_output,
+    deadline: float | None = None,
+) -> bool:
+    """True when a refspec-less `git push` would FORCE, DELETE, or MIRROR by config.
+
+    A bare push (no command-line refspec) inherits `remote.<name>.push`,
+    `remote.<name>.mirror`, AND `remote.<name>.receivepack`, so it can silently
+    perform charter-blocked updates
+    (BLUEPRINT §2) that no argv token reveals:
+      - a push refspec with a leading '+' -> forced update,
+      - a push refspec with an empty source (':dst') -> remote ref deletion,
+      - `remote.<name>.mirror=true` -> --mirror (force + delete of removed refs).
+      - `remote.<name>.receivepack` -> execution of a configured receiver command.
+    Command-line force/lease/`:ref`/`--mirror` are handled elsewhere; only the
+    CONFIGURED forms reach here. Over-approximates across all remotes. Resolution
+    failure/absence -> "" -> not dangerous, matching git's own
+    non-fast-forward-rejecting default for an unconfigured bare push. This is a
+    deliberate fail-open direction: if the shared resolver deadline is already
+    exhausted the read returns "" and the bare push is graduated — acceptable
+    because the floor's own `git config` reads are local and fast, so a forcing
+    config in practice resolves within budget."""
+    output = command_output_before_deadline(
+        command_runner,
+        [
+            "git",
+            *(git_globals or []),
+            "config",
+            "--get-regexp",
+            r"^remote\..*\.(push|mirror|receivepack)$",
+        ],
+        project_dir,
+        deadline,
+    )
+    for line in output.splitlines():
+        parts = line.split(None, 1)
+        if not parts:
+            continue
+        key = parts[0].lower()
+        value = parts[1].strip() if len(parts) == 2 else ""
+        if key.endswith(".mirror"):
+            # git treats a valueless boolean key (`mirror` with no `= value`) as
+            # true, and `--get-regexp` emits it with no value — so empty counts.
+            if value == "" or value.lower() in {"true", "yes", "on", "1"}:
+                return True
+            continue
+        if key.endswith(".receivepack"):
+            return True
+        for refspec in value.split():
+            # A configured push value is a refspec, never a CLI option: a leading
+            # '+' forces and an empty source (':dst') deletes the destination ref.
+            if refspec.startswith("+") or (
+                refspec.startswith(":") and len(refspec) > 1
+            ):
+                return True
+    return False
+
+
+def segment_may_mutate_repository_config(raw: list[str]) -> bool:
+    """Return whether a shell segment may rewrite the current repo's config."""
+    if not raw:
+        return False
+    normalized = [
+        restore_quoted_literal_markers(token).strip("'\"").replace("\\", "/").lower()
+        for token in raw
+    ]
+    config_indexes = [
+        index
+        for index, token in enumerate(normalized)
+        if token == ".git/config" or token.endswith("/.git/config")
+    ]
+    if not config_indexes:
+        return False
+    head, _tokens = command_head(raw)
+    if head in {
+        "add-content",
+        "ac",
+        "clear-content",
+        "clc",
+        "copy",
+        "copy-item",
+        "cp",
+        "cpi",
+        "move",
+        "move-item",
+        "mv",
+        "mi",
+        "new-item",
+        "ni",
+        "out-file",
+        "rename-item",
+        "ren",
+        "rni",
+        "set-content",
+        "sc",
+        "tee",
+        "tee-object",
+    }:
+        return True
+    return any(
+        index > 0 and normalized[index - 1] in {">", ">>", ">|"}
+        for index in config_indexes
+    )
+
+
 def dangerous_git_remote_mutation(args: list[str]) -> bool:
     """Reject remote-name or URL changes that can retarget a later push."""
     action = next((token.lower() for token in args if not token.startswith("-")), "")
@@ -5550,6 +6040,21 @@ def check(
     # T4/wave_mode. Never weakens `strict` — the flag is ignored where guards are walls.
     relaxed = bool(flags.get("relaxed_work_loss_guards")) and not strict
 
+    # Graduated opacity (BLUEPRINT §2 / issue #21). The charter denies the PROVEN
+    # irreversible; a shape the parser merely cannot PROVE safe is scaled by blast
+    # radius instead of hard-denied. This helper is used ONLY for shapes that
+    # cannot conceal a charter irreversible (force spellings, rm -rf outside the
+    # project, secret-file write, pipe-to-shell all keep their unconditional deny):
+    #   below T4/wave  -> allow (the parser's own uncertainty is not the agent's fault)
+    #   T4 or wave     -> deny (blast radius justifies strictness)
+    # Rule id prefixes the reason so smoke cases, ledgers, and overrides can key on
+    # it. A guarded/ask channel (for opaque operands OF a write verb) lands with its
+    # first real caller in a follow-up slice, not speculatively here.
+    def graduated_opacity(rule_id: str, reason: str):
+        if strict:
+            return "deny", f"[{rule_id}] {reason}"
+        return None
+
     command = strip_quoted_heredoc_bodies(remove_shell_line_continuations(command))
     command = mask_inert_powershell_assignment_scriptblocks(command)
     unwrapped = unwrap_powershell_scriptblock(command)
@@ -5638,6 +6143,7 @@ def check(
     environment_provider_context = False
     active_git_process_environment: set[str] = set()
     active_git_repository_environment = set(repository_environment_seed)
+    repository_config_may_have_changed = False
     command_aliases: dict[str, str] = {}
     previous_pass = None
 
@@ -5674,6 +6180,7 @@ def check(
             environment_provider_context = False
             active_git_process_environment = set()
             active_git_repository_environment = set(repository_environment_seed)
+            repository_config_may_have_changed = False
             command_aliases = {}
         previous_pass = current_pass
         if not raw:
@@ -5681,6 +6188,10 @@ def check(
         raw = strip_control_prefixes(raw)
         if not raw:
             continue
+        repository_config_may_have_changed = (
+            repository_config_may_have_changed
+            or segment_may_mutate_repository_config(raw)
+        )
         if dangerous_git_trace_environment_mutation(raw):
             return (
                 "deny",
@@ -5809,6 +6320,7 @@ def check(
             for marker in (
                 "__HARNESS_UNRESOLVED_ANSI_C_QUOTE__",
                 "__HARNESS_UNRESOLVED_LOCALE_QUOTE__",
+                "__HARNESS_UNPARSEABLE_QUOTING__",
             )
         ):
             return "deny", "Cannot safely decode an executable shell word."
@@ -6304,7 +6816,10 @@ def check(
                     "A dynamic nested-shell script cannot be inspected safely.",
                 )
             if head == "cmd":
-                nested_script = cmd_unescape(nested_script)
+                # cmd.exe gives single quotes no grouping semantics; leaving them
+                # intact here would make the recursive POSIX/PowerShell-aware pass
+                # hide separators that cmd actually executes.
+                nested_script = cmd_unescape(nested_script).replace("'", "")
             elif head in {"pwsh", "powershell"}:
                 nested_script = unwrap_powershell_scriptblock(nested_script)
             nested_decision = check(
@@ -6977,11 +7492,68 @@ def check(
                     positionals.append(token)
                     index += 1
                 explicit_selector = any(token in {"--all", "--tags"} for token in args)
-                if len(positionals) < 2 and not explicit_selector:
-                    return (
-                        "deny",
+                repository_via_option = any(
+                    token == "--repo" or token.startswith("--repo=") for token in args
+                )
+                has_explicit_refspec = len(positionals) >= (
+                    1 if repository_via_option else 2
+                )
+                if not has_explicit_refspec and not explicit_selector:
+                    # Plain `git push` to a configured upstream is the closing move
+                    # of nearly every agent loop. Command-line force/lease/`:ref`/
+                    # `--mirror` spellings are rejected ABOVE this point. The residual
+                    # charter risk is a CONFIGURED force/delete/mirror: a refspec-less
+                    # push inherits `remote.<name>.push` / `.mirror` (PR #23 reviews).
+                    # Resolve that config and deny the dangerous shapes at every tier;
+                    # only a provably-plain bare push is graduated by blast radius.
+                    # If a repository-environment override or an uncertain cwd makes
+                    # the resolver look at the wrong repo, we cannot prove safety ->
+                    # deny (fail closed, mirroring the sensitive_data push handling).
+                    # sensitive_data push-privacy resolution still runs below.
+                    # Only a KNOWN git repository env var (GIT_DIR / GIT_WORK_TREE /
+                    # GIT_COMMON_DIR) actually redirects git to a different repo than
+                    # the resolver's cwd, making the inherited config unverifiable. A
+                    # generic PowerShell `$env:VAR=` assignment is marked with the
+                    # <UNKNOWN> sentinel by the mutation scanner; excluding it keeps
+                    # the common `$env:WT_PROJECT_DIR='...'; git push` wave pattern
+                    # allowed (issue #21 corpus) while still denying the GIT_DIR case.
+                    bare_push_repository_environment = (
+                        effective_git_repository_environment
+                        & _GIT_REPOSITORY_COMMAND_ENVIRONMENT
+                    ) | {
+                        name.upper()
+                        for name in os.environ
+                        if name.upper() in _GIT_REPOSITORY_ENVIRONMENT
+                    }
+                    if (
+                        bare_push_repository_environment
+                        or repository_config_may_have_changed
+                        or cwd_uncertain
+                    ):
+                        return (
+                            "deny",
+                            "[push-config-unverifiable] A refspec-less git push inherits remote "
+                            "config, but a repository-environment override or uncertain cwd "
+                            "prevents verifying it; push an explicit refspec instead.",
+                        )
+                    if configured_bare_push_is_dangerous(
+                        current_cwd,
+                        git_toks[1:subcommand_index] if subcommand_index else None,
+                        deadline=_remote_deadline,
+                    ):
+                        return (
+                            "deny",
+                            "[push-config-force] A refspec-less git push inherits a configured "
+                            "force ('+'), delete (':ref'), mirror update, or receive-pack "
+                            "command from remote config; "
+                            "push an explicit non-forcing refspec instead.",
+                        )
+                    opaque = graduated_opacity(
+                        "push-opaque-refspec",
                         "A git push without an explicit refspec can inherit opaque config.",
                     )
+                    if opaque:
+                        return opaque
                 if lease_requested and (
                     explicit_selector
                     or not force_with_lease_targets_are_features(positionals[1:])

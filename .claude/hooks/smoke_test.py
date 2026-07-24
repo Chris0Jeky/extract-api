@@ -7,6 +7,7 @@ import functools
 import json
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -50,6 +51,54 @@ def load_dispatch_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+_FIXTURE_ROOT: str | None = None
+
+
+def neutral_fixture_root(candidates: list[str] | None = None) -> str:
+    """Create a unique fixture root under a neutral, non-temp parent.
+
+    When this smoke suite is vendored inside a tiered host repository, HERE
+    sits under the host's tier.json, so the dispatcher's ancestor-authority
+    walk (correctly) merges the host posture into synthetic fixture projects
+    and corrupts case expectations. A temp-resident root is equally unusable:
+    the floor's explicit temp-path allowance changes containment semantics.
+    Refuse to run rather than report bogus verdicts if no candidate is clean.
+    The caller owns the returned directory and must remove it after the run.
+    """
+    module = load_dispatch_module()
+    if candidates is None:
+        candidates = [HERE, os.path.expanduser("~")]
+    for candidate in candidates:
+        if not os.path.isdir(candidate):
+            continue
+        if module.declared_project_dirs(candidate) or module.is_within_temp(candidate):
+            continue
+        try:
+            return tempfile.mkdtemp(prefix=".agent-harness-smoke-", dir=candidate)
+        except OSError:
+            continue
+    raise SystemExit(
+        "smoke: no neutral fixture root available — every candidate inherits "
+        "a tier declaration or sits inside the temp allowance; fixture "
+        "expectations would be corrupted (agent-harness#12 F5)"
+    )
+
+
+def fixture_root() -> str:
+    global _FIXTURE_ROOT
+    if _FIXTURE_ROOT is None:
+        _FIXTURE_ROOT = neutral_fixture_root()
+    return _FIXTURE_ROOT
+
+
+def cleanup_fixture_root() -> None:
+    """Remove the run-owned neutral fixture root, if one was created."""
+    global _FIXTURE_ROOT
+    if _FIXTURE_ROOT is not None:
+        shutil.rmtree(_FIXTURE_ROOT)
+        _FIXTURE_ROOT = None
 
 
 def parse_decision(proc: subprocess.CompletedProcess[str]):
@@ -154,12 +203,14 @@ def invoke_payload(
     cwd: str,
     env_project: str | None = None,
     runtime: str | None = None,
+    env_extra: dict[str, str] | None = None,
 ):
     env = clean_dispatch_environment()
     if env_project is None:
         env.pop("CLAUDE_PROJECT_DIR", None)
     else:
         env["CLAUDE_PROJECT_DIR"] = env_project
+    env.update(env_extra or {})
     proc = subprocess.run(
         dispatch_argv(runtime),
         input=json.dumps(payload),
@@ -177,9 +228,10 @@ def invoke_case(
     cwd: str,
     env_project: str | None = None,
     runtime: str | None = None,
+    env_extra: dict[str, str] | None = None,
 ):
     payload = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": cwd}
-    return invoke_payload(payload, cwd, env_project, runtime)
+    return invoke_payload(payload, cwd, env_project, runtime, env_extra)
 
 
 def run_synthetic_project_case(
@@ -203,6 +255,13 @@ def run_synthetic_project_case(
         timeout=10,
     )
     return parse_decision(proc)
+
+
+def isolated_dispatch_temp(root: str) -> dict[str, str]:
+    """Give a subprocess a temp root that cannot swallow containment fixtures."""
+    trusted_temp = os.path.join(root, "dispatcher-temp")
+    os.makedirs(trusted_temp, exist_ok=True)
+    return {name: trusted_temp for name in ("TMPDIR", "TEMP", "TMP")}
 
 
 def invoke_synthetic_context(command: str, payload_cwd: str, env_project: str):
@@ -386,6 +445,41 @@ CASES = [
     ('gh repo create leak "--public"', 1, {"sensitive_data": True}, "deny"),
     ('Remove-Item -Recurse -Force "C:/critical/outside path"', 1, {}, "deny"),
     ('Remove-Item -Recurse -Force "C:\\critical\\outside path"', 1, {}, "deny"),
+    (r'''Remove-Item -Recurse "C:\critical\outside path\"''', 1, {}, "deny"),
+    (r'''   Remove-Item -Recurse "C:\critical\outside path\"''', 1, {}, "deny"),
+    (
+        r'''Write-Output Remove-Item -Recurse "C:\critical\outside path\"''',
+        1,
+        {},
+        "allow",
+    ),
+    (
+        r'''Write-Output "note & Remove-Item -Recurse C:\critical\outside path\"''',
+        1,
+        {},
+        "allow",
+    ),
+    (
+        r'''Write-Output "note"; Remove-Item -Recurse "C:\critical\outside\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (r'''Remove-Item -ErrorAction Stop "build\"''', 1, {}, "allow"),
+    (r'''Remove-Item -Recurse "build\"''', 1, {}, "allow"),
+    (
+        r"""Remove-Item -Recurse "build\"; git push --force origin main""",
+        1,
+        {},
+        "deny",
+    ),
+    (r'''& "Remove-Item" -Recurse "C:\critical\outside path\"''', 1, {}, "deny"),
+    (
+        r'''powershell -Command "Remove-Item -Recurse C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
     ("Remove-Item -Recurse -Force 'C:/critical/outside path'", 1, {}, "deny"),
     ('rm -rf build "C:/critical/outside path"', 1, {}, "deny"),
     ("rm -rf build 'C:/critical/outside path'", 1, {}, "deny"),
@@ -398,6 +492,216 @@ CASES = [
     ("del -Recurse -Force C:/critical/outside", 1, {}, "deny"),
     ("erase -Recur C:/critical/outside", 1, {}, "deny"),
     ("rd /s /q C:/critical/outside", 1, {}, "deny"),
+    (r'''rd /s /q "C:\critical\outside path\"''', 1, {}, "deny"),
+    (r'''rd/s/q "C:\critical\outside path\"''', 1, {}, "deny"),
+    (r'''rmdir/s "C:\critical\outside path\"''', 1, {}, "deny"),
+    (r'''del/f/s "C:\critical\outside path\"''', 1, {}, "deny"),
+    (r'''cmd /c rd/s/q "C:\critical\outside path\"''', 1, {}, "deny"),
+    (r'''cmd /c "rd /s /q C:\critical\outside path\"''', 1, {}, "deny"),
+    (r'''cmd /c " rd /s /q C:\critical\outside path\"''', 1, {}, "deny"),
+    (r'''cmd /c "@rd /s /q C:\critical\outside path\"''', 1, {}, "deny"),
+    (r'''cmd /c "call rd /s /q C:\critical\outside path\"''', 1, {}, "deny"),
+    (r'''cmd /c "if 1==1 rd /s /q C:\critical\outside path\"''', 1, {}, "deny"),
+    (r'''cmd /c "echo rd /s /q C:\critical\outside path\"''', 1, {}, "allow"),
+    (
+        r'''cmd /c "echo ok & rd /s /q C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''cmd /c "echo 'ok & rd /s /q C:\critical\outside\'"''',
+        1,
+        {},
+        "deny",
+    ),
+    (r'''rd /s /q "build\"''', 1, {}, "allow"),
+    (r'''cmd /c "cmd /c rd /s /q C:\critical\outside path\"''', 1, {}, "deny"),
+    (r'''cmd /c "cmd /d /c rd /s /q C:\critical\outside path\"''', 1, {}, "deny"),
+    (r'''cmd /c "call cmd /c rd /s /q C:\critical\outside path\"''', 1, {}, "deny"),
+    (
+        r'''cmd /c "start /wait cmd /c rd /s /q C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''cmd /c "start "" /wait cmd /c rd /s /q C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''cmd /c "start "window title" /wait cmd /c rd /s /q C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''cmd /c "start /d C:\temp cmd /c rd /s /q C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (r'''cmd /c "if 1==1 @rd /s /q C:\critical\outside path\"''', 1, {}, "deny"),
+    (
+        'cmd /c "' + ("call " * 16) + r'''rd /s /q C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''powershell -Command "powershell -Command Remove-Item -Recurse C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''pwsh -Command "pwsh -Command Remove-Item -Recurse C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''cmd /c "powershell /Command Remove-Item -Recurse C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''powershell /Command "Remove-Item -Recurse build\"''',
+        1,
+        {},
+        "allow",
+    ),
+    (
+        r'''cmd /c "for %I in (x) do rd /s /q C:\critical\outside\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''Microsoft.PowerShell.Management\Remove-Item -Recurse "C:\critical\outside\"''',
+        1,
+        {},
+        "deny",
+    ),
+    # --- v1.5.4: preserve the Windows fallback boundary ---
+    (
+        r'''cmd /c "if /I x EQU x rd /s /q C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''cmd /c "if /I x EQU x echo C:\path\"''',
+        1,
+        {},
+        "allow",
+    ),
+    (
+        r'''cmd /c "2>nul rd /s /q C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (r'''cmd /c "2>nul echo C:\path\"''', 1, {}, "allow"),
+    (
+        r'''cmd /c "start /wait "title" cmd /c rd /s /q C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''cmd /c "start /wait "title" cmd /c echo C:\path\"''',
+        1,
+        {},
+        "allow",
+    ),
+    (
+        r'''powershell -Command "Start-Process powershell -ArgumentList -Command,Remove-Item,-Recurse,C:\critical\outside\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''powershell -Command "Start-Process powershell -ArgumentList -Command,Write-Output,C:\path\"''',
+        1,
+        {},
+        "allow",
+    ),
+    (
+        r'''cmd /c "echo hello & echo C:\path\"''',
+        1,
+        {},
+        "allow",
+    ),
+    (
+        r'''Remove-Item -Recurse -LiteralPath:"C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''Remove-Item -Recurse -Lit:"C:\critical\outside path\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''Remove-Item -Recurse -LiteralPath:"build dir\"''',
+        1,
+        {},
+        "allow",
+    ),
+    (
+        r'''cmd /c "start "" /wait C:\Windows\System32\cmd.exe /c rd /s /q C:\critical\outside\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r'''cmd /c "start "" /wait C:\Windows\System32\cmd.exe /c echo C:\path\"''',
+        1,
+        {},
+        "allow",
+    ),
+    (
+        r'''cmd /c "echo C:\Windows\System32\cmd.exe /c rd /s /q C:\critical\outside\"''',
+        1,
+        {},
+        "allow",
+    ),
+    (
+        r'''cmd /c "start "" /wait "C:\Program Files\PowerShell\7\pwsh.exe" -Command Remove-Item -Recurse C:\critical\outside\"''',
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r"""Start-Job -ScriptBlock { Remove-Item -Recurse "C:\critical\outside\" }""",
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r"""Start-ThreadJob -ScriptBlock { Remove-Item -Recurse "C:\critical\outside\" }""",
+        1,
+        {},
+        "deny",
+    ),
+    (
+        r"""Start-Job -ScriptBlock { Write-Output "C:\path\" }""",
+        1,
+        {},
+        "allow",
+    ),
+    (
+        r'''cmd /c "echo cmd /c rd /s /q C:\critical\outside path\"''',
+        1,
+        {},
+        "allow",
+    ),
     ("rmdir /s /q C:/critical/outside", 1, {}, "deny"),
     ("Remove-Item -R FileSystem::C:/critical/outside", 1, {}, "deny"),
     (
@@ -1052,7 +1356,15 @@ CASES = [
     ("git --exec-path=C:/tmp status", 1, {}, "deny"),
     ("git-send-email --sendmail-cmd helper patch.eml", 1, {}, "deny"),
     ("git-filter-branch --tree-filter helper main", 1, {}, "deny"),
-    ("git push origin", 1, {}, "deny"),
+    # Plain push (no explicit refspec) is graduated opacity, not charter: force
+    # spellings are rejected earlier, so a bare push is allowed below T4 and
+    # denied only where blast radius makes opaque config a wall (T4 / wave_mode).
+    ("git push origin", 1, {}, "allow"),
+    ("git push origin", 2, {}, "allow"),
+    ("git push origin", 3, {}, "allow"),
+    ("git push origin", 4, {}, "deny"),
+    ("git push origin", 3, {"wave_mode": True}, "deny"),
+    ("git push", 2, {}, "allow"),
     ("git push origin :main", 1, {}, "deny"),
     ("git push origin :refs/heads/main", 1, {}, "deny"),
     ("git push origin main :old", 1, {}, "deny"),
@@ -1098,6 +1410,20 @@ CASES = [
     ("git config include.path C:/outside/injected.gitconfig", 1, {}, "deny"),
     ("git config --unset include.path", 1, {}, "deny"),
     ("git config --remove-section remote.origin", 1, {}, "deny"),
+    ("git config --remove-section push", 1, {}, "deny"),
+    ("git config push.default matching", 1, {}, "deny"),
+    ("git config --unset push.default", 1, {}, "deny"),
+    ("git config push.default", 1, {}, "allow"),
+    ("git config set push.default matching", 1, {}, "deny"),
+    ("git config unset push.default", 1, {}, "deny"),
+    ("git config get push.default", 1, {}, "allow"),
+    ("git config --remove-section=push", 1, {}, "deny"),
+    ("git config --remove-s=push", 1, {}, "deny"),
+    ("git config remove-section push", 1, {}, "deny"),
+    ("git config --rename-section push push-safe", 1, {}, "deny"),
+    ("git config --rename-section=push push-safe", 1, {}, "deny"),
+    ("git config --rename-se=push push-safe", 1, {}, "deny"),
+    ("git config --remove-section color", 1, {}, "allow"),
     ("git config unset remote.origin.url", 1, {}, "deny"),
     ("git config remove-section remote.origin", 1, {}, "deny"),
     ("git config rename-section remote.origin remote.backup", 1, {}, "deny"),
@@ -1760,7 +2086,9 @@ CASES = [
     ("git push --all origin", 1, {}, "allow"),
     ("git push --push-option harmless origin main", 1, {}, "allow"),
     ("git push --recurse-submodules check origin main", 1, {}, "allow"),
-    ("git push --repo origin main", 1, {}, "deny"),
+    ("git push --repo origin main", 1, {}, "allow"),
+    ("git push --repo=origin main", 1, {}, "allow"),
+    ("git push --repo origin main", 4, {}, "allow"),
     ("git push --repo origin --all", 1, {}, "allow"),
     ("git push -vo harmless origin main", 1, {}, "allow"),
     ("git push -od origin main", 1, {}, "allow"),
@@ -2741,7 +3069,7 @@ CASES = [
 ]
 
 
-def main():
+def run_smoke():
     failures = []
     for command, tier, flags, expected in CASES:
         got = run_case(command, tier, flags)
@@ -2970,7 +3298,8 @@ def main():
             failures.append(("junction escape", 1, {}, "deny", got))
         print(f"  [{status}] expected=deny got={got}  junction escape")
     else:
-        with tempfile.TemporaryDirectory(dir=HERE) as link_fixture:
+        with tempfile.TemporaryDirectory(dir=fixture_root()) as link_fixture:
+            temp_env = isolated_dispatch_temp(link_fixture)
             project = os.path.join(link_fixture, "project")
             outside = os.path.join(link_fixture, "outside")
             link = os.path.join(project, "escape")
@@ -2985,7 +3314,7 @@ def main():
                 print(f"  [FAIL] symlink fixture unavailable: {exc.__class__.__name__}")
             else:
                 link_target = link.replace("\\", "/")
-                got = invoke_case(f"rm -rf {link_target}", project)
+                got = invoke_case(f"rm -rf {link_target}", project, env_extra=temp_env)
                 status = "ok" if got == "deny" else "FAIL"
                 if got != "deny":
                     failures.append(("symlink escape", 1, {}, "deny", got))
@@ -3099,7 +3428,7 @@ def main():
         print(f"  [{status}] expected={expected} got={got}  {label}")
 
     authority_cases = []
-    with tempfile.TemporaryDirectory(dir=HERE) as project:
+    with tempfile.TemporaryDirectory(dir=fixture_root()) as project:
         invalid_authorities = [
             ("malformed tier JSON", "{"),
             ("non-object tier declaration", "[]"),
@@ -3344,6 +3673,16 @@ def main():
         (
             "inherited editor applies to commit",
             run_case("git commit", 3, {}, env_extra={"GIT_EDITOR": "helper"}),
+            "deny",
+        ),
+        (
+            "inherited editor applies past named option terminator",
+            run_case(
+                "git merge --edit --no-ff --end-of-options --abort",
+                3,
+                {},
+                env_extra={"GIT_EDITOR": "helper"},
+            ),
             "deny",
         ),
         (
@@ -3675,7 +4014,8 @@ def main():
         print(f"  [{status}] expected={expected} got={got}  {label}")
 
     symlink_authority_count = 1
-    with tempfile.TemporaryDirectory(dir=HERE) as authority_fixture:
+    with tempfile.TemporaryDirectory(dir=fixture_root()) as authority_fixture:
+        temp_env = isolated_dispatch_temp(authority_fixture)
         project = os.path.join(authority_fixture, "project")
         outside = os.path.join(authority_fixture, "outside")
         link = os.path.join(project, "linked-cwd")
@@ -3699,7 +4039,7 @@ def main():
         else:
             got = "pending"
         if got == "pending":
-            got = invoke_case("rm -rf build", link, project)
+            got = invoke_case("rm -rf build", link, project, env_extra=temp_env)
         status = "ok" if got == "deny" else "FAIL"
         if got != "deny":
             failures.append(
@@ -3938,16 +4278,17 @@ def main():
         inherited_original = os.environ.get(inherited_name)
         os.environ[inherited_name] = "repo/.git"
         try:
-            inherited_override_decision, inherited_override_reason = (
-                dispatch_module.check(
-                    "git push origin main",
-                    sensitive_cfg,
-                    HERE,
-                    HERE,
-                    remote_resolver=lambda *args: (
-                        inherited_override_calls.append(args) or (False, "private")
-                    ),
-                )
+            (
+                inherited_override_decision,
+                inherited_override_reason,
+            ) = dispatch_module.check(
+                "git push origin main",
+                sensitive_cfg,
+                HERE,
+                HERE,
+                remote_resolver=lambda *args: (
+                    inherited_override_calls.append(args) or (False, "private")
+                ),
             )
         finally:
             if inherited_original is None:
@@ -4390,7 +4731,7 @@ def main():
             ["https://github.com/example/public-last.git"],
         ),
     ]
-    with tempfile.TemporaryDirectory(dir=HERE) as remote_project:
+    with tempfile.TemporaryDirectory(dir=fixture_root()) as remote_project:
         subprocess.run(
             ["git", "init", "--quiet"],
             cwd=remote_project,
@@ -4661,7 +5002,7 @@ def main():
         print(f"  [{status}] expected={expected} got={got}  {label}")
 
     runtime_neutral_cases = []
-    with tempfile.TemporaryDirectory(dir=HERE) as project:
+    with tempfile.TemporaryDirectory(dir=fixture_root()) as project:
         write_tier(project, 1, {})
         write_agent_tier(project, 4, {"sensitive_data": True})
         runtime_neutral_cases.extend(
@@ -4678,7 +5019,7 @@ def main():
                 ),
             ]
         )
-    with tempfile.TemporaryDirectory(dir=HERE) as project:
+    with tempfile.TemporaryDirectory(dir=fixture_root()) as project:
         write_agent_tier(project, 1, {})
         write_tier(project, 4, {"sensitive_data": True})
         runtime_neutral_cases.extend(
@@ -4695,7 +5036,7 @@ def main():
                 ),
             ]
         )
-    with tempfile.TemporaryDirectory(dir=HERE) as project:
+    with tempfile.TemporaryDirectory(dir=fixture_root()) as project:
         write_agent_tier(project, 3, {"relaxed_work_loss_guards": True})
         write_tier(project, 3, {"relaxed_work_loss_guards": False})
         runtime_neutral_cases.append(
@@ -4738,6 +5079,13 @@ def main():
             print("  ", f)
         sys.exit(1)
     sys.exit(0)
+
+
+def main():
+    try:
+        run_smoke()
+    finally:
+        cleanup_fixture_root()
 
 
 if __name__ == "__main__":
