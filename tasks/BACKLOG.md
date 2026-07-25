@@ -5,6 +5,20 @@ when its DoD is true and `make ci-quick` is green. Every task ships as its own P
 under the 5-part merge gate (AGENTS.md): two adversarial reviews, all threads
 resolved, green CI, aged, with a newer PR above it. Small conventional commits.
 
+## Awaiting Chris (agents never self-merge)
+
+- **Merge PR #85 — vendored deny floor 1.5.2 -> canonical 1.6.3.** Verbatim
+  canonical bytes; digests and the full measurement are in the PR body. All gates
+  green on the exact head: `make test-hooks` (23 denies + 13 allows), the canonical
+  1,737-case floor matrix, ruff, `mypy` strict, 323 pytest, and repo CI. Measured on
+  80,311 real commands: **964 newly allowed / 143 newly blocked**, identical at T1
+  and T2. The 143 are all from the 1.5.2 -> 1.5.3 step, none are charter shapes, and
+  the global 1.6.3 hook already denies them today — so merging is a strict net
+  relaxation on this machine. Rationale and caveats are in the PR body.
+- **Tier gap (#86):** `main` still tracks no `tier.json`, so the floor governs this
+  T2 repo at T1 defaults. It does not affect PR #85 (deltas are identical at T1 and
+  T2, re-verified for 1.6.3), but it is a real authority gap.
+
 ## M0 - kickoff (DONE)
 
 - [x] **T00 Scaffold + config + stubs.** pyproject (pinned, ADR 0001), Makefile,
