@@ -3,8 +3,13 @@
 Strict-schema LLM extraction service: document text (or PDF text) in, Pydantic v2
 strict record out, per-field accuracy reported across OpenAI and Anthropic. It
 fails loudly instead of silently coercing. ~2.7k lines of source, 323 tests, 99%
-coverage; engineering-complete through M3 and deployable. What is left is human
-fixture labels plus paid `--live` runs (`tasks/BACKLOG.md` T15/T17/T20/T21).
+coverage; the served paths are complete through M3 and deployable. What is left
+is human fixture labels, TWO code changes, then paid `--live` runs
+(`tasks/BACKLOG.md` T15/T17/T20/T21). The code changes are merge blockers for
+T17 and must land BEFORE any paid run (`docs/STATUS.md`): the #46 null-handling
+/ hallucination-denominator metric, and #57 item 1 (`cost_usd` in the 422 body,
+contract pre-approved). Spend on `--live` before they land and the accuracy and
+cost table is wrong and has to be rerun.
 
 Positioning line for every README / title / CV line: "I make LLM systems cheap,
 reliable, and provably valuable in production." Lead with measured numbers; until
@@ -25,7 +30,7 @@ list and the human-action file (only Chris ticks its human-blocked items);
 | `llm/` | The only provider seam. `client.py` (both SDKs, 467 lines), `pipeline.py:run_extraction` (validation-retry), `schema_utils`, `prompts`, `errors` | `test_llm_client`, `test_openai_client`, `test_anthropic_client`, `test_pipeline`, `test_schema_utils`, `test_prompts`, `test_import_boundary` |
 | `schemas/` | Strict `invoice.v1` + `job_posting.v1`, ISO-4217 set, `registry.py` | `test_schemas`, `test_iso4217`, `test_registry` |
 | `harness/` | Deterministic accuracy scoring (`run_accuracy.py`, `scoring.py`) and `normalize.py` | `test_run_accuracy`, `test_scoring`, `test_normalize` |
-| `fixtures/` | 10 REVIEWED invoices, 1 job posting; DRAFT is excluded from scoring | `test_validate_fixtures` |
+| `fixtures/` | 10 REVIEWED invoices and ZERO job postings (`job_postings/` holds only `.gitkeep`, so a job-posting accuracy run exits with no REVIEWED input until T15); DRAFT is excluded from scoring | `test_validate_fixtures` |
 | `.claude/hooks/dispatch.py` | Vendored canonical deny floor (v1.6.20). T4-class in any repo: do not edit | `.claude/hooks/smoke_test.py` |
 
 `llm/` never imports `api/`. Only `llm/client.py` may import a provider SDK, and
@@ -43,7 +48,9 @@ module directly as below.
 | any typed source | `python -m mypy` | 10s cold / 1s warm, 23 files clean |
 | endpoint, wiring, idempotency | `python scripts/smoke.py` | 0.8s: boots the app, 200 + forced 422 + replay + 409, offline |
 | fixtures or labels | `python scripts/validate_fixtures.py` | 0.3s, "10 REVIEWED, 0 DRAFT" |
-| `scripts/agent_hooks/*` | `make test-hooks` | 0.1s, 23 denies + 13 allows |
+| `scripts/agent_hooks/pre_tool_use.py` | `make test-hooks` (`smoke_test.py`; it imports this hook only) | 0.2s, 23 denies + 13 allows |
+| `scripts/agent_hooks/pre_tool_use.py` or `post_tool_failure.py` | `python -m pytest --no-cov tests/test_agent_hooks.py` | 0.7s, 9 passed |
+| `scripts/agent_hooks/session_start.py` | nothing automated covers it: run `python scripts/agent_hooks/session_start.py` and read the line it prints | 0.1s, exit 0 |
 | pre-push gate | `make ci-quick` (lint + mypy + pytest) | 20s cold / 6s warm, 323 passed, coverage 99.39% |
 
 CI (`.github/workflows/ci.yml`) runs exactly that plus `validate_fixtures.py` and
