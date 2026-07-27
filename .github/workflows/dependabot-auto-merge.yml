@@ -28,11 +28,7 @@ jobs:
         # is not permitted to approve pull requests"), which previously failed this job. main
         # requires 0 approving reviews and only the CI status checks, so `--auto` completes
         # the merge as soon as those checks are green (and never merges a red PR).
-        #
-        # `--merge`, not `--squash`: squash merging is disabled on this repository
-        # (measured 2026-07-27: `allow_squash_merge: false`), so `--squash` could only
-        # ever fail the job. A merge commit also preserves the original SHAs.
-        run: gh pr merge --auto --merge "$PR_URL"
+        run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
