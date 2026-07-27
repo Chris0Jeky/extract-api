@@ -96,9 +96,3 @@ open issues (#4-#13) for the tracked follow-ups.
 - Add a doc type beyond `invoice` + `uk_job_posting` in v1.
 - Commit secrets (env refs only; document in `.env.example`).
 - Put an em dash anywhere in the repo.
-
-## Repo facts
-
-- Remote: `github.com/Chris0Jeky/extract-api` exists and is authed (an earlier
-  bootstrap note said no remote was set; corrected here).
-- Kickoff work is on branch `chore/kickoff`. Conventional commits.

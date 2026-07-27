@@ -1,6 +1,6 @@
 {
   "tier": 2,
-  "name": "daily driver",
+  "name": "daily-driver",
   "authority": { "push": "free", "merge": "free" },
   "flags": { "sensitive_data": false, "wave_mode": false, "dormant_production": false },
   "model_routing": { "harness_and_review": "top", "slices": "mid", "maintenance": "cheap" },
