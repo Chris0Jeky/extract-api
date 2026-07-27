@@ -14,7 +14,8 @@ they exist, carry "Numbers pending: measured, not promised."
 proving checks. Review and merge policy lives once, in `~/.claude/CLAUDE.md` (the
 twelve laws, auto-injected); do not restate it here. `AGENTS.md` holds the
 Definition of Done and the repo review lenses; `tasks/BACKLOG.md` is both the task
-list and the human-action file (only Chris ticks its human-blocked items).
+list and the human-action file (only Chris ticks its human-blocked items);
+`docs/STATUS.md` is the narrative handoff (check its date before trusting it).
 
 ## Map
 
