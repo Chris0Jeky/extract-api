@@ -8,9 +8,11 @@ Positioning line for every README / title / CV line: "I make LLM systems cheap,
 reliable, and provably valuable in production." Lead with measured numbers; until
 they exist, carry "Numbers pending: measured, not promised."
 
-`AGENTS.md` is the rulebook (Review Policy, Definition of Done, the 5-part merge
-gate). This file is orientation, commands, and locked decisions. Read both before
-changing code.
+`AGENTS.md` is the rulebook (Definition of Done, work protocol, security
+baseline). Review and merge policy lives once, globally: the twelve laws in
+`~/.claude/CLAUDE.md` plus agent-harness `BLUEPRINT.md` section 1; this repo is
+**T2** (`.agent-harness/tier.json`) - push and merge free on green proving
+checks. This file is orientation, commands, and locked decisions.
 
 ## Commands
 
@@ -33,7 +35,8 @@ On Windows pass the venv interpreter, e.g. `make PYTHON=.venv/Scripts/python tes
 ## Session protocol
 
 1. Read this file, `AGENTS.md`, and `tasks/BACKLOG.md`.
-2. State the next unblocked task and wait for the go.
+2. State the next unblocked task and start it (global law 6: batch true blockers
+   into one question, otherwise proceed on a named assumption).
 3. Work one safe slice (`.claude/skills/safe-slice`); small conventional commits
    (`<area>: <imperative summary>`); behavior changes ship with tests.
 4. End every session with a report: done / decisions needed / next unblocked
@@ -93,7 +96,6 @@ open issues (#4-#13) for the tracked follow-ups.
 - Add a doc type beyond `invoice` + `uk_job_posting` in v1.
 - Commit secrets (env refs only; document in `.env.example`).
 - Put an em dash anywhere in the repo.
-- Push without explicit approval, or self-merge a PR.
 
 ## Repo facts
 
