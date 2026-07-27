@@ -33,11 +33,12 @@ make ci-quick                # ruff + mypy strict + pytest
 ## Pull requests
 
 - Fill in the PR template (Summary, Type, Checklist, Risk Notes, Test plan).
-- Run `make ci-quick` and a manual check (see `docs/testing/MANUAL_VERIFICATION.md`)
-  before opening.
-- Open it ready for review, and merge it under this repo's declared gate (see
-  AGENTS.md for where that policy lives). T2: green CI plus comments triaged.
-  Merge with a merge commit; never squash.
+- Run `make ci-quick` and the narrowest seam check from the CLAUDE.md
+  proving-checks table before opening; add a manual check when the change touches
+  the serving path (`docs/testing/MANUAL_VERIFICATION.md`).
+- Review, gate, and merge-style policy lives once, in the global laws (AGENTS.md
+  names where). Squash merging is disabled on the remote, so it is not a choice
+  you have to make here.
 
 ## Running the service
 

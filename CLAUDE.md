@@ -1,96 +1,104 @@
 # CLAUDE.md - extract-api
 
-extract-api is a strict-schema LLM extraction service that turns documents into
-validated structured data and reports per-field accuracy across two providers
-(OpenAI and Anthropic). It fails loudly instead of silently coercing.
+Strict-schema LLM extraction service: document text (or PDF text) in, Pydantic v2
+strict record out, per-field accuracy reported across OpenAI and Anthropic. It
+fails loudly instead of silently coercing. ~2.7k lines of source, 323 tests, 99%
+coverage; the served paths are complete through M3 and deployable. What is left
+is human fixture labels, TWO code changes, then paid `--live` runs
+(`tasks/BACKLOG.md` T15/T17/T20/T21). The code changes are merge blockers for
+T17 and must land BEFORE any paid run (`docs/STATUS.md`): the #46 null-handling
+/ hallucination-denominator metric, and #57 item 1 (`cost_usd` in the 422 body,
+contract pre-approved). Spend on `--live` before they land and the accuracy and
+cost table is wrong and has to be rerun.
 
 Positioning line for every README / title / CV line: "I make LLM systems cheap,
 reliable, and provably valuable in production." Lead with measured numbers; until
 they exist, carry "Numbers pending: measured, not promised."
 
-`AGENTS.md` is the rulebook (Definition of Done, work protocol, security
-baseline). Review and merge policy lives once, globally: the twelve laws in
-`~/.claude/CLAUDE.md` plus agent-harness `BLUEPRINT.md` section 1; this repo is
-**T2** (`.agent-harness/tier.json`) - push and merge free on green proving
-checks. This file is orientation, commands, and locked decisions.
+**Authority: T2** (`.agent-harness/tier.json`) - push and merge free on green
+proving checks. Review and merge policy lives once, in `~/.claude/CLAUDE.md` (the
+twelve laws, auto-injected); do not restate it here. `AGENTS.md` holds the
+Definition of Done and the repo review lenses; `tasks/BACKLOG.md` is both the task
+list and the human-action file (only Chris ticks its human-blocked items);
+`docs/STATUS.md` is the narrative handoff (check its date before trusting it).
 
-## Commands
+## Map
 
-```
-uv venv --python 3.13 && uv pip install -e ".[dev]"   # setup (fallback: python3 -m venv .venv)
-make help          # list targets
-make dev           # run the API (uvicorn on :8200; /docs for OpenAPI)
-make test          # pytest + coverage (ratchet floor in pyproject)
-make typecheck     # mypy strict
-make lint          # ruff check + format check
-make ci-quick      # lint + typecheck + test (pre-push gate)
-make smoke         # deterministic offline smoke (no paid model calls)
-make fixtures-validate   # validate fixtures against their schema + labels
-make accuracy-run        # accuracy harness (pending M3)
-make test-hooks    # self-test the agent safety hooks
-```
+| Region | What lives there | Its tests |
+| --- | --- | --- |
+| `api/` | FastAPI app (`main.py` `create_app`), taxonomy rendering (`errors.py`), SQLite idempotency, budget guard, PDF/text decode (`content.py`) | `test_api`, `test_extract_endpoint`, `test_errors`, `test_idempotency`, `test_budget`, `test_content` |
+| `llm/` | The only provider seam. `client.py` (both SDKs, 467 lines), `pipeline.py:run_extraction` (validation-retry), `schema_utils`, `prompts`, `errors` | `test_llm_client`, `test_openai_client`, `test_anthropic_client`, `test_pipeline`, `test_schema_utils`, `test_prompts`, `test_import_boundary` |
+| `schemas/` | Strict `invoice.v1` + `job_posting.v1`, ISO-4217 set, `registry.py` | `test_schemas`, `test_iso4217`, `test_registry` |
+| `harness/` | Deterministic accuracy scoring (`run_accuracy.py`, `scoring.py`) and `normalize.py` | `test_run_accuracy`, `test_scoring`, `test_normalize` |
+| `fixtures/` | 10 REVIEWED invoices and ZERO job postings (`job_postings/` holds only `.gitkeep`, so a job-posting accuracy run exits with no REVIEWED input until T15); DRAFT is excluded from scoring | `test_validate_fixtures` |
+| `.claude/hooks/dispatch.py` | Vendored canonical deny floor (v1.6.20). T4-class in any repo: do not edit | `.claude/hooks/smoke_test.py` |
 
-On Windows pass the venv interpreter, e.g. `make PYTHON=.venv/Scripts/python test`.
+`llm/` never imports `api/`. Only `llm/client.py` may import a provider SDK, and
+`tests/test_import_boundary.py` enforces that repo-wide, `scripts/` included.
 
-## Session protocol
+## Proving checks (measured 2026-07-27 on Windows)
 
-1. Read this file, `AGENTS.md`, and `tasks/BACKLOG.md`.
-2. State the next unblocked task and start it (global law 6: batch true blockers
-   into one question, otherwise proceed on a named assumption).
-3. Work one safe slice (`.claude/skills/safe-slice`); small conventional commits
-   (`<area>: <imperative summary>`); behavior changes ship with tests.
-4. End every session with a report: done / decisions needed / next unblocked
-   tasks (use `.claude/skills/verify-and-sync`).
+Use the venv interpreter: `make PYTHON=.venv/Scripts/python <target>`, or call the
+module directly as below.
 
-## Locked decisions (do not re-litigate; full detail in docs/plan/PLAN.md)
+| Changed | Narrowest check | Measured |
+| --- | --- | --- |
+| anything | `python -m ruff check . && python -m ruff format --check .` | 0.5s, clean |
+| one seam | `python -m pytest --no-cov tests/test_<area>.py` | <1s |
+| any typed source | `python -m mypy` | 10s cold / 1s warm, 23 files clean |
+| endpoint, wiring, idempotency | `python scripts/smoke.py` | 0.8s: boots the app, 200 + forced 422 + replay + 409, offline |
+| fixtures or labels | `python scripts/validate_fixtures.py` | 0.3s, "10 REVIEWED, 0 DRAFT" |
+| `scripts/agent_hooks/pre_tool_use.py` | `make test-hooks` (`smoke_test.py`; it imports this hook only) | 0.2s, 23 denies + 13 allows |
+| `scripts/agent_hooks/pre_tool_use.py` or `post_tool_failure.py` | `python -m pytest --no-cov tests/test_agent_hooks.py` | 0.7s, 9 passed |
+| `scripts/agent_hooks/session_start.py` | nothing automated covers it: run `python scripts/agent_hooks/session_start.py` and read the line it prints | 0.1s, exit 0 |
+| pre-push gate | `make ci-quick` (lint + mypy + pytest) | 20s cold / 6s warm, 323 passed, coverage 99.39% |
+
+CI (`.github/workflows/ci.yml`) runs exactly that plus `validate_fixtures.py` and
+gitleaks, on Python 3.13. There is no extra lint config to satisfy.
+
+## Pitfalls (measured here, not guessed)
+
+- **A targeted pytest slice fails on coverage, not on your test.** `addopts` in
+  `pyproject.toml` carries `--cov-fail-under=70`, so `pytest tests/test_schemas.py`
+  reports 12% and exits 1 with all 27 tests passing. Add `--no-cov` to any slice;
+  drop it for the full run. The floor is a ratchet: it may rise, never fall.
+- `.claude/hooks/smoke_test.py` is the floor's own matrix: **2232 cases, 5m15s on
+  this box** (one subprocess per case). It is not in CI or `ci-quick`. Run it only
+  when the floor changes, which is T4-class work you should not be doing here.
+- `scripts/agent_hooks/pre_tool_use.py` is a **deprecated** bespoke floor, no
+  longer wired; its retirement is tracked as issue #83. Leave it alone.
+- Windows: bare `make test` picks the wrong interpreter. Pass `PYTHON=`.
+- `ruff` skips `.claude/hooks` by design (vendored canonical bytes).
+- `ORCHESTRATOR.md` at the repo root is a local-only working log, git-excluded via
+  `.git/info/exclude`. Never commit it.
+
+## Locked decisions (do not re-litigate; detail in docs/plan/PLAN.md + docs/adr/)
 
 - Two doc types only: `invoice`, `uk_job_posting`. Versioned schemas
-  (`invoice.v1`, `job_posting.v1`); version travels in request and response.
-- Pydantic v2 strict models. Validation-retry loop, max 1 retry (2 attempts
-  total); attempt 2 appends the exact failure list; second failure returns 422 with
-  the full trail. Never silently coerce. Log every retry with its error class.
-- Error taxonomy: exactly one ErrorCode per non-200. The enum in `api/errors.py` is the
-  single source of truth; new members require owner approval (do not add casually). What
-  is locked is the one-code-per-non-200 invariant, not a frozen count. Current members:
-  `validation_failed`, `low_confidence`, `unsupported_doc_type`, `provider_error`,
-  `provider_timeout`, `budget_exceeded`, `idempotency_conflict`, `internal_error` (T05),
-  `not_found` (issue #28), `method_not_allowed` (issue #28).
+  (`invoice.v1`, `job_posting.v1`); the version travels in request and response.
+- Validation-retry: max 1 retry (2 attempts). Attempt 2 appends the exact failure
+  list; a second failure returns 422 with the full trail. Never silently coerce.
+  Log every retry with its error class.
+- Exactly one `ErrorCode` per non-200. `api/errors.py` is the single source of
+  truth; new members need owner approval. The invariant is locked, not the count.
 - Idempotency: `Idempotency-Key` + `sha256(payload)`; same key+hash replays
-  (`replayed:true`, no model call); same key+different hash returns 409; TTL 24h.
-  SQLite store (ADR 0004).
-- Synchronous API only (async job queue is a non-goal).
-- Both providers behind one `llm/client.py` seam reading `LLM_BASE_URL` +
-  `LLM_API_KEY` (+ `GATEWAY_BYPASS`). No other module imports a provider SDK.
-- Structured outputs guarantee SHAPE, not SEMANTICS (ADR 0002): optionals are
-  null-unions; cross-field / normalization / value constraints are Pydantic
-  validators after parse; that is what the retry loop catches.
-- Deterministic accuracy harness; NO LLM judges anywhere. OCR is a non-goal
-  (text and pre-extracted PDF text only, via PyMuPDF).
+  (`replayed:true`, no model call); same key+different hash is 409; TTL 24h;
+  SQLite (ADR 0004).
+- Structured outputs guarantee SHAPE, not SEMANTICS (ADR 0002): cross-field and
+  value constraints are Pydantic validators after parse, which is what the retry
+  loop catches. The seam is text-based: `complete(json_schema)` returns raw JSON
+  text, re-validated by the loop. Both providers read `LLM_BASE_URL` +
+  `LLM_API_KEY` (+ `GATEWAY_BYPASS`), so the gateway move is an env change.
 - Normalization: dates to ISO 8601; money to integer minor units + ISO-4217
-  currency; a genuinely-absent field is `null`, never a guessed value.
-- Emit `cost_usd` per request from day one (gateway forward-compat).
-
-## Build state
-
-M0 + M1's T01-T03 are merged to `main` (see `docs/STATUS.md` for the full handoff):
-
-- M0 kickoff: config + pinned deps (ADR 0001), CI + governance + `.claude` harness,
-  10 DRAFT invoice fixtures.
-- T01: invoice schema completeness (committed ISO-4217 membership, cross-field
-  total/subtotal validators, explicit-null required-but-nullable keys).
-- T02: the `llm/client.py` OpenAI path (Responses API + strict json_schema,
-  `llm/errors.py`, `llm/schema_utils.py` sanitization, fail-loud, env-priced cost).
-- T03: the validation-retry pipeline (`llm/pipeline.py:run_extraction`, 1 retry).
-
-So the invoice pipeline is built end-to-end EXCEPT the HTTP wiring. NEXT: T04
-(`POST /v1/extract` happy path) + T04b (FixtureClient + offline smoke), then T05
-(taxonomy wiring) and T06 (normalize) to finish M1. See `tasks/BACKLOG.md` and the
-open issues (#4-#13) for the tracked follow-ups.
+  currency; a genuinely absent field is `null`, never a guess.
+- `cost_usd` is emitted per request, env-priced, with no silent default that could
+  mis-bill.
+- Non-goals: async job queue, OCR (text and pre-extracted PDF text only, via
+  PyMuPDF), LLM judges anywhere in the accuracy harness.
 
 ## NEVER DO
 
-- Silently coerce, or guess a value for an absent field (return `null` or fail
-  loudly).
+- Silently coerce, or guess a value for an absent field (return `null` or fail loudly).
 - Import a provider SDK outside `llm/client.py`.
 - Use an LLM judge in the accuracy harness.
 - Add a doc type beyond `invoice` + `uk_job_posting` in v1.
