@@ -35,9 +35,9 @@ make ci-quick                # ruff + mypy strict + pytest
 - Fill in the PR template (Summary, Type, Checklist, Risk Notes, Test plan).
 - Run `make ci-quick` and a manual check (see `docs/testing/MANUAL_VERIFICATION.md`)
   before opening.
-- The PR merges only under the 5-part gate (AGENTS.md): two adversarial reviews,
-  all threads resolved, green CI, aged, with a newer PR above it. Agents do not
-  self-merge.
+- Open it ready for review, and merge it under this repo's declared gate (see
+  AGENTS.md for where that policy lives). T2: green CI plus comments triaged.
+  Merge with a merge commit; never squash.
 
 ## Running the service
 

@@ -7,7 +7,8 @@ otherwise proceed with a stated, reversible assumption.
 
 - Irreversible or hard-to-reverse actions (data loss, history rewrite, deletes).
 - Anything touching credentials, secrets, or security posture.
-- Outward-facing actions (push, publish, deploy, sending to an external service).
+- Outward-facing actions beyond the declared authority (deploy, publish to a
+  third party). Pushing a branch and opening a PR are free at T2.
 - A decision that contradicts a locked decision or an ADR.
 
 ## Proceed with a stated assumption

@@ -1,0 +1,11 @@
+{
+  "tier": 2,
+  "name": "daily-driver",
+  "authority": { "push": "free", "merge": "free" },
+  "flags": { "sensitive_data": false, "wave_mode": false, "dormant_production": false },
+  "model_routing": { "harness_and_review": "top", "slices": "mid", "maintenance": "cheap" },
+  "budgets": { "standing_context_tokens": 3000, "session_baseline_tokens": null },
+  "human_todo": "tasks/BACKLOG.md",
+  "last_reviewed": "2026-07-27",
+  "notes": "T2 reference implementation (BLUEPRINT section 1 tier table). Authority is the autonomy-first T2 default: push and merge free, self-review on green proving checks (make ci-quick + make smoke), comments triaged once. No independent review round is owed at T2. Set per owner directive agent-harness#91 (gated merges flip to free) under the standing 2026-07-27 grant to flip declared authority dials on judgment; reversible by editing this one field back to human-only. human_todo alias is tasks/BACKLOG.md (grandfathered; no separate HUMAN_TODO.md). The argv-aware deny floor at .claude/hooks/dispatch.py is the authoritative guard; .claude/settings.json keeps a small permission-level deny tripwire alongside it. Floor changes are T4-class work in any repo."
+}

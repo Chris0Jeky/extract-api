@@ -4,18 +4,18 @@ Authoritative rulebook for anyone (human or agent) working in extract-api.
 `CLAUDE.md` defers to this file. Precedence: an explicit instruction from Chris >
 this file > inline code comments.
 
-## Review Policy (non-negotiable)
+## Review and merge policy
 
-1. **Post findings, then fix everything found.** Every finding at every severity
-   (critical, high, medium, low) is addressed with a fix, a commit, and
-   verification. There is no "non-blocking" category that gets silently ignored.
-2. **Inspect all existing PR comments** (human and bots: Dependabot, CodeQL,
-   gitleaks, prior review threads). Address anything unaddressed: fix it, reply
-   with invalidation evidence, or seed a tracked follow-up issue. Tech debt from
-   reviews must be zero.
-3. **Two independent adversarial reviews per PR** before merge, run as distinct
-   lenses (for example correctness, then completeness). Out-of-scope findings
-   become tracked issues, never silent drops.
+One home for this policy: the twelve global laws in `~/.claude/CLAUDE.md` and the
+tier table in agent-harness `BLUEPRINT.md` section 1 (operational detail: the
+global `review-and-ship` skill). This repo's row: **T2 daily driver** per
+`.agent-harness/tier.json` - push and merge free, self-review on green proving
+checks, comments triaged once, no independent review round owed.
+
+Repo-specific review lenses to carry into that pipeline: strict validation (never
+silently coerce), the validation-retry loop (exact failure list, max 2 attempts,
+422 trail), error-taxonomy correctness (exactly one code per non-200),
+idempotency (replay / 409 / TTL), `cost_usd` emission, provider-seam isolation.
 
 ## Definition of Done
 
@@ -26,13 +26,6 @@ this file > inline code comments.
 - Docs are updated when reality changes (README, PLAN, ADRs, this file).
 - No secrets in any file; env refs only. No em dashes anywhere.
 - Provider SDKs are imported only in `llm/client.py`.
-
-## The merge gate (5 parts)
-
-Merge a PR once: **2 independent adversarial reviews + all bot/review threads
-resolved + green CI + aged + a newer PR sits above it.** Aging is relative: merge
-the older PR, never the newest. Agents never self-merge; they leave the PR for
-Chris. Never `--delete-branch` a stacked base.
 
 ## Work protocol
 

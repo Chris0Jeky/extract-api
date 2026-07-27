@@ -2,8 +2,11 @@
 
 Half-day tasks with definitions of done (DoD), sequenced M1-M4. A task is done
 when its DoD is true and `make ci-quick` is green. Every task ships as its own PR
-under the 5-part merge gate (AGENTS.md): two adversarial reviews, all threads
-resolved, green CI, aged, with a newer PR above it. Small conventional commits.
+under this repo's declared gate (AGENTS.md names where that policy lives). Small
+conventional commits.
+
+This file is also the human-action backlog (`human_todo` in
+`.agent-harness/tier.json`); only Chris ticks its human-blocked items.
 
 ## M0 - kickoff (DONE)
 

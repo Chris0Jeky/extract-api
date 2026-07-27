@@ -27,8 +27,8 @@ These require repo-admin access in the GitHub UI. Do them once; record the date.
 - **gitleaks.** Free for personal/public repos; confirm the first run is green.
   For org use, add a `GITLEAKS_LICENSE` secret.
 
-## The merge gate (manual discipline)
+## The merge gate
 
-CI enforces "green". The rest of the 5-part gate is manual: two adversarial
-reviews, all threads resolved, the PR aged (merge the older one, never the
-newest, once a newer PR sits above it). See `AGENTS.md`.
+Declared once in `.agent-harness/tier.json` and defined by the global laws (see
+`AGENTS.md`). This repo is T2: green CI plus comments triaged once is the whole
+gate.
