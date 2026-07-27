@@ -12,6 +12,11 @@ global `review-and-ship` skill). This repo's row: **T2 daily driver** per
 `.agent-harness/tier.json` - push and merge free, self-review on green proving
 checks, comments triaged once, no independent review round owed.
 
+Repo-specific review lenses to carry into that pipeline: strict validation (never
+silently coerce), the validation-retry loop (exact failure list, max 2 attempts,
+422 trail), error-taxonomy correctness (exactly one code per non-200),
+idempotency (replay / 409 / TTL), `cost_usd` emission, provider-seam isolation.
+
 ## Definition of Done
 
 - Behavior changes ship with tests (unit/integration as appropriate). Handle
