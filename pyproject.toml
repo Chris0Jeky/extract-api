@@ -67,5 +67,5 @@ follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q --cov=api --cov=schemas --cov=llm --cov=harness --cov-report=term-missing --cov-fail-under=70"
+addopts = "-q --cov=api --cov=schemas --cov=llm --cov=harness --cov-report=term-missing --cov-fail-under=95"
 # Coverage floor is a ratchet: it may rise, never fall (see docs/CONTRIBUTING.md).
