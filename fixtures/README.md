@@ -48,7 +48,16 @@ One JSON file per fixture, under `fixtures/invoices/` or `fixtures/job_postings/
 `expected` label validates against the strict schema for (doc_type,
 schema_version).
 
-## Current state (M0)
+## Current state
 
-10 DRAFT invoice fixtures are seeded for Chris to review. They are agent-drafted
-and must not be presented as ground truth until cleared to REVIEWED.
+There are 10 REVIEWED invoice fixtures and 0 job-posting fixtures. The
+`fixtures/job_postings/` directory contains only `.gitkeep`; new human-reviewed
+labels are still needed for future T15 fixtures before they can be scored.
+
+### Total-only invoice convention
+
+For `invoice_0007` and `invoice_0008`, the source states only a total. Because
+invoice.v1 cannot represent a null subtotal (#35), these labels set
+`subtotal_minor=total_minor`. This is a scoring convention, not an inferred
+subtotal, and deliberately differs from a back-calculated ex-VAT subtotal. Do
+not infer line items.

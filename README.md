@@ -37,17 +37,28 @@ Body: {
   "meta": { "provider", "model", "schema_version", "attempts", "replayed",
             "field_confidence", "cost_usd", "latency_ms" } }
 
-422 Unprocessable Entity:
-{ "error": "validation_failed", "attempts": 2,
-  "failures": [ { "field", "constraint", "model_output" } ] }
+422 Unprocessable Entity (terminal provider-validation retry):
+{ "error": "validation_failed",
+  "detail": "extraction failed strict validation after 2 attempt(s)",
+  "attempts": 2,
+  "trail": [
+    [ { "loc", "type", "msg" } ],
+    [ { "loc", "type", "msg" } ]
+  ] }
+
+422 Unprocessable Entity (pre-request validation):
+{ "error": "validation_failed", "detail": "request validation failed" }
+// Malformed requests and empty or oversized content fail before any provider call.
+// The terminal provider-validation response does not include cost_usd yet (#57).
 
 409 Conflict:
 { "error": "idempotency_conflict" }   // same key, different payload hash
 ```
 
 Idempotency: `Idempotency-Key` + `sha256(payload)` is stored with the response.
-Same key + same hash replays the stored response with no model call
-(`replayed: true` in meta); same key + different hash is a 409; TTL 24h.
+For a successful response, same key + same hash replays the stored response with
+`meta.replayed: true`, preserves the original `meta.cost_usd`, and makes no provider
+call or new provider spend. Same key + different hash is a 409; TTL 24h.
 
 `field_confidence` is a presence-only **heuristic** (1.0 for a present value, 0.0 for an
 explicit null), not a calibrated probability. The README will say so wherever the
