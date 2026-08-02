@@ -1,8 +1,9 @@
 """Resolve request content to the text the extraction pipeline consumes.
 
-`content_format="text"` passes the content through unchanged. `content_format="pdf_base64"`
-decodes a base64 PDF and extracts its embedded text via PyMuPDF. OCR is a non-goal, so a
-scanned/image PDF (no extractable text) fails loud rather than yielding an empty record.
+`content_format="text"` passes content through after enforcing the text-size cap.
+`content_format="pdf_base64"` decodes a base64 PDF and extracts its embedded text via
+PyMuPDF. OCR is a non-goal, so a scanned/image PDF (no extractable text) fails loud rather
+than yielding an empty record.
 Every malformed-input case (bad base64, oversized, corrupt/non-PDF, no text) raises
 `validation_failed` so the client gets a clear 422, never a 500 or a silent empty extract.
 """
@@ -26,10 +27,19 @@ _MAX_TEXT_CHARS = 4 * 1024 * 1024
 
 
 def resolve_content(request: ExtractRequest) -> str:
-    """Return the text to extract from: passthrough for text, decoded text for a PDF."""
+    """Return capped request text, or decoded and capped text extracted from a PDF."""
     if request.content_format == "text":
+        _check_text_limit(request.content, source="text")
         return request.content
     return extract_pdf_text(request.content)
+
+
+def _check_text_limit(text: str, *, source: str) -> None:
+    if len(text) > _MAX_TEXT_CHARS:
+        raise ExtractError(
+            ErrorCode.validation_failed,
+            detail=f"{source} content exceeds the {_MAX_TEXT_CHARS}-char limit",
+        )
 
 
 def extract_pdf_text(content_b64: str) -> str:
