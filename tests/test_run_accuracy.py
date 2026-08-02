@@ -91,6 +91,62 @@ def test_run_accuracy_perfect_predictor_is_100pct():
     assert report.cost_usd_total == pytest.approx(0.01)
 
 
+def test_run_accuracy_preflights_all_fixtures_before_predictor_calls():
+    first = {**_fixture("first"), "fixture_id": "first"}
+    later = {
+        **_fixture("later"),
+        "fixture_id": "later",
+        "expected": {key: value for key, value in _BASE.items() if key != "total_minor"},
+    }
+    calls: list[str] = []
+
+    def predict(fx):
+        calls.append(str(fx["content"]))
+        return Prediction(fx["expected"], 0.01, 1.0, "openai")
+
+    with pytest.raises(ValueError, match=r"later: expected label fails invoice\.v1"):
+        run_accuracy("invoice", "openai", predict, fixtures=[first, later])
+    assert calls == []
+
+
+def test_run_accuracy_preflights_predictor_fields_before_later_paid_call():
+    first = {**_fixture("first"), "fixture_id": "first"}
+    later = {**_fixture("later"), "fixture_id": "later"}
+    later.pop("content")
+    calls: list[str] = []
+
+    def predict(fx):
+        calls.append(str(fx["content"]))
+        return Prediction(fx["expected"], 0.01, 1.0, "openai")
+
+    with pytest.raises(ValueError, match="later: missing content"):
+        run_accuracy("invoice", "openai", predict, fixtures=[first, later])
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("change", "message"),
+    [
+        (lambda fx: fx.pop("doc_type"), "missing doc_type"),
+        (
+            lambda fx: fx.update(doc_type="uk_job_posting"),
+            "doc_type .* does not match selected doc_type 'invoice'",
+        ),
+        (lambda fx: fx.update(content="  "), "content must be a non-empty string"),
+        (lambda fx: fx.pop("schema_version"), "missing schema_version"),
+        (lambda fx: fx.update(schema_version=1), "schema_version must be a non-empty string"),
+        (lambda fx: fx.pop("expected"), "missing expected label"),
+    ],
+)
+def test_run_accuracy_preflight_rejects_malformed_fixture_metadata(change, message):
+    fixture = {**_fixture(), "fixture_id": "bad-fixture"}
+    change(fixture)
+    with pytest.raises(ValueError, match=f"bad-fixture: {message}"):
+        run_accuracy(
+            "invoice", "openai", lambda fx: pytest.fail("predictor called"), fixtures=[fixture]
+        )
+
+
 def test_run_accuracy_counts_a_mismatch():
     def predict(fx):
         return Prediction({**fx["expected"], "invoice_number": "WRONG"}, 0.0, 1.0, "openai")

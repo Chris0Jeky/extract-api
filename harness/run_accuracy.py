@@ -21,10 +21,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from harness.scoring import AccuracyReport, aggregate, render_markdown, score_failed, score_record
-from schemas.registry import resolve
+from schemas.registry import UnknownSchema, resolve
 
 if TYPE_CHECKING:
     import httpx  # type-only: the runtime import stays local to live_predictor (--live only)
@@ -86,6 +86,69 @@ _FIXTURES_ROOT = Path(__file__).resolve().parent.parent / "fixtures"
 _CONTROL_PLANE_CODES = frozenset({"budget_exceeded", "idempotency_conflict"})
 
 
+def _preflight_fixtures(
+    doc_type: str, fixtures: list[dict[str, object]]
+) -> list[tuple[dict[str, object], type[BaseModel], dict[str, object]]]:
+    """Resolve and validate every fixture before any predictor call.
+
+    Accuracy runs may make paid provider calls, so fixture setup errors must be found for the
+    complete selected corpus up front.  Schema versions are intentionally type-checked instead
+    of coerced: a non-string value is malformed fixture data, not an alternate spelling of a
+    registered version.
+    """
+    prepared: list[tuple[dict[str, object], type[BaseModel], dict[str, object]]] = []
+    for index, fx in enumerate(fixtures, start=1):
+        fixture_id = fx.get("fixture_id")
+        fixture_ref = (
+            fixture_id if isinstance(fixture_id, str) and fixture_id else f"fixture #{index}"
+        )
+        if "doc_type" not in fx:
+            raise ValueError(f"{fixture_ref}: missing doc_type")
+        fixture_doc_type = fx["doc_type"]
+        if not isinstance(fixture_doc_type, str) or not fixture_doc_type.strip():
+            raise ValueError(f"{fixture_ref}: doc_type must be a non-empty string")
+        if fixture_doc_type != doc_type:
+            raise ValueError(
+                f"{fixture_ref}: doc_type {fixture_doc_type!r} does not match selected "
+                f"doc_type {doc_type!r}"
+            )
+        if "schema_version" not in fx:
+            raise ValueError(f"{fixture_ref}: missing schema_version")
+        schema_version = fx["schema_version"]
+        if not isinstance(schema_version, str) or not schema_version:
+            raise ValueError(f"{fixture_ref}: schema_version must be a non-empty string")
+        try:
+            model_cls = resolve(doc_type, schema_version)
+        except UnknownSchema as exc:
+            raise ValueError(
+                f"{fixture_ref}: invalid schema_version {schema_version!r}: {exc}"
+            ) from exc
+
+        if "content" not in fx:
+            raise ValueError(f"{fixture_ref}: missing content")
+        content = fx["content"]
+        if not isinstance(content, str) or not content.strip():
+            raise ValueError(f"{fixture_ref}: content must be a non-empty string")
+        if "expected" not in fx:
+            raise ValueError(f"{fixture_ref}: missing expected label")
+        expected = fx["expected"]
+        if not isinstance(expected, dict):
+            raise ValueError(f"{fixture_ref}: expected must be a JSON object")
+        try:
+            model_cls.model_validate_json(json.dumps(expected))
+        except (ValidationError, TypeError, ValueError) as exc:
+            detail = (
+                f"{exc.error_count()} validation error(s)"
+                if isinstance(exc, ValidationError)
+                else str(exc)
+            )
+            raise ValueError(
+                f"{fixture_ref}: expected label fails {doc_type}.{schema_version}: {detail}"
+            ) from exc
+        prepared.append((fx, model_cls, expected))
+    return prepared
+
+
 def _response_error_code(resp: httpx.Response) -> str | None:
     """The taxonomy `error` code from a non-2xx body, or None if it is not a coded error.
 
@@ -142,18 +205,14 @@ def run_accuracy(
 ) -> AccuracyReport:
     """Score `provider` over `doc_type`'s REVIEWED fixtures (or an injected fixture list)."""
     items = load_reviewed_fixtures(doc_type) if fixtures is None else fixtures
+    prepared = _preflight_fixtures(doc_type, items)
     scored = []
     costs: list[float] = []
     latencies: list[float] = []
     failures = 0
     skipped = 0
     resolved_provider = provider  # fallback if every fixture fails (no server label to read)
-    for fx in items:
-        expected = fx["expected"]
-        assert isinstance(expected, dict)
-        # Resolve each fixture against ITS OWN schema_version, so a mixed-version corpus is
-        # scored correctly rather than all canonicalized against one run-level model.
-        model_cls = resolve(doc_type, str(fx["schema_version"]))
+    for fx, model_cls, expected in prepared:
         try:
             prediction = predict(fx)
         except ControlPlaneRejection:
