@@ -1,6 +1,9 @@
 version: 2
 updates:
-  - package-ecosystem: pip
+  # uv (not pip): updates pyproject ranges AND uv.lock together, so a dependency
+  # bump keeps the frozen CI install (uv sync --locked) green. A pip-ecosystem bump
+  # would touch only pyproject and leave the lock drifted, failing CI.
+  - package-ecosystem: uv
     directory: "/"
     schedule:
       interval: weekly
