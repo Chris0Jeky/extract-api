@@ -24,6 +24,7 @@ dev = [
     "pytest-cov>=6,<8",
     "ruff==0.16.0",
     "mypy==2.3.0",
+    "httpx2==2.7.0",
 ]
 
 [build-system]
