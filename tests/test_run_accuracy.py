@@ -157,14 +157,14 @@ def test_run_accuracy_counts_a_mismatch():
     assert report.overall_exact_match_rate < 1.0
 
 
-def test_run_accuracy_records_a_failed_extraction_and_continues():
-    fixtures = [_fixture("a"), _fixture("b")]
+def test_run_accuracy_records_a_failed_extraction_and_continues(capsys):
+    fixtures = [{**_fixture("a"), "fixture_id": "failed-invoice"}, _fixture("b")]
     seen = {"n": 0}
 
     def predict(fx):
         seen["n"] += 1
         if seen["n"] == 1:
-            raise PredictionFailed("first fixture failed")
+            raise PredictionFailed("provider timeout")
         return Prediction(fx["expected"], 0.02, 8.0, "openai")
 
     report = run_accuracy("invoice", "openai", predict, fixtures=fixtures)
@@ -173,18 +173,21 @@ def test_run_accuracy_records_a_failed_extraction_and_continues():
     # the failed fixture's present fields counted as missed, so overall is below 100%
     assert 0.0 < report.overall_exact_match_rate < 1.0
     assert report.cost_usd_total == pytest.approx(0.02)  # only the successful call's cost
+    assert capsys.readouterr().err == (
+        "accuracy: fixture failed-invoice: prediction failed: provider timeout\n"
+    )
 
 
-def test_run_accuracy_skips_control_plane_rejection_out_of_denominator():
+def test_run_accuracy_skips_control_plane_rejection_out_of_denominator(capsys):
     # A budget/idempotency rejection never reached the model, so the fixture is skipped, NOT
     # scored as all-missed; it must not appear in the per-field denominator (issue #52).
-    fixtures = [_fixture("a"), _fixture("b")]
+    fixtures = [{**_fixture("a"), "fixture_id": "skipped-invoice"}, _fixture("b")]
     seen = {"n": 0}
 
     def predict(fx):
         seen["n"] += 1
         if seen["n"] == 1:
-            raise ControlPlaneRejection("budget exhausted")
+            raise ControlPlaneRejection("budget cap reached")
         return Prediction(fx["expected"], 0.02, 8.0, "openai")
 
     report = run_accuracy("invoice", "openai", predict, fixtures=fixtures)
@@ -193,6 +196,9 @@ def test_run_accuracy_skips_control_plane_rejection_out_of_denominator():
     assert report.n_fixtures == 1  # only the scored fixture is in the denominator
     assert report.overall_exact_match_rate == 1.0  # the one scored fixture was perfect
     assert report.cost_usd_total == pytest.approx(0.02)  # the skipped fixture contributes no cost
+    assert capsys.readouterr().err == (
+        "accuracy: fixture skipped-invoice: skipped (control-plane): budget cap reached\n"
+    )
 
 
 def test_run_accuracy_skip_is_distinct_from_failure():
