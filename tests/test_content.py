@@ -42,6 +42,22 @@ def test_resolve_content_passes_text_through():
     assert resolve_content(req) == "raw text here"
 
 
+def test_resolve_content_accepts_text_at_limit(monkeypatch):
+    monkeypatch.setattr("api.content._MAX_TEXT_CHARS", 4)
+    req = ExtractRequest(doc_type="invoice", content="abcd")
+    assert resolve_content(req) == "abcd"
+
+
+def test_resolve_content_rejects_text_over_limit(monkeypatch):
+    monkeypatch.setattr("api.content._MAX_TEXT_CHARS", 4)
+    req = ExtractRequest(doc_type="invoice", content="abcde")
+    with pytest.raises(ExtractError) as exc:
+        resolve_content(req)
+    assert exc.value.code.value == "validation_failed"
+    assert "text" in exc.value.detail.lower()
+    assert "char" in exc.value.detail.lower()
+
+
 def test_resolve_content_extracts_pdf():
     req = ExtractRequest(
         doc_type="invoice", content=_pdf_b64("PDF body text"), content_format="pdf_base64"

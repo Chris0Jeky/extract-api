@@ -255,6 +255,19 @@ def test_empty_content_is_rejected_before_any_provider_call(monkeypatch):
     assert fake.calls == 0
 
 
+def test_oversized_text_returns_422_before_any_provider_call(monkeypatch):
+    monkeypatch.setattr("api.content._MAX_TEXT_CHARS", 4)
+    fake = _FakeClient([VALID_JSON])
+    client = _client_with(monkeypatch, fake)
+    resp = _post(client, content="abcde", content_format="text")
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["error"] == "validation_failed"
+    assert "text" in body["detail"].lower()
+    assert "char" in body["detail"].lower()
+    assert fake.calls == 0
+
+
 def test_missing_required_field_renders_validation_failed():
     # A missing required field is a RequestValidationError -> validation_failed via the
     # T05 handler, not FastAPI's default 422 body. Validation runs before the handler.
