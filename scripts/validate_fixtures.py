@@ -60,8 +60,22 @@ def validate_file(path: Path) -> list[str]:
         errs.append(f"{path.name}: expected must be a JSON object")
         return errs
 
+    # resolve() indexes a dict keyed by strings; an unhashable metadata value (for example a
+    # list) would otherwise raise TypeError and abort the corpus scan instead of reporting this
+    # fixture. Keep the validator strict: malformed values are errors, never coerced.
+    doc_type = data["doc_type"]
+    schema_version = data["schema_version"]
+    valid_doc_type = isinstance(doc_type, str) and bool(doc_type.strip())
+    valid_schema_version = isinstance(schema_version, str) and bool(schema_version.strip())
+    if not valid_doc_type:
+        errs.append(f"{path.name}: doc_type must be a non-empty string")
+    if not valid_schema_version:
+        errs.append(f"{path.name}: schema_version must be a non-empty string")
+    if not valid_doc_type or not valid_schema_version:
+        return errs
+
     try:
-        model = resolve(data["doc_type"], data["schema_version"])
+        model = resolve(doc_type, schema_version)
     except UnknownSchema as exc:
         return [*errs, f"{path.name}: {exc}"]
 
@@ -69,7 +83,7 @@ def validate_file(path: Path) -> list[str]:
         model.model_validate_json(json.dumps(data["expected"]))
     except ValidationError as exc:
         errs.append(
-            f"{path.name}: expected label fails {data['doc_type']}.{data['schema_version']}: "
+            f"{path.name}: expected label fails {doc_type}.{schema_version}: "
             f"{exc.error_count()} error(s)"
         )
 

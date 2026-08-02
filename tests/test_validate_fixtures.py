@@ -116,6 +116,20 @@ def test_non_string_metadata_reported_not_crashed(tmp_path):
     assert any("label_status must be one of" in e for e in errs)
 
 
+def test_list_doc_type_reports_error_not_type_error(tmp_path):
+    path = tmp_path / "list_doc_type.json"
+    path.write_text(json.dumps(_fixture(doc_type=["invoice"])), encoding="utf-8")
+    errs = validate_fixtures.validate_file(path)
+    assert errs == [f"{path.name}: doc_type must be a non-empty string"]
+
+
+def test_list_schema_version_reports_error_not_type_error(tmp_path):
+    path = tmp_path / "list_schema_version.json"
+    path.write_text(json.dumps(_fixture(schema_version=["v1"])), encoding="utf-8")
+    errs = validate_fixtures.validate_file(path)
+    assert errs == [f"{path.name}: schema_version must be a non-empty string"]
+
+
 # --- corpus-wide placement invariant (issue #63) ---
 
 
