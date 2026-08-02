@@ -215,14 +215,21 @@ def run_accuracy(
     for fx, model_cls, expected in prepared:
         try:
             prediction = predict(fx)
-        except ControlPlaneRejection:
+        except ControlPlaneRejection as exc:
             # The fixture never reached the model (a budget/idempotency guard rejected it). It
             # is not an accuracy signal, so keep it OUT of the per-field denominator (issue #52).
+            fixture_id = fx.get("fixture_id", "?")
+            print(
+                f"accuracy: fixture {fixture_id}: skipped (control-plane): {exc}",
+                file=sys.stderr,
+            )
             skipped += 1
             continue
-        except PredictionFailed:
+        except PredictionFailed as exc:
             # A failed extraction is the accuracy signal: count every field as missed and
             # keep going, so one hard (or transiently-failing) fixture cannot erase the run.
+            fixture_id = fx.get("fixture_id", "?")
+            print(f"accuracy: fixture {fixture_id}: prediction failed: {exc}", file=sys.stderr)
             scored.append(score_failed(model_cls, expected))
             failures += 1
             continue
