@@ -8,7 +8,13 @@ services:
     ports:
       - "8200:8200"
     env_file:
-      - .env
+      - ${EXTRACT_API_ENV_FILE:-.env}
+    environment:
+      # The compose volume owns durable replay state. This intentionally overrides the
+      # relative local-host default in .env so a non-root container never writes /app.
+      IDEMPOTENCY_DB_PATH: /data/idempotency.sqlite
+    volumes:
+      - idempotency-data:/data
     restart: unless-stopped
     healthcheck:
       test:
@@ -19,3 +25,6 @@ services:
       interval: 30s
       timeout: 3s
       retries: 3
+
+volumes:
+  idempotency-data:

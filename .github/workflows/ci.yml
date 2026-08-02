@@ -54,7 +54,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build runtime image
-        run: docker build --tag extract-api:ci .
+        run: docker build --tag extract-api:0.1.0 .
+      - name: Docker persistence smoke
+        run: python scripts/docker_persistence_smoke.py --image extract-api:0.1.0
 
   secret-scan:
     name: secret scan (gitleaks)

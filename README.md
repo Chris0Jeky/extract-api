@@ -127,3 +127,9 @@ set `LLM_PROVIDER_MODE=fixture` + `FIXTURE_CANNED_TEXT=<canned model output>` in
 container serves `/v1/extract` deterministically offline. `FIXTURE_CANNED_TEXT` must be a JSON
 string that validates against the requested `doc_type`/`schema_version` (e.g. a valid `invoice.v1`
 object); arbitrary text will fail the validation-retry loop and return a 422, by design.
+
+The image runs as an unprivileged user and defaults `IDEMPOTENCY_DB_PATH` to
+`/data/idempotency.sqlite`. Compose mounts its named `idempotency-data` volume at `/data` and
+forces the same path over the relative local default in `.env`, so replay records survive container
+replacement or recreation while that volume is retained. `docker compose down --volumes`
+intentionally destroys those replay records.
