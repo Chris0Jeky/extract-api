@@ -5,6 +5,7 @@ All offline."""
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import httpx
 import pytest
@@ -426,6 +427,72 @@ def test_main_live_renders_and_writes_report(tmp_path, monkeypatch, capsys):
     assert "### invoice / openai" in capsys.readouterr().out
     assert out.exists()
     assert "overall exact-match: 100.0%" in out.read_text(encoding="utf-8")
+
+
+def test_main_live_creates_nested_output_parent_before_writing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("harness.run_accuracy._FIXTURES_ROOT", tmp_path)
+    _write(tmp_path / "invoices", "a.json", "REVIEWED")
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _resp(200, _ok_body()))
+    out = tmp_path / "nested" / "reports" / "report.md"
+
+    assert main(["--doc-type", "invoice", "--live", "--out", str(out)]) == 0
+    assert out.read_text(encoding="utf-8").endswith("\n")
+    assert out.parent.is_dir()
+    assert "### invoice / openai" in capsys.readouterr().out
+
+
+def test_main_live_output_file_parent_failure_precedes_predictor_call(tmp_path, monkeypatch):
+    monkeypatch.setattr("harness.run_accuracy._FIXTURES_ROOT", tmp_path)
+    _write(tmp_path / "invoices", "a.json", "REVIEWED")
+    parent_file = tmp_path / "not-a-directory"
+    parent_file.write_text("occupied", encoding="utf-8")
+    calls = {"n": 0}
+
+    def fake_post(*args, **kwargs):
+        calls["n"] += 1
+        return _resp(200, _ok_body())
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    with pytest.raises(FileExistsError):
+        main(["--doc-type", "invoice", "--live", "--out", str(parent_file / "report.md")])
+    assert calls["n"] == 0
+
+
+def test_main_live_write_failure_keeps_report_on_stdout(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("harness.run_accuracy._FIXTURES_ROOT", tmp_path)
+    _write(tmp_path / "invoices", "a.json", "REVIEWED")
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _resp(200, _ok_body()))
+    out = tmp_path / "report.md"
+
+    def fail_write_text(self, data, *, encoding=None):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Path, "write_text", fail_write_text)
+    with pytest.raises(OSError, match="disk full"):
+        main(["--doc-type", "invoice", "--live", "--out", str(out)])
+    expected_lines = [
+        "### invoice / openai",
+        "",
+        "- fixtures scored: 1 (0 failed extraction(s))",
+        "- overall exact-match: 100.0% (11/11)",
+        "- hallucinated-field rate: 0.0% (0/11)",
+        "- cost: $0.0100 | latency p50/p95 (successful): 12/12 ms",
+        "",
+        "| field | exact-match | mismatch | missed | hallucinated |",
+        "| --- | --- | --- | --- | --- |",
+        "| `buyer_name` | 100% (1/1) | 0 | 0 | 0 |",
+        "| `currency` | 100% (1/1) | 0 | 0 | 0 |",
+        "| `due_date` | 100% (1/1) | 0 | 0 | 0 |",
+        "| `invoice_number` | 100% (1/1) | 0 | 0 | 0 |",
+        "| `issue_date` | 100% (1/1) | 0 | 0 | 0 |",
+        "| `line_items` | 100% (1/1) | 0 | 0 | 0 |",
+        "| `subtotal_minor` | 100% (1/1) | 0 | 0 | 0 |",
+        "| `tax_minor` | 100% (1/1) | 0 | 0 | 0 |",
+        "| `total_minor` | 100% (1/1) | 0 | 0 | 0 |",
+        "| `vendor_name` | 100% (1/1) | 0 | 0 | 0 |",
+        "| `vendor_tax_id` | 100% (1/1) | 0 | 0 | 0 |",
+    ]
+    assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
 @pytest.mark.parametrize("bad", ["0", "-5", "nan", "inf"])
