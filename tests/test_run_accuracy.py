@@ -501,6 +501,21 @@ def test_main_live_write_failure_keeps_report_on_stdout(tmp_path, monkeypatch, c
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 
 
+def test_main_live_stdout_failure_still_writes_report(tmp_path, monkeypatch):
+    monkeypatch.setattr("harness.run_accuracy._FIXTURES_ROOT", tmp_path)
+    _write(tmp_path / "invoices", "a.json", "REVIEWED")
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _resp(200, _ok_body()))
+    out = tmp_path / "report.md"
+
+    def fail_print(*args, **kwargs):
+        raise OSError("stdout closed")
+
+    monkeypatch.setattr("builtins.print", fail_print)
+    with pytest.raises(OSError, match="stdout closed"):
+        main(["--doc-type", "invoice", "--live", "--out", str(out)])
+    assert "overall exact-match: 100.0% (11/11)" in out.read_text(encoding="utf-8")
+
+
 @pytest.mark.parametrize("bad", ["0", "-5", "nan", "inf"])
 def test_main_rejects_non_positive_or_non_finite_timeout(bad):
     # A non-positive OR non-finite --live timeout is nonsensical; fail loud rather than let it

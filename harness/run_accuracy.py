@@ -368,9 +368,23 @@ def main(argv: list[str] | None = None) -> int:
         live_predictor(args.base_url, args.provider, timeout=args.timeout),
     )
     markdown = render_markdown(report)
-    print(markdown)
+    stdout_error: Exception | None = None
+    try:
+        print(markdown)
+    except Exception as exc:
+        # A closed or redirected stdout must not prevent the requested report file from
+        # being written.  Re-raise after the file sink is attempted so the CLI still fails
+        # loudly instead of hiding the output error.
+        stdout_error = exc
     if args.out:
-        Path(args.out).write_text(markdown + "\n", encoding="utf-8")
+        try:
+            Path(args.out).write_text(markdown + "\n", encoding="utf-8")
+        except Exception as exc:
+            if stdout_error is not None:
+                raise exc from stdout_error
+            raise
+    if stdout_error is not None:
+        raise stdout_error
     return 0
 
 
