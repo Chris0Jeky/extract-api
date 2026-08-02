@@ -353,15 +353,17 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    if args.out:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     report = run_accuracy(
         args.doc_type,
         args.provider,
         live_predictor(args.base_url, args.provider, timeout=args.timeout),
     )
     markdown = render_markdown(report)
+    print(markdown)
     if args.out:
         Path(args.out).write_text(markdown + "\n", encoding="utf-8")
-    print(markdown)
     return 0
 
 
