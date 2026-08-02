@@ -1,6 +1,6 @@
 # ADR 0001: Pinned dependency versions and runtime
 
-- Status: ACCEPTED (2026-06-13); lockfile hardening landed 2026-07-03 (issue #6).
+- Status: ACCEPTED (2026-06-13). This amendment records the lockfile hardening for issue #6.
 - Deciders: Chris.
 
 ## Context
