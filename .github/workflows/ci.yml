@@ -44,6 +44,17 @@ jobs:
         run: uv run --no-sync pytest
       - name: Fixtures validate
         run: uv run --no-sync python scripts/validate_fixtures.py
+      - name: Offline smoke
+        run: uv run --no-sync python scripts/smoke.py
+
+  docker-build:
+    name: Docker image build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build runtime image
+        run: docker build --tag extract-api:ci .
 
   secret-scan:
     name: secret scan (gitleaks)
