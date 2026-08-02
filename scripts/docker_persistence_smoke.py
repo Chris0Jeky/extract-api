@@ -1,4 +1,4 @@
-"""Exercise the Docker image's non-root and durable idempotency contract offline."""
+"""Exercise the Docker image's locked runtime, non-root, and durable idempotency contracts."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 import uuid
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -18,6 +19,7 @@ from urllib.request import Request, urlopen
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _FIXTURE = _REPO_ROOT / "fixtures" / "invoices" / "invoice_0001.json"
 _READY_TIMEOUT_S = 30.0
+_RUNTIME_PACKAGES = ("fastapi", "pydantic", "openai", "anthropic", "pymupdf", "uvicorn")
 
 
 def _run(
@@ -116,6 +118,86 @@ def _assert_image_user(image: str) -> None:
         raise RuntimeError(f"Docker image must configure a non-root user, got {user!r}")
 
 
+def _locked_runtime_versions() -> dict[str, str]:
+    with (_REPO_ROOT / "uv.lock").open("rb") as lock_file:
+        lock = tomllib.load(lock_file)
+    packages = lock.get("package")
+    if not isinstance(packages, list):
+        raise RuntimeError("uv.lock has no package list")
+
+    versions: dict[str, str] = {}
+    for package in packages:
+        if not isinstance(package, dict):
+            continue
+        name = package.get("name")
+        version = package.get("version")
+        if isinstance(name, str) and isinstance(version, str):
+            versions[name] = version
+
+    expected: dict[str, str] = {}
+    for package in _RUNTIME_PACKAGES:
+        version = versions.get(package)
+        if version is None:
+            raise RuntimeError(f"uv.lock has no version for runtime package {package!r}")
+        expected[package] = version
+    return expected
+
+
+def _assert_locked_runtime(image: str) -> None:
+    dockerfile = (_REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    required_dockerfile_fragments = (
+        "FROM ghcr.io/astral-sh/uv:0.11.21 AS uv",
+        "COPY pyproject.toml uv.lock README.md ./",
+        "UV_PYTHON_DOWNLOADS=0",
+        "uv sync --locked --no-dev --no-editable --python 3.13",
+    )
+    missing = [fragment for fragment in required_dockerfile_fragments if fragment not in dockerfile]
+    if missing or "pip install" in dockerfile:
+        raise RuntimeError(
+            f"Dockerfile must install the locked non-dev runtime with uv; missing={missing!r}"
+        )
+
+    expected_versions = _locked_runtime_versions()
+    probe = (
+        "import importlib.metadata as metadata, json, sys; "
+        f"names={_RUNTIME_PACKAGES!r}; "
+        "result={'python': f'{sys.version_info.major}.{sys.version_info.minor}', "
+        "'versions': {name: metadata.version(name) for name in names}, "
+        "'pytest_installed': any((distribution.metadata['Name'] or '').lower() == 'pytest' "
+        "for distribution in metadata.distributions())}; "
+        "print(json.dumps(result, sort_keys=True))"
+    )
+    completed = _run(
+        "docker",
+        "run",
+        "--rm",
+        "--entrypoint",
+        "python",
+        image,
+        "-c",
+        probe,
+        capture_output=True,
+    )
+    result = json.loads(completed.stdout)
+    if not isinstance(result, dict):
+        raise RuntimeError(f"runtime package probe returned an unexpected value: {result!r}")
+    if result.get("python") != "3.13":
+        raise RuntimeError(f"runtime image must use Python 3.13, got {result.get('python')!r}")
+    if result.get("pytest_installed") is not False:
+        raise RuntimeError("runtime image must not install the pytest development dependency")
+
+    installed_versions = result.get("versions")
+    if not isinstance(installed_versions, dict):
+        raise RuntimeError(f"runtime package probe has no versions object: {result!r}")
+    for package, expected in expected_versions.items():
+        installed = installed_versions.get(package)
+        if installed != expected:
+            raise RuntimeError(
+                f"runtime package {package!r} is {installed!r}, "
+                f"expected locked version {expected!r}"
+            )
+
+
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
         listener.bind(("127.0.0.1", 0))
@@ -205,6 +287,7 @@ def main() -> int:
     volume: str | None = None
     try:
         _assert_compose_contract()
+        _assert_locked_runtime(args.image)
         _assert_image_user(args.image)
         payload, valid_canned_text = _fixture_request()
         resource_suffix = uuid.uuid4().hex[:12]
@@ -255,7 +338,10 @@ def main() -> int:
     finally:
         _cleanup(container, volume)
 
-    print("DOCKER PERSISTENCE SMOKE OK: non-root image, writable /data, replay survives recreate")
+    print(
+        "DOCKER RUNTIME SMOKE OK: locked non-dev dependencies, non-root image, "
+        "writable /data, replay survives recreate"
+    )
     return 0
 
 

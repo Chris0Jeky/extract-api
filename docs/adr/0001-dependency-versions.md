@@ -34,8 +34,10 @@ values:
 `fastapi[standard]` pulls Starlette and Uvicorn; `pydantic-core` rides with
 pydantic. A universal `uv.lock` (`requires-python >=3.12,<3.14`, resolved across
 platforms) is committed and is the reproducibility record. CI installs frozen from
-it (`uv sync --locked --extra dev`), so a lock that has drifted from pyproject fails
-CI loudly rather than resolving silently. Regenerate it with `make lock` (`uv lock`)
+it (`uv sync --locked --extra dev`), and the Docker runtime uses uv 0.11.21 with
+`uv sync --locked --no-dev --no-editable --python 3.13`. A lock that has drifted
+from pyproject therefore fails either install path loudly rather than resolving
+silently. Regenerate it with `make lock` (`uv lock`)
 after any dependency change and commit the result; Dependabot (uv ecosystem) updates
 the lock and pyproject together. The verified table above therefore records the
 original snapshot, not the current pins, which live in `uv.lock`. Plain `venv` + pip
