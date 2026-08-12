@@ -18,6 +18,8 @@ ENV UV_PYTHON_DOWNLOADS=0 \
 # --locked rejects a stale lock instead of resolving the project ranges. Runtime
 # images omit development dependencies and install the application non-editably.
 COPY pyproject.toml uv.lock README.md ./
+COPY LICENSE RELICENSING.md ./
+COPY LICENSES ./LICENSES
 COPY api ./api
 COPY schemas ./schemas
 COPY llm ./llm
