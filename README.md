@@ -135,3 +135,13 @@ The image runs as an unprivileged user and defaults `IDEMPOTENCY_DB_PATH` to
 forces the same path over the relative local default in `.env`, so replay records survive container
 replacement or recreation while that volume is retained. `docker compose down --volumes`
 intentionally destroys those replay records.
+
+## License
+
+Current releases are licensed under the GNU General Public License version 3 only
+(`GPL-3.0-only`). See `LICENSE`. Versions published before 12 August 2026 remain
+available under their existing MIT grant; see `RELICENSING.md` and `LICENSES/MIT.txt`.
+
+Dependencies and any future externally sourced fixtures retain their own terms.
+Adding real or anonymised source material requires a separate provenance and
+licence-compatibility review; it does not inherit the GPL automatically.

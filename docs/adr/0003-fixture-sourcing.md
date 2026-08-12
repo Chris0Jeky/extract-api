@@ -31,6 +31,9 @@ the normalized expected output and must be trustworthy ground truth.
   error-taxonomy frequencies meaningful.
 - The DRAFT-versus-REVIEWED gate is enforced by `fixtures-validate` and by the
   harness, which scores only REVIEWED labels.
+- A real or anonymized fixture also requires documented source provenance and a
+  licence-compatibility review before commit. External source text does not
+  inherit the repository's GPL licence merely by anonymization or inclusion.
 
 ## Labeling convention: invoice `line_items` (added 2026-07-03)
 

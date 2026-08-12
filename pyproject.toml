@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "Strict-schema LLM extraction service with validation-retry and per-field accuracy across two providers."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
-license = { text = "MIT" }
+license = "GPL-3.0-only"
+license-files = ["LICENSE", "LICENSES/*", "RELICENSING.md"]
 authors = [{ name = "Chris0Jeky" }]
 
 # Versions verified live against PyPI on 2026-06-13 (see docs/adr/0001-dependency-versions.md).

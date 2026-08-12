@@ -1,8 +1,11 @@
 # STATUS - where extract-api is
 
-Living snapshot for starting a new session strong. Last updated 2026-07-03.
+Living snapshot for starting a new session strong. Last updated 2026-08-12.
 Authoritative detail lives in `AGENTS.md` (rules), `tasks/BACKLOG.md` (tasks),
 `docs/plan/PLAN.md` + `docs/adr/` (decisions). This file is the orientation.
+
+Current and future owner-authored software is `GPL-3.0-only`; earlier MIT
+releases retain their historical grant. See `LICENSE` and `RELICENSING.md`.
 
 ## Start here (next session)
 
