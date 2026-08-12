@@ -12,10 +12,10 @@ authors = [{ name = "Chris0Jeky" }]
 dependencies = [
     "fastapi[standard]>=0.141.1,<0.142",
     "pydantic>=2.13,<3",
-    "openai>=2.50.0,<3",
+    "openai>=2.53.0,<3",
     # Floor is the verified 0.109.1 (ADR 0001): the T09 structured-output path needs the
     # Messages `output_config` parameter, which the 0.109.0 floor did not guarantee.
-    "anthropic>=0.120.2,<0.121",
+    "anthropic>=0.121.0,<0.122",
     "PyMuPDF==1.27.2.3",
 ]
 
@@ -23,9 +23,9 @@ dependencies = [
 dev = [
     "pytest==9.1.1",
     "pytest-cov>=6,<8",
-    "ruff==0.16.0",
+    "ruff==0.16.2",
     "mypy==2.3.0",
-    "httpx2==2.7.0",
+    "httpx2==2.10.0",
 ]
 
 [build-system]
