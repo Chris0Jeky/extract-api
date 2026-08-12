@@ -1,6 +1,7 @@
 # STATUS - where extract-api is
 
-Living snapshot for starting a new session strong. Last updated 2026-08-12.
+Living functional snapshot for starting a new session strong. Last updated 2026-07-03;
+the licence-only note below was added 2026-08-12 without refreshing the remaining snapshot.
 Authoritative detail lives in `AGENTS.md` (rules), `tasks/BACKLOG.md` (tasks),
 `docs/plan/PLAN.md` + `docs/adr/` (decisions). This file is the orientation.
 
