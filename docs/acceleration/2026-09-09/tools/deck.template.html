@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>extract-api | Decision studio</title>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#e9edf4;background:#11161c;--panel:#1a222b;--line:#354150;--muted:#aebccd;--accent:#88e2c0;--bg:#11161c}*{box-sizing:border-box}body{margin:0}button,input,textarea,select{font:inherit}button,select{cursor:pointer}button{border:1px solid var(--line);background:var(--panel);color:inherit;border-radius:7px;padding:10px 14px}button:hover{border-color:var(--accent)}button:disabled{opacity:.4;cursor:default}:focus-visible{outline:3px solid var(--accent);outline-offset:3px}input,textarea,select{color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:10px;width:100%}textarea{resize:vertical;min-height:110px}a{color:var(--accent)}header{border-bottom:1px solid var(--line);padding:23px 30px;display:flex;gap:22px;justify-content:space-between;align-items:center;flex-wrap:wrap}header strong{font-size:23px;letter-spacing:-.6px}header small{display:block;color:var(--muted);margin-top:5px}.actions{display:flex;gap:8px;flex-wrap:wrap}.primary{background:var(--accent);color:#10241b;border-color:var(--accent);font-weight:650}.layout{display:grid;grid-template-columns:310px minmax(0,1fr);max-width:1450px;margin:auto}aside{padding:26px 20px;border-right:1px solid var(--line)}main{padding:38px 46px 50px;min-width:0}h1{font-size:clamp(26px,3vw,39px);line-height:1.2;letter-spacing:-1px;margin:14px 0}h2{font-size:19px;margin-top:0}p{line-height:1.6}small,.muted{color:var(--muted)}.eyebrow{font-size:12px;font-weight:650;letter-spacing:1.3px;text-transform:uppercase;color:var(--accent)}.progress{height:6px;background:var(--line);border-radius:8px;margin:12px 0 22px;overflow:hidden}.progress>div{height:100%;background:var(--accent);width:0}.filter{display:grid;gap:10px;margin-bottom:18px}.filter label{font-size:13px;color:var(--muted)}nav{display:grid;gap:6px;max-height:65vh;overflow:auto}nav button{display:flex;gap:10px;text-align:left;align-items:baseline;border-color:transparent;padding:11px 9px;line-height:1.35;font-size:13px}nav button[aria-current=true]{border-color:var(--accent);background:#263930}.dot{color:var(--muted);font-size:11px;min-width:28px}.done .dot{color:var(--accent)}.callout{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--panel);padding:17px 20px;border-radius:6px;margin:20px 0}.callout p{margin:5px 0}.options{display:grid;gap:12px;margin:24px 0}.option{display:block;text-align:left;padding:20px;background:var(--panel);width:100%}.option[aria-pressed=true]{border:2px solid var(--accent);padding:19px;background:#21332e}.option .title{font-size:17px;font-weight:650;display:block;margin-bottom:8px}.option .desc,.option .trade{display:block;line-height:1.55;font-size:14px}.option .trade{color:var(--muted);margin-top:8px}.badge{display:inline-block;margin-left:9px;padding:3px 7px;font-size:10px;letter-spacing:.3px;border:1px solid var(--accent);border-radius:4px;color:var(--accent);vertical-align:middle}.row{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap}.navigation{margin-top:27px;padding-top:22px;border-top:1px solid var(--line)}#status{font-size:13px;color:var(--accent);padding:10px 30px;min-height:38px;border-bottom:1px solid var(--line)}.notes{display:block;margin:20px 0 8px;font-weight:600;font-size:14px}.consequences{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}.consequences>section{padding:17px;background:var(--panel);border:1px solid var(--line);border-radius:7px}.consequences p{font-size:14px;margin:6px 0}.consequences h2{font-size:14px}.footer{color:var(--muted);font-size:12px;margin-top:20px;line-height:1.6}.empty{padding:20px;color:var(--muted)}.summary-card{border-bottom:1px solid var(--line);padding:14px 0}.summary-card h2{font-size:16px;margin:0 0 8px}.summary-card p{font-size:14px;margin:6px 0;white-space:pre-wrap}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:800px){.layout{grid-template-columns:1fr}aside{border-right:0;border-bottom:1px solid var(--line);padding:20px}nav{max-height:180px;grid-template-columns:repeat(2,minmax(0,1fr))}main{padding:25px 20px}.consequences{grid-template-columns:1fr}header{padding:20px}.filter{grid-template-columns:1fr 1fr}#status{padding:10px 20px}}
+@media(prefers-reduced-motion:no-preference){button{transition:background .12s,border-color .12s}}
+@media print{body{background:#fff;color:#000}header .actions,aside,.navigation,#status,.options,.notes,textarea{display:none}.layout{display:block}main{padding:20px}.callout,.consequences>section{background:none;border-color:#999}*{color:#000!important}.summary-card{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header><div><strong>extract-api<span style="color:var(--accent)"> / </span>Decision studio</strong><small>Repository review to agent handoff · 20 decisions · No network requests</small></div><div class="actions"><button id="summary">Review handoff</button><button id="import">Import answers</button><button id="export-json" class="primary">Export JSON</button><button id="export-md">Export Markdown</button></div></header>
+<div id="status" role="status" aria-live="polite">Recommendations are suggestions. Exports do not authorise paid calls, fixture promotion or changes to safety controls.</div>
+<div class="layout"><aside><div class="row"><strong id="count">0 / 20 answered</strong><small id="current-position"></small></div><div class="progress" role="progressbar" aria-label="Decisions answered" aria-valuemin="0" aria-valuemax="20" aria-valuenow="0"><div id="bar"></div></div><div class="filter"><label>Find a decision<input id="search" type="search" placeholder="Metrics, corpus, deployment..."></label><label>Show<select id="filter"><option value="all">All decisions</option><option value="unanswered">Unanswered</option><option value="answered">Answered</option></select></label></div><nav id="nav" aria-label="Decisions"></nav><div class="actions" style="margin-top:20px"><button id="defaults">Use recommendations</button><button id="reset">Reset</button></div><p class="footer">Snapshot <code>aeacafa</code><br>Catalog dated 4 September 2026.<br>Packaged 9 September 2026.<br>Recheck repository state before acting.<br>Save an export before moving this file.</p></aside><main id="main"></main></div>
+<input id="import-file" type="file" accept="application/json,.json" class="visually-hidden" aria-label="Import handoff JSON">
+<script id="catalog" type="application/json">__CATALOG__</script>
+<script>
+'use strict';
+const catalog=JSON.parse(document.getElementById('catalog').textContent);
+const decisions=catalog.decisions;
+const repository=catalog.snapshot.repository;
+const sha=catalog.snapshot.snapshot_sha;
+const storageKey='extract-api-decisions-v1-'+sha;
+const byId=new Map(decisions.map(d=>[d.id,d]));
+let state={selections:{},notes:{}}, current=0, summary=false;
+const el=id=>document.getElementById(id);
+const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const notify=text=>{el('status').textContent=text;};
+function validate(doc){
+ if(!doc||typeof doc!=='object'||Array.isArray(doc))throw new Error('Expected a JSON object.');
+ if(doc.repository!==repository||doc.snapshot_sha!==sha)throw new Error('Repository or snapshot does not match this deck. Reconcile manually before importing.');
+ if(doc.schema_version!=='1.0')throw new Error('Unsupported handoff version.');
+ if(!doc.selections||typeof doc.selections!=='object'||Array.isArray(doc.selections))throw new Error('Expected selections object.');
+ const selections={},notes={};
+ for(const [id,choice] of Object.entries(doc.selections)){
+  const d=byId.get(id);
+  if(!d||!d.options.some(o=>o.id===choice))throw new Error('Unknown decision or option: '+id);
+  selections[id]=choice;
+ }
+ const inputNotes=doc.notes??{};
+ if(typeof inputNotes!=='object'||inputNotes===null||Array.isArray(inputNotes))throw new Error('Expected notes object.');
+ for(const [id,note] of Object.entries(inputNotes)){
+  if(!byId.has(id)||typeof note!=='string'||note.length>20000)throw new Error('Invalid note: '+id);
+  notes[id]=note;
+ }
+ return {selections,notes};
+}
+function handoff(){return {schema_version:'1.0',repository,snapshot_sha:sha,exported_at:new Date().toISOString(),selections:{...state.selections},notes:{...state.notes},unresolved_decisions:decisions.filter(d=>!state.selections[d.id]).map(d=>d.id),execution_authorization:{paid_calls:false,fixture_promotion:false,guardrail_changes:false,issue_mutations:false,merge:false},instructions:'These are planning choices, not execution permissions. Revalidate live HEAD and reconcile the advisory task graph; unresolved decisions must remain unresolved. Use the packaging README before the historical source instructions.'};}
+function save(){try{localStorage.setItem(storageKey,JSON.stringify(handoff()));}catch{notify('Browser storage is unavailable. Export JSON to save your answers.');}}
+function visible(){const q=el('search').value.toLowerCase(),f=el('filter').value;return decisions.filter(d=>[d.id,d.area,d.title,d.context].join(' ').toLowerCase().includes(q)&&(f==='all'||(f==='answered')===Boolean(state.selections[d.id])));}
+function renderNav(){
+ const answered=decisions.filter(d=>state.selections[d.id]).length;
+ el('count').textContent=answered+' / '+decisions.length+' answered';
+ el('current-position').textContent=summary?'Handoff':String(current+1).padStart(2,'0');
+ el('bar').style.width=(answered/decisions.length*100)+'%';
+ document.querySelector('[role=progressbar]').setAttribute('aria-valuenow',String(answered));
+ const items=visible();
+ el('nav').innerHTML=items.length?items.map(d=>`<button data-id="${d.id}" class="${state.selections[d.id]?'done':''}" aria-current="${!summary&&decisions[current].id===d.id}"><span class="dot">${d.id}${state.selections[d.id]?' ✓':''}</span><span>${escape(d.title)}</span></button>`).join(''):'<p class="empty">No decisions match this filter.</p>';
+ for(const b of el('nav').querySelectorAll('button'))b.onclick=()=>{current=decisions.findIndex(d=>d.id===b.dataset.id);summary=false;render();};
+}
+function render(){
+ renderNav();el('summary').textContent=summary?'Back to decisions':'Review handoff';
+ if(summary){el('main').innerHTML='<div class="eyebrow">Agent handoff</div><h1>Your decisions, with the gaps visible.</h1><div class="callout"><p>Unanswered decisions stay unresolved. Recommendations do not count as approvals. Paid calls, label certification, safety changes, issue mutations and merges require separate authority.</p></div>'+decisions.map(d=>{const o=d.options.find(x=>x.id===state.selections[d.id]);return `<section class="summary-card"><h2>${d.id} · ${escape(d.title)}</h2><p>${o?escape(o.label):'UNRESOLVED'}</p>${state.notes[d.id]?'<p class="muted">'+escape(state.notes[d.id])+'</p>':''}</section>`;}).join('');return;}
+ const d=decisions[current],choice=state.selections[d.id],selected=d.options.find(o=>o.id===choice);
+ el('main').innerHTML=`<div class="eyebrow">${d.id} / ${escape(d.area)} / ${escape(d.urgency)}</div><h1>${escape(d.title)}</h1><p class="muted">${escape(d.question)}</p><div class="callout"><p>${escape(d.context)}</p></div><div class="row"><h2 style="margin:0">Choose a direction</h2><button id="clear-choice" ${choice?'':'disabled'}>Leave unresolved</button></div><div class="options">${d.options.map(o=>`<button class="option" data-option="${escape(o.id)}" aria-pressed="${o.id===choice}"><span class="title">${escape(o.label)}${o.id===d.recommended?'<span class="badge">RECOMMENDED</span>':''}</span><span class="desc">${escape(o.summary)}</span><span class="trade">${escape(o.tradeoffs)}</span></button>`).join('')}</div>${selected?'<div class="consequences"><section><h2>Agent preparation</h2>'+selected.agent_actions.map(a=>'<p>'+escape(a)+'</p>').join('')+'</section><section><h2>Human decisions</h2>'+selected.human_actions.map(a=>'<p>'+escape(a)+'</p>').join('')+'</section></div>':''}<label class="notes" for="note">Notes, constraints or a different approach</label><textarea id="note" maxlength="20000" placeholder="Add the reasoning you want the in-repo agent to preserve. No keys or private documents."></textarea><div class="row navigation"><button id="previous" ${current===0?'disabled':''}>← Previous</button><span class="muted">${current+1} of ${decisions.length}</span><button id="next" class="primary">${current===decisions.length-1?'Review handoff':'Next →'}</button></div>`;
+ el('note').value=state.notes[d.id]||'';
+ el('note').oninput=()=>{state.notes[d.id]=el('note').value;save();};
+ for(const b of el('main').querySelectorAll('[data-option]'))b.onclick=()=>{state.selections[d.id]=b.dataset.option;save();render();};
+ el('clear-choice').onclick=()=>{delete state.selections[d.id];save();render();};
+ el('previous').onclick=()=>{current--;render();};
+ el('next').onclick=()=>{if(current===decisions.length-1)summary=true;else current++;render();};
+}
+function markdown(){return '# extract-api decision handoff\n\nRepository: '+repository+'\nSnapshot: '+sha+'\n\nPlanning choices only. No paid calls, label promotion, safety changes, issue mutations or merge authorisation.\n\n'+decisions.map(d=>{const o=d.options.find(x=>x.id===state.selections[d.id]);return '## '+d.id+': '+d.title+'\n\n'+(o?o.label+'\n\n'+o.summary+'\n\nTrade-off: '+o.tradeoffs:'UNRESOLVED')+(state.notes[d.id]?'\n\nNote: '+state.notes[d.id]:'')+'\n';}).join('\n');}
+function download(name,text,type){const url=URL.createObjectURL(new Blob([text],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);notify('Exported '+name+'. Unresolved decisions remain explicit.');}
+el('export-json').onclick=()=>download('extract-api-agent-handoff.json',JSON.stringify(handoff(),null,2)+'\n','application/json');
+el('export-md').onclick=()=>download('extract-api-agent-handoff.md',markdown(),'text/markdown');
+el('summary').onclick=()=>{summary=!summary;render();};
+el('defaults').onclick=()=>{for(const d of decisions)if(!state.selections[d.id])state.selections[d.id]=d.recommended;save();render();notify('Filled unanswered choices with recommendations. Existing choices and notes were preserved; no execution permissions were granted.');};
+el('reset').onclick=()=>{if(confirm('Clear all answers and notes? Export them first to keep a backup.')){state={selections:{},notes:{}};current=0;summary=false;save();render();}};
+el('search').oninput=renderNav;el('filter').onchange=renderNav;
+el('import').onclick=()=>el('import-file').click();
+el('import-file').onchange=async()=>{const f=el('import-file').files[0];if(!f)return;try{if(f.size>1048576)throw new Error('File exceeds 1 MiB.');const next=validate(JSON.parse(await f.text()));state=next;save();render();notify('Imported answers. No execution permissions were imported.');}catch(err){notify('Import rejected: '+err.message);}finally{el('import-file').value='';}};
+try{const saved=localStorage.getItem(storageKey);if(saved)state=validate(JSON.parse(saved));}catch{notify('Stored answers could not be loaded. Import a saved JSON export or start again.');}
+window.addEventListener('keydown',e=>{if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)||summary)return;if(e.key==='ArrowRight'&&current<decisions.length-1){current++;render();}if(e.key==='ArrowLeft'&&current>0){current--;render();}});
+render();
+</script>
+</body>
+</html>

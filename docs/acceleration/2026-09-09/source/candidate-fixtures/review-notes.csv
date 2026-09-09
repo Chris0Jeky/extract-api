@@ -1,0 +1,39 @@
+fixture_id,doc_type,coverage,ambiguity,review_note
+invoice_0011,invoice,line items; VAT; due date; vendor tax ID,low,Check tax ID is intentionally synthetic.
+invoice_0012,invoice,decimal comma; Italian text; EUR,medium,Confirm issue/due date normalization is content-faithful.
+invoice_0013,invoice,JPY zero-decimal; multilingual heading,low,Amounts are already JPY units.
+invoice_0014,invoice,KWD three-decimal,low,Minor-unit values use 3 digits.
+invoice_0015,invoice,fractional quantity,low,Quantity is 2.5; line amount reconciles.
+invoice_0016,invoice,line-level discount,medium,Description carries discount; amount is authoritative.
+invoice_0017,invoice,shipping represented as line item,low,This is v1-representable and not the #54 total-level case.
+invoice_0018,invoice,summary-only; no line items,low,line_items must remain null.
+invoice_0019,invoice,tax unknown; subtotal and total differ,high,Review whether this belongs in v1 benchmark; tax:null disables reconciliation.
+invoice_0020,invoice,payable on receipt; due date absent,medium,Do not infer due_date from phrase.
+invoice_0021,invoice,USD; tax zero; buyer absent,low,No buyer should remain null.
+invoice_0022,invoice,large amount; thousands separators,low,Check integer size and normalization.
+invoice_0023,invoice,zero-value line and total,medium,Decide whether zero-value invoices belong in product scope.
+invoice_0024,invoice,CAD; HST,low,Simple non-UK currency case.
+job_posting_0001,job,senior; hybrid; annual range; visa not offered,low,Straightforward baseline.
+job_posting_0002,job,junior; remote UK; k-suffix; sponsorship offered,low,Straightforward baseline.
+job_posting_0003,job,competitive salary; onsite; visa absent,medium,Seniority is inferred as mid from unqualified title; review policy.
+job_posting_0004,job,day rate; contract; remote,low,Salary period is day.
+job_posting_0005,job,hourly; part-time; right-to-work explicit,low,Text explicitly says sponsorship unavailable.
+job_posting_0006,job,monthly internship; hybrid,low,Monthly pay and intern seniority.
+job_posting_0007,job,maximum-only salary; principal; sponsorship conditional,medium,Schema collapses conditional sponsorship into offered.
+job_posting_0008,job,minimum-only salary; manager,low,Maximum remains null.
+job_posting_0009,job,company absent/confidential,low,company:null tests absent-field handling.
+job_posting_0010,job,director; remote; compensation absent,low,No salary fields.
+job_posting_0011,job,temporary; day rate; onsite,low,Temporary vs contract is explicit.
+job_posting_0012,job,staff; multi-location wording; remote; sponsorship,medium,Review location string and remote interpretation.
+job_posting_0013,job,lead; flat annual salary,low,min=max convention.
+job_posting_0014,job,part-time; monthly; temporary; hybrid,medium,Review junior seniority for assistant.
+job_posting_0015,job,manager; remote; competitive salary,low,No salary/currency/period.
+job_posting_0016,job,junior; flat salary; no sponsorship,low,Straightforward.
+job_posting_0017,job,missing location/remote/salary/visa,medium,Tests unspecified enums vs null scalars.
+job_posting_0018,job,multi-location; day rate; contract; right-to-work,medium,Hybrid across multiple cities; verify location representation.
+job_posting_0019,job,intern; no salary,low,No salary values.
+job_posting_0020,job,temporary; monthly; manager,low,Straightforward.
+job_posting_0021,job,confidential company; principal; remote; sponsorship,low,company:null.
+job_posting_0022,job,hourly full-time; hybrid,medium,Unusual but valid salary period.
+job_posting_0023,job,part-time pro-rata annual salary,high,Schema cannot express pro-rata basis; review inclusion/caveat.
+job_posting_0024,job,senior; flat salary; sponsorship offered,low,Straightforward.

@@ -1,0 +1,137 @@
+{
+  "packaged_on": "2026-09-09",
+  "recovered_file_count": 26,
+  "normalization": "UTF-8, LF line endings, em dash replaced with spaced ASCII hyphen; no substantive changes. Archived scripts are unmodified apart from typography.",
+  "files": [
+    {
+      "path": "AGENT_BOOTSTRAP.md",
+      "original_sha256": "bf9d8487a50839b2893d04d60b2aed43f2596bae0b6a253c955bb89874f1ebe2",
+      "packaged_sha256": "bf9d8487a50839b2893d04d60b2aed43f2596bae0b6a253c955bb89874f1ebe2"
+    },
+    {
+      "path": "MASTER_REVIEW.md",
+      "original_sha256": "45b1bb440dc18c747738d4b8fb7f8f9db837aec105c6524b852515a7ce466974",
+      "packaged_sha256": "45b1bb440dc18c747738d4b8fb7f8f9db837aec105c6524b852515a7ce466974"
+    },
+    {
+      "path": "README.md",
+      "original_sha256": "6411da0604a0a400f635b63f5852fa723953d5afe859762ac25f77a273c7bad5",
+      "packaged_sha256": "6411da0604a0a400f635b63f5852fa723953d5afe859762ac25f77a273c7bad5"
+    },
+    {
+      "path": "candidate-fixtures/review-notes.csv",
+      "original_sha256": "40d22d10e5c7559821e32dbb513435f0dab0e43871a9ed054eff88b6cb9688bc",
+      "packaged_sha256": "bc5b9a4ed4bbd5f858007b117f4b13b251c1dfbe8652f6ebc5f36bc01db1e703"
+    },
+    {
+      "path": "decisions/ADR-0005-benchmark-metric-contract.md",
+      "original_sha256": "dbbe91f246ddf7e76c506c1aceb9ec808f3b052c89d832c16dff9441ad3f30cf",
+      "packaged_sha256": "dbbe91f246ddf7e76c506c1aceb9ec808f3b052c89d832c16dff9441ad3f30cf"
+    },
+    {
+      "path": "decisions/ADR-0006-paid-run-artifacts-and-resume.md",
+      "original_sha256": "396ba053082ec64f6fc91cf6c1476ab6f90f99f99fe328d6722b31e8c125fa3a",
+      "packaged_sha256": "396ba053082ec64f6fc91cf6c1476ab6f90f99f99fe328d6722b31e8c125fa3a"
+    },
+    {
+      "path": "decisions/ADR-0007-transport-failure-policy.md",
+      "original_sha256": "df41310863906fc6c42fc01fd9d9271431f0fb5863ca883a80b9485dd0f349e4",
+      "packaged_sha256": "df41310863906fc6c42fc01fd9d9271431f0fb5863ca883a80b9485dd0f349e4"
+    },
+    {
+      "path": "decisions/ADR-0008-corpus-governance.md",
+      "original_sha256": "ac4d457e0589baa0b60fd7e30a4041e46d28d85e119fc63d516ffb29c9d54528",
+      "packaged_sha256": "ac4d457e0589baa0b60fd7e30a4041e46d28d85e119fc63d516ffb29c9d54528"
+    },
+    {
+      "path": "decisions/ADR-0009-release-gate-baselines.md",
+      "original_sha256": "c3065bf734a4e71538ae5ccd8c506e74fd417bd23f48be0a084041132929913e",
+      "packaged_sha256": "c3065bf734a4e71538ae5ccd8c506e74fd417bd23f48be0a084041132929913e"
+    },
+    {
+      "path": "implementation/PATCH_GUIDE.md",
+      "original_sha256": "b7871882e53d399943d0aa27a518b6781a09473231198664206910ae4bb37de2",
+      "packaged_sha256": "b7871882e53d399943d0aa27a518b6781a09473231198664206910ae4bb37de2"
+    },
+    {
+      "path": "machine/agent-task-manifest.json",
+      "original_sha256": "75481754034c4d8b7d086c5a6ed67ea2498421779374ae94578b536bf2bff9fd",
+      "packaged_sha256": "75481754034c4d8b7d086c5a6ed67ea2498421779374ae94578b536bf2bff9fd"
+    },
+    {
+      "path": "machine/decisions.json",
+      "original_sha256": "f0a9f7adc4e595c7a108179122b3d1565cf0c87dcd9aa687d669bfb9dc66fe0c",
+      "packaged_sha256": "f0a9f7adc4e595c7a108179122b3d1565cf0c87dcd9aa687d669bfb9dc66fe0c"
+    },
+    {
+      "path": "machine/default-selections.json",
+      "original_sha256": "2804c02be7ac0df49a45371b3654cfd73b134cc818547c50986eaf5f0e1eb07d",
+      "packaged_sha256": "2804c02be7ac0df49a45371b3654cfd73b134cc818547c50986eaf5f0e1eb07d"
+    },
+    {
+      "path": "machine/human-tasks.json",
+      "original_sha256": "e77d8c926f8c97e7f731cf452ae617dc5a46549eb4b2b6637e71007859cef260",
+      "packaged_sha256": "e77d8c926f8c97e7f731cf452ae617dc5a46549eb4b2b6637e71007859cef260"
+    },
+    {
+      "path": "machine/issue-seeding.json",
+      "original_sha256": "7415ce54514a74eb8d01860de470543ba662c63ba7563232c964636c27ca5549",
+      "packaged_sha256": "7415ce54514a74eb8d01860de470543ba662c63ba7563232c964636c27ca5549"
+    },
+    {
+      "path": "machine/issue-triage.json",
+      "original_sha256": "f3c9d55abba0f3ceaffe2aea4125dcb6705d202e2f6a69b73db32c849c1d1d30",
+      "packaged_sha256": "f3c9d55abba0f3ceaffe2aea4125dcb6705d202e2f6a69b73db32c849c1d1d30"
+    },
+    {
+      "path": "machine/risk-register.json",
+      "original_sha256": "82d6bf8d69cf8720cdb4d8c6ee863f92ea68a65376f57453cbb623653f9a0493",
+      "packaged_sha256": "82d6bf8d69cf8720cdb4d8c6ee863f92ea68a65376f57453cbb623653f9a0493"
+    },
+    {
+      "path": "prompts/execute-bundle.md",
+      "original_sha256": "681d15f406408b115043abf733ff504ef2bc9150a6ca70ac1c7997ccdb0e20b6",
+      "packaged_sha256": "681d15f406408b115043abf733ff504ef2bc9150a6ca70ac1c7997ccdb0e20b6"
+    },
+    {
+      "path": "review/03-issue-triage.md",
+      "original_sha256": "70a3f49500590e059ec5e67de46067ccac33f719a57944e1a858c15830f6d168",
+      "packaged_sha256": "0a085cd6f00d677bb9c469519ae7e5e9a9cbf4f40980b5fe865718d1932c23b7"
+    },
+    {
+      "path": "review/06-risk-edge-cases.md",
+      "original_sha256": "472025db9a23f9c71b5649dd43ebbe1ed1b09818606e521bbb5a885bde391269",
+      "packaged_sha256": "472025db9a23f9c71b5649dd43ebbe1ed1b09818606e521bbb5a885bde391269"
+    },
+    {
+      "path": "review/07-doc-drift.md",
+      "original_sha256": "a8c5fe6620ff01c4d395a08393322ede33c397cb40f60c3ab8373d275f7c4192",
+      "packaged_sha256": "a8c5fe6620ff01c4d395a08393322ede33c397cb40f60c3ab8373d275f7c4192"
+    },
+    {
+      "path": "roadmap/30-60-90.md",
+      "original_sha256": "c47d2355ddf22b044f6a6f8c31705aeaa3a0b621fbba4e78546e93a6b967b834",
+      "packaged_sha256": "c47d2355ddf22b044f6a6f8c31705aeaa3a0b621fbba4e78546e93a6b967b834"
+    },
+    {
+      "path": "roadmap/critical-path.md",
+      "original_sha256": "a24c19b405c711a76deb068c6e22e13d8ecf56120f13b8f0171a568369d28453",
+      "packaged_sha256": "6e830f1a1638875a71c99b57f3366f6f225367e76fbedce7d5c942fcc8fcd66d"
+    },
+    {
+      "path": "scripts/render_agent_plan.py",
+      "original_sha256": "4de4bc8e7dcb4016baa90c871e8953bfc12fd0b57024e621b8fb5b92e67f2770",
+      "packaged_sha256": "78b974d94b678dd584aad94c0fbd2434b4dc8d763458963abe9965db5025652c"
+    },
+    {
+      "path": "scripts/unbundle.py",
+      "original_sha256": "92359c36915679a46106f8125e9023d782f968c9e5298952a69b896ef1ea82ed",
+      "packaged_sha256": "92359c36915679a46106f8125e9023d782f968c9e5298952a69b896ef1ea82ed"
+    },
+    {
+      "path": "templates/paid-run-checklist.md",
+      "original_sha256": "2a6535022c1a212d2643567b5d66775ebd5cb072891cfa6b64620bed2bab7ab8",
+      "packaged_sha256": "2a6535022c1a212d2643567b5d66775ebd5cb072891cfa6b64620bed2bab7ab8"
+    }
+  ]
+}
