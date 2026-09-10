@@ -1,0 +1,194 @@
+{
+  "schema_version": "1.0",
+  "repository": "Chris0Jeky/extract-api",
+  "snapshot_sha": "aeacafa63685af3b47030375d13b2b5c1d5979f9",
+  "packaged_on": "2026-09-09",
+  "scope": "Recovered planning material and newly completed offline decision/handoff tooling; no production changes",
+  "files": [
+    {
+      "path": ".ruff.toml",
+      "bytes": 188,
+      "sha256": "ea88e6d8a9f33c582ca4623bbec1ac36869abee090b9e443762869aeadc716d9"
+    },
+    {
+      "path": "PACKAGING_NOTES.md",
+      "bytes": 3922,
+      "sha256": "adc9f08bf853908d85c88545ee61f3fb41e96ff1fdb9250cc23a621cbb6b3ef0"
+    },
+    {
+      "path": "README.md",
+      "bytes": 4412,
+      "sha256": "1be896ff4b1c4a32767be2fb7afd2e1287fa0767bb0ffb22c0fd75d1df155ccd"
+    },
+    {
+      "path": "RECOVERY_INVENTORY.json",
+      "bytes": 6606,
+      "sha256": "29e7b1b8663361c24ab6dd9ec1889e5213308f22410a85b6d505fd9f07420d23"
+    },
+    {
+      "path": "START_AGENT.md",
+      "bytes": 1566,
+      "sha256": "a5d752c97cbca342e0eca63f71f0b57e4093952bb4df62fed041ba911cbecaba"
+    },
+    {
+      "path": "VERIFICATION.md",
+      "bytes": 2312,
+      "sha256": "485f2f3d336fd4abda9dffc517197b7f1f917f437b489ffd5ed323c18dea71cf"
+    },
+    {
+      "path": "decision-deck/index.html",
+      "bytes": 42745,
+      "sha256": "84aa3ff89ce40d973a687b6911012a5d949e4d69302d294261cbdda96de92ea2"
+    },
+    {
+      "path": "source/AGENT_BOOTSTRAP.md",
+      "bytes": 7291,
+      "sha256": "bf9d8487a50839b2893d04d60b2aed43f2596bae0b6a253c955bb89874f1ebe2"
+    },
+    {
+      "path": "source/MASTER_REVIEW.md",
+      "bytes": 26021,
+      "sha256": "45b1bb440dc18c747738d4b8fb7f8f9db837aec105c6524b852515a7ce466974"
+    },
+    {
+      "path": "source/README.md",
+      "bytes": 4551,
+      "sha256": "6411da0604a0a400f635b63f5852fa723953d5afe859762ac25f77a273c7bad5"
+    },
+    {
+      "path": "source/candidate-fixtures/review-notes.csv",
+      "bytes": 3752,
+      "sha256": "bc5b9a4ed4bbd5f858007b117f4b13b251c1dfbe8652f6ebc5f36bc01db1e703"
+    },
+    {
+      "path": "source/decisions/ADR-0005-benchmark-metric-contract.md",
+      "bytes": 6287,
+      "sha256": "dbbe91f246ddf7e76c506c1aceb9ec808f3b052c89d832c16dff9441ad3f30cf"
+    },
+    {
+      "path": "source/decisions/ADR-0006-paid-run-artifacts-and-resume.md",
+      "bytes": 3791,
+      "sha256": "396ba053082ec64f6fc91cf6c1476ab6f90f99f99fe328d6722b31e8c125fa3a"
+    },
+    {
+      "path": "source/decisions/ADR-0007-transport-failure-policy.md",
+      "bytes": 3413,
+      "sha256": "df41310863906fc6c42fc01fd9d9271431f0fb5863ca883a80b9485dd0f349e4"
+    },
+    {
+      "path": "source/decisions/ADR-0008-corpus-governance.md",
+      "bytes": 3618,
+      "sha256": "ac4d457e0589baa0b60fd7e30a4041e46d28d85e119fc63d516ffb29c9d54528"
+    },
+    {
+      "path": "source/decisions/ADR-0009-release-gate-baselines.md",
+      "bytes": 1293,
+      "sha256": "c3065bf734a4e71538ae5ccd8c506e74fd417bd23f48be0a084041132929913e"
+    },
+    {
+      "path": "source/implementation/PATCH_GUIDE.md",
+      "bytes": 5667,
+      "sha256": "b7871882e53d399943d0aa27a518b6781a09473231198664206910ae4bb37de2"
+    },
+    {
+      "path": "source/machine/agent-task-manifest.json",
+      "bytes": 29339,
+      "sha256": "75481754034c4d8b7d086c5a6ed67ea2498421779374ae94578b536bf2bff9fd"
+    },
+    {
+      "path": "source/machine/decisions.json",
+      "bytes": 36265,
+      "sha256": "f0a9f7adc4e595c7a108179122b3d1565cf0c87dcd9aa687d669bfb9dc66fe0c"
+    },
+    {
+      "path": "source/machine/default-selections.json",
+      "bytes": 766,
+      "sha256": "2804c02be7ac0df49a45371b3654cfd73b134cc818547c50986eaf5f0e1eb07d"
+    },
+    {
+      "path": "source/machine/human-tasks.json",
+      "bytes": 3231,
+      "sha256": "e77d8c926f8c97e7f731cf452ae617dc5a46549eb4b2b6637e71007859cef260"
+    },
+    {
+      "path": "source/machine/issue-seeding.json",
+      "bytes": 6741,
+      "sha256": "7415ce54514a74eb8d01860de470543ba662c63ba7563232c964636c27ca5549"
+    },
+    {
+      "path": "source/machine/issue-triage.json",
+      "bytes": 10686,
+      "sha256": "f3c9d55abba0f3ceaffe2aea4125dcb6705d202e2f6a69b73db32c849c1d1d30"
+    },
+    {
+      "path": "source/machine/risk-register.json",
+      "bytes": 4359,
+      "sha256": "82d6bf8d69cf8720cdb4d8c6ee863f92ea68a65376f57453cbb623653f9a0493"
+    },
+    {
+      "path": "source/prompts/execute-bundle.md",
+      "bytes": 1960,
+      "sha256": "681d15f406408b115043abf733ff504ef2bc9150a6ca70ac1c7997ccdb0e20b6"
+    },
+    {
+      "path": "source/review/03-issue-triage.md",
+      "bytes": 10302,
+      "sha256": "0a085cd6f00d677bb9c469519ae7e5e9a9cbf4f40980b5fe865718d1932c23b7"
+    },
+    {
+      "path": "source/review/06-risk-edge-cases.md",
+      "bytes": 4249,
+      "sha256": "472025db9a23f9c71b5649dd43ebbe1ed1b09818606e521bbb5a885bde391269"
+    },
+    {
+      "path": "source/review/07-doc-drift.md",
+      "bytes": 2138,
+      "sha256": "a8c5fe6620ff01c4d395a08393322ede33c397cb40f60c3ab8373d275f7c4192"
+    },
+    {
+      "path": "source/roadmap/30-60-90.md",
+      "bytes": 1557,
+      "sha256": "c47d2355ddf22b044f6a6f8c31705aeaa3a0b621fbba4e78546e93a6b967b834"
+    },
+    {
+      "path": "source/roadmap/critical-path.md",
+      "bytes": 14803,
+      "sha256": "6e830f1a1638875a71c99b57f3366f6f225367e76fbedce7d5c942fcc8fcd66d"
+    },
+    {
+      "path": "source/scripts/render_agent_plan.py",
+      "bytes": 4745,
+      "sha256": "78b974d94b678dd584aad94c0fbd2434b4dc8d763458963abe9965db5025652c"
+    },
+    {
+      "path": "source/scripts/unbundle.py",
+      "bytes": 2631,
+      "sha256": "92359c36915679a46106f8125e9023d782f968c9e5298952a69b896ef1ea82ed"
+    },
+    {
+      "path": "source/templates/paid-run-checklist.md",
+      "bytes": 1529,
+      "sha256": "2a6535022c1a212d2643567b5d66775ebd5cb072891cfa6b64620bed2bab7ab8"
+    },
+    {
+      "path": "tools/build-deck.mjs",
+      "bytes": 789,
+      "sha256": "c1beba185e4e8150c1834ecbdda93d9f997b6e5b7ade6b6cb2cee91da0ce85c3"
+    },
+    {
+      "path": "tools/bundle.mjs",
+      "bytes": 8171,
+      "sha256": "ed603939605ea7104c18b04ea23183d2e2b0b0bae4b49ae62a40827af344a563"
+    },
+    {
+      "path": "tools/bundle.test.mjs",
+      "bytes": 3510,
+      "sha256": "fa0acda41fda31eb283481871648eb239cb041b091064f14cc528ef0c2ea5353"
+    },
+    {
+      "path": "tools/deck.template.html",
+      "bytes": 15800,
+      "sha256": "8ec815c0efef92dab50c8f38f2a4629b7b11443528978e73a04a06b23e7900c8"
+    }
+  ]
+}

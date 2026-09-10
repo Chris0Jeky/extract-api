@@ -1,0 +1,238 @@
+{
+  "schema_version": "1.0",
+  "issues": [
+    {
+      "number": 10,
+      "title": "Maintenance: periodic ISO-4217 refresh + currency-status audit",
+      "current_action": "KEEP / SCHEDULE",
+      "priority": "P3",
+      "bucket": "maintenance",
+      "recommendation": "Convert to a scheduled six-month audit with a generated provenance file. Do not put it on the v0.1 critical path.",
+      "why": "The current snapshot is recent enough for the pending benchmark, but currency membership is time-sensitive over the life of the service.",
+      "owner": "agent, with human source approval",
+      "next": [
+        "Add source/date/hash metadata",
+        "Create audit script",
+        "Open automated PR only when the set changes"
+      ]
+    },
+    {
+      "number": 13,
+      "title": "Hook hardening backlog: obscure destructive-command bypass variants",
+      "current_action": "MOVE UPSTREAM / CLOSE",
+      "priority": "P3",
+      "bucket": "agent-harness",
+      "recommendation": "Revalidate against the canonical shared floor. Move any still-real gaps to agent-harness and close the repo-local legacy-hook issue.",
+      "why": "The issue targets the deprecated bespoke hook, while the repository now vendors a shared dispatcher. Keeping security-floor logic forked locally creates drift.",
+      "owner": "human or independent top-model review",
+      "next": [
+        "Do not let the constrained agent autonomously weaken its own guard",
+        "Link upstream issue or close as obsolete"
+      ]
+    },
+    {
+      "number": 32,
+      "title": "StarletteHTTPException degrade branch masks future non-404/405 client errors as 500",
+      "current_action": "KEEP / TRIGGER-GATED",
+      "priority": "P3",
+      "bucket": "future-contract",
+      "recommendation": "Keep as a trigger-gated footgun. Resolve before adding authentication, authorization or new HTTPException-based middleware.",
+      "why": "It is currently unreachable but would invert future 4xx semantics into a 500.",
+      "owner": "agent",
+      "next": [
+        "Add a trigger label",
+        "Resolve alongside the first new 4xx taxonomy code"
+      ]
+    },
+    {
+      "number": 35,
+      "title": "Consider making subtotal_minor nullable for total-only invoices",
+      "current_action": "CONSOLIDATE INTO INVOICE.V2 EPIC",
+      "priority": "P3",
+      "bucket": "future-v2",
+      "recommendation": "Merge with #54 into one invoice.v2 design epic. Keep v1 frozen for the first evidence run and disclose the total-only convention.",
+      "why": "The current schema forces a convention that conflicts with the never-infer story, but changing it now would invalidate the pending v1 baseline.",
+      "owner": "human decision, agent design",
+      "next": [
+        "Create invoice.v2 epic",
+        "Document current corpus convention",
+        "Do not add more total-only fixtures to the reviewed v1 set"
+      ]
+    },
+    {
+      "number": 42,
+      "title": "Idempotency: atomic reservation for concurrent same-key requests",
+      "current_action": "KEEP / SCALE-TRIGGERED",
+      "priority": "P3",
+      "bucket": "post-evidence",
+      "recommendation": "Keep the sequential v1 contract. Implement pending reservations only before multi-worker or multi-replica deployment.",
+      "why": "The current single-process use is coherent; solving distributed in-flight coordination before measured value is unnecessary complexity.",
+      "owner": "agent after human contract choice",
+      "next": [
+        "Add explicit deployment trigger",
+        "Choose 202/425/409 semantics when activated"
+      ]
+    },
+    {
+      "number": 46,
+      "title": "Accuracy: report hallucination rate over absent-field opportunities",
+      "current_action": "IMPLEMENT NOW",
+      "priority": "P0",
+      "bucket": "release-blocker",
+      "recommendation": "Replace the single outcome table with layered request/extraction/semantic accounting. Make expected-null opportunities the hallucination denominator.",
+      "why": "The current all-fields denominator can hide systematic hallucination and failed extractions currently corrupt null-field semantics.",
+      "owner": "agent after metric ADR approval",
+      "next": [
+        "Ratify ADR-0005 draft",
+        "Add null-correct and no-prediction states",
+        "Report document exact match and accepted-extraction rate separately"
+      ]
+    },
+    {
+      "number": 54,
+      "title": "v1 invoice schema cannot represent total-level shipping/adjustment outside subtotal",
+      "current_action": "CONSOLIDATE INTO INVOICE.V2 EPIC",
+      "priority": "P3",
+      "bucket": "future-v2",
+      "recommendation": "Combine with #35 and defer implementation until after a stable v1 baseline and real error evidence.",
+      "why": "This is a real representational limit, but the current milestone is evidence, not schema expansion.",
+      "owner": "human decision, agent design",
+      "next": [
+        "Design explicit adjustment equation",
+        "Decide credit-note semantics",
+        "Version schema rather than mutate v1"
+      ]
+    },
+    {
+      "number": 57,
+      "title": "T17 live-harness hardening",
+      "current_action": "RETITLE / IMPLEMENT REMAINDER",
+      "priority": "P0",
+      "bucket": "release-blocker",
+      "recommendation": "Retitle around its only material remainder: expose billed cost on terminal validation failures and fold it into run totals.",
+      "why": "Malformed-2xx handling, configurable timeout and fixture placement have landed; leaving the omnibus title obscures what remains.",
+      "owner": "agent",
+      "next": [
+        "Add cost_usd to terminal 422 body",
+        "Carry cost through PredictionFailed",
+        "Report attempted, successful and failed spend separately"
+      ]
+    },
+    {
+      "number": 74,
+      "title": "Harness paid-run loss-protection omnibus",
+      "current_action": "SPLIT REMAINDERS / CLOSE",
+      "priority": "P1",
+      "bucket": "tracking-hygiene",
+      "recommendation": "Move transport classification to ADR-0007/new issue, failed cost to #57, then close #74 with a completion summary.",
+      "why": "Preflight, report preservation and deterministic failure logging already landed. A historical umbrella no longer reflects executable work.",
+      "owner": "agent",
+      "next": [
+        "Post completion comment",
+        "Link successor issues",
+        "Close"
+      ]
+    },
+    {
+      "number": 79,
+      "title": "Synthetic DRAFT corpus + FixtureClient echo mode",
+      "current_action": "SPLIT INTO TWO P0/P1 ISSUES",
+      "priority": "P0",
+      "bucket": "release-blocker",
+      "recommendation": "Generate synthetic DRAFT fixtures now. Implement rehearsal as a test-only content-hash response map or in-process ASGI runner, not a production expected-label echo mode.",
+      "why": "Fixture authoring and harness rehearsal are independently valuable and have different risk profiles.",
+      "owner": "agent drafts; human reviews",
+      "next": [
+        "Import candidate fixtures from this bundle",
+        "Create coverage matrix",
+        "Build perfect/failure rehearsal maps outside production routing"
+      ]
+    },
+    {
+      "number": 80,
+      "title": "Job salary/string hardening + normalize.py + validator crash",
+      "current_action": "SPLIT / CLOSE UMBRELLA",
+      "priority": "P1",
+      "bucket": "schema-and-cleanup",
+      "recommendation": "Close the fixed validator-crash item. Create one schema decision issue and one dead-code/label-tooling issue.",
+      "why": "The current issue mixes a completed bug, a product-schema choice and an architecture cleanup.",
+      "owner": "agent with human schema approval",
+      "next": [
+        "Tighten job salary/nonblank semantics before baseline",
+        "Either repurpose normalize.py as explicit label tooling or delete it"
+      ]
+    },
+    {
+      "number": 83,
+      "title": "Retire legacy scripts/agent_hooks/pre_tool_use.py",
+      "current_action": "KEEP / DO AFTER #88",
+      "priority": "P2",
+      "bucket": "cleanup",
+      "recommendation": "Resolve current shared-floor wiring/provenance first, then retire legacy hook code and its coverage burden.",
+      "why": "The legacy module is not runtime code and keeps duplicate safety semantics alive.",
+      "owner": "agent, independently reviewed",
+      "next": [
+        "Preserve only unique redaction tests",
+        "Delete legacy module",
+        "Update workflow docs"
+      ]
+    },
+    {
+      "number": 86,
+      "title": "Main has no tier.json",
+      "current_action": "CLOSE AS FIXED",
+      "priority": "P0 hygiene",
+      "bucket": "stale",
+      "recommendation": "Close with evidence that .agent-harness/tier.json now declares T2.",
+      "why": "The tracked T2 declaration exists on the reviewed main snapshot.",
+      "owner": "agent",
+      "next": [
+        "Post evidence",
+        "Close"
+      ]
+    },
+    {
+      "number": 87,
+      "title": "bypassPermissions + missing tier makes work-loss guards unprompted",
+      "current_action": "CLOSE AS FIXED/OBSOLETE",
+      "priority": "P0 hygiene",
+      "bucket": "stale",
+      "recommendation": "Close: the tier declaration exists and the project-scope bypassPermissions setting was removed.",
+      "why": "Both premises of the issue are false on the reviewed head.",
+      "owner": "agent",
+      "next": [
+        "Reference tier file and commit 1266bbd",
+        "Close"
+      ]
+    },
+    {
+      "number": 88,
+      "title": "Vendored deny floor is live but unpinned and untested",
+      "current_action": "REWRITE",
+      "priority": "P1",
+      "bucket": "agent-harness",
+      "recommendation": "Rewrite around the current question: prove where PreToolUse is wired, pin canonical bytes, and run the large matrix only on floor/config changes or scheduled/manual workflows.",
+      "why": "The committed settings no longer contain the local PreToolUse entry, so the July issue body is stale even though provenance/testing remains unresolved.",
+      "owner": "human/independent top-model review",
+      "next": [
+        "Audit global adapter",
+        "Add fast digest check",
+        "Add path-filtered or scheduled canonical matrix"
+      ]
+    },
+    {
+      "number": 91,
+      "title": "Vendored floor is 1.5.2 against canonical 1.6.18",
+      "current_action": "CLOSE AS FIXED",
+      "priority": "P0 hygiene",
+      "bucket": "stale",
+      "recommendation": "Close with current FLOOR_VERSION 1.6.20 evidence.",
+      "why": "The reported version gap no longer exists on the reviewed main snapshot.",
+      "owner": "agent",
+      "next": [
+        "Post current version",
+        "Close"
+      ]
+    }
+  ]
+}
