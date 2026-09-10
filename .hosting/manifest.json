@@ -1,0 +1,15 @@
+{
+  "schema_version":1,"reviewed_on":"2026-09-10","repository":"Chris0Jeky/extract-api","stable_id":"extract-api","runtime_class":"private",
+  "public_origin":null,"origin_evidence":"not-configured",
+  "target":"Remain local/private; a later separate container is optional",
+  "source_paths":["README.md","AGENTS.md"],
+  "persistent_state":["Persistent SQLite idempotency at /data"],
+  "invariants":["No unauthenticated public paid-model endpoint","Preserve strict validation, retries and idempotency semantics","Document content and credentials never enter logs or public fixtures","Do not co-locate heavy processing on Taskdeck by default"],
+  "gates":["Gateway authentication and caller budgets","Persistent idempotency/restart proof","PDF resource and provider-spend acceptance","Separate host and cost authorization"],
+  "tasks":[
+    {"id":"EX1","goal":"Prepare the private deployment contract","acceptance":"Authentication, payload bounds and finite caller/provider budgets are specified before external exposure"},
+    {"id":"EX2","goal":"Prove persistence and isolation offline","acceptance":"Fixture-mode restart preserves idempotency; malformed/oversized inputs never call a paid provider"},
+    {"id":"EX3","goal":"Publish only a bounded synthetic demonstration","acceptance":"No live keys, documents or new service are introduced by this compatibility slice"}
+  ],
+  "activation_authorized":false
+}
