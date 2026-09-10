@@ -1,0 +1,3 @@
+# source/ is an archival handoff, not executable application code. Its original
+# Python sketches are retained for review. New tooling uses dependency-free JS.
+extend-exclude = ["source"]

@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0",
+  "tasks": [
+    {
+      "id": "HT01",
+      "task": "Approve metric semantics",
+      "why_human": "This defines what public numbers mean; code cannot decide the truth claim.",
+      "estimate": "30-60 min",
+      "input": "ADR-0005 draft and deck D02-D04",
+      "output": "Accepted definitions and headline order"
+    },
+    {
+      "id": "HT02",
+      "task": "Approve transport/retry semantics",
+      "why_human": "Retries trade cost, comparability and reliability; ambiguous sent requests need an owner policy.",
+      "estimate": "20-40 min",
+      "input": "ADR-0007 and deck D05",
+      "output": "Retry limits, infra abort threshold, ambiguous-spend policy"
+    },
+    {
+      "id": "HT03",
+      "task": "Review synthetic fixture labels",
+      "why_human": "DRAFT labels must not become ground truth by agent self-certification.",
+      "estimate": "3-6 hours for the supplied candidates",
+      "input": "candidate fixtures + review checklist",
+      "output": "Corrected REVIEWED labels or explicit rejections"
+    },
+    {
+      "id": "HT04",
+      "task": "Source/anonymize real fixtures",
+      "why_human": "Rights, privacy and genuine ambiguity require accountable sourcing.",
+      "estimate": "4-10 hours depending access",
+      "input": "coverage gaps",
+      "output": "Real-anonymized fixtures + provenance register"
+    },
+    {
+      "id": "HT05",
+      "task": "Verify provider models and prices",
+      "why_human": "Model IDs/prices are external commercial choices and keys are private.",
+      "estimate": "20-30 min",
+      "input": "paid-run operator checklist",
+      "output": "Uncommitted config + dated price source"
+    },
+    {
+      "id": "HT06",
+      "task": "Authorize pilot and full paid runs",
+      "why_human": "The agent must not independently spend or widen a budget.",
+      "estimate": "10 min per approval",
+      "input": "preflight manifest and maximum spend",
+      "output": "Recorded approval tied to run ID"
+    },
+    {
+      "id": "HT07",
+      "task": "Review outliers and label disputes",
+      "why_human": "Changing labels after seeing model output can overfit the benchmark.",
+      "estimate": "1-3 hours",
+      "input": "outlier report",
+      "output": "Versioned corrections with rationale"
+    },
+    {
+      "id": "HT08",
+      "task": "Approve public claims/release",
+      "why_human": "The owner is accountable for the scope, caveats and product positioning.",
+      "estimate": "30-60 min",
+      "input": "generated final report",
+      "output": "Release approval"
+    },
+    {
+      "id": "HT09",
+      "task": "Verify global agent-hook wiring",
+      "why_human": "The runtime configuration is outside the repository and the constrained agent should not certify its own guardrail.",
+      "estimate": "20-45 min",
+      "input": "#88 audit instructions",
+      "output": "Verified wiring/provenance decision"
+    },
+    {
+      "id": "HT10",
+      "task": "Decide licence before adoption push",
+      "why_human": "This is a strategic/legal posture, not an implementation detail.",
+      "estimate": "30-60 min",
+      "input": "intended users and commercial plan",
+      "output": "GPL/permissive/dual path"
+    }
+  ]
+}

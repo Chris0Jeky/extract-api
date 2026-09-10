@@ -1,0 +1,125 @@
+{
+  "schema_version": "1.0",
+  "risks": [
+    {
+      "id": "R01",
+      "severity": "critical",
+      "area": "Evidence",
+      "risk": "Publishing two-domain accuracy with no reviewed job-posting corpus",
+      "mitigation": "Block headline claims until corpus minimum and review gates pass.",
+      "trigger": "Any README/report update with two-domain numbers"
+    },
+    {
+      "id": "R02",
+      "severity": "high",
+      "area": "Metrics",
+      "risk": "Hallucination rate diluted by all-fields denominator",
+      "mitigation": "Use expected-null opportunities and null-correct counts.",
+      "trigger": "Before first paid full run"
+    },
+    {
+      "id": "R03",
+      "severity": "high",
+      "area": "Metrics",
+      "risk": "Failed extractions corrupt null-field semantics",
+      "mitigation": "Layer extraction outcome and semantic scoring; add strict document success.",
+      "trigger": "ADR-0005"
+    },
+    {
+      "id": "R04",
+      "severity": "high",
+      "area": "Cost",
+      "risk": "Terminal 422 spend omitted from totals",
+      "mitigation": "Surface billed cost in error payload and journal every attempt.",
+      "trigger": "#57"
+    },
+    {
+      "id": "R05",
+      "severity": "high",
+      "area": "Durability",
+      "risk": "Interrupted paid run loses in-memory evidence",
+      "mitigation": "Append-only journal with fsync and hash-validated resume.",
+      "trigger": "Before full paid run"
+    },
+    {
+      "id": "R06",
+      "severity": "high",
+      "area": "Provenance",
+      "risk": "Mixed model/provider/config in one report",
+      "mitigation": "Frozen manifest and per-result consistency checks.",
+      "trigger": "Run start and each response"
+    },
+    {
+      "id": "R07",
+      "severity": "high",
+      "area": "Operations",
+      "risk": "Unauthenticated public exposure causes paid-call abuse",
+      "mitigation": "Gateway-only binding, TLS, auth, rate limits and upstream budget.",
+      "trigger": "Any external deployment"
+    },
+    {
+      "id": "R08",
+      "severity": "medium",
+      "area": "PDF",
+      "risk": "Untrusted PDF consumes CPU/memory or exploits parser surface",
+      "mitigation": "Gateway size limit, container limits, read-only filesystem, timeout and isolated preprocessor if public.",
+      "trigger": "External PDF traffic"
+    },
+    {
+      "id": "R09",
+      "severity": "medium",
+      "area": "Runtime",
+      "risk": "Per-process budget resets/repeats across workers",
+      "mitigation": "Treat as benchmark safety only; gateway/shared store owns production quota.",
+      "trigger": "More than one process or restart-sensitive budget"
+    },
+    {
+      "id": "R10",
+      "severity": "medium",
+      "area": "Idempotency",
+      "risk": "Concurrent same-key calls duplicate spend",
+      "mitigation": "Keep single-process boundary; add atomic reservation before scaling.",
+      "trigger": "Multiple workers/replicas"
+    },
+    {
+      "id": "R11",
+      "severity": "medium",
+      "area": "Schema",
+      "risk": "v1 total-only convention contradicts never-infer prompt",
+      "mitigation": "Disclose convention, avoid new total-only fixtures, design invoice.v2 after baseline.",
+      "trigger": "Corpus review"
+    },
+    {
+      "id": "R12",
+      "severity": "medium",
+      "area": "Docs",
+      "risk": "Agents act on stale STATUS/PLAN/ADR claims",
+      "mitigation": "Canonical state file and drift checks.",
+      "trigger": "Every status-changing PR"
+    },
+    {
+      "id": "R13",
+      "severity": "medium",
+      "area": "Agent harness",
+      "risk": "Vendored floor provenance/wiring is unproven",
+      "mitigation": "Audit global adapter, pin digests, gated canonical matrix.",
+      "trigger": "#88 rewrite"
+    },
+    {
+      "id": "R14",
+      "severity": "medium",
+      "area": "Supply chain",
+      "risk": "Not every CI action is immutable-SHA pinned and Docker check is not a required branch check",
+      "mitigation": "Pin third-party actions and require the Docker job or aggregate required gate.",
+      "trigger": "CI hardening wave"
+    },
+    {
+      "id": "R15",
+      "severity": "low",
+      "area": "API",
+      "risk": "Presence heuristic is mistaken for calibrated confidence",
+      "mitigation": "Rename to field_presence or remove before formal consumers.",
+      "trigger": "v0.1 contract freeze"
+    }
+  ]
+}

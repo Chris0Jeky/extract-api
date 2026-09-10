@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "repository": "Chris0Jeky/extract-api",
+  "snapshot_sha": "aeacafa63685af3b47030375d13b2b5c1d5979f9",
+  "selections": {
+    "D01": "two_domain_measured",
+    "D02": "layered",
+    "D03": "conditional_plus_context",
+    "D04": "top_and_path",
+    "D05": "infra_separate",
+    "D06": "jsonl_resume",
+    "D07": "mixed_reviewed",
+    "D08": "test_map_asgi",
+    "D09": "full_manifest",
+    "D10": "rename_deprecate",
+    "D11": "targeted_tighten",
+    "D12": "trigger_later",
+    "D13": "gateway_only",
+    "D14": "adapter_pin_gated",
+    "D15": "generated_status",
+    "D16": "keep_then_review",
+    "D17": "after_baseline",
+    "D18": "package_after_baseline",
+    "D19": "merge_now",
+    "D20": "canary_plus_full"
+  },
+  "notes": {}
+}

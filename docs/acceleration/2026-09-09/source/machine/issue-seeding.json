@@ -1,0 +1,205 @@
+{
+  "schema_version": "1.0",
+  "repository": "Chris0Jeky/extract-api",
+  "snapshot_sha": "aeacafa63685af3b47030375d13b2b5c1d5979f9",
+  "issues": [
+    {
+      "title": "eval: implement layered request/extraction/semantic benchmark accounting",
+      "labels": [
+        "area:eval",
+        "release-blocker",
+        "risk:benchmark-integrity"
+      ],
+      "milestone": "M5 - Evidence-ready benchmark",
+      "body": "Adopt ADR-0005. Replace failed-as-all-missed accounting, use expected-null hallucination opportunities, add strict document success and numerator/denominator reporting. Supersedes the executable work in #46.",
+      "task_ids": [
+        "H20",
+        "A20",
+        "A21"
+      ]
+    },
+    {
+      "title": "eval: surface terminal validation spend and include it in run economics",
+      "labels": [
+        "area:eval",
+        "area:runtime",
+        "release-blocker",
+        "risk:benchmark-integrity"
+      ],
+      "milestone": "M5 - Evidence-ready benchmark",
+      "body": "Expose finite nonnegative cost_usd on billed terminal 422 responses and carry it through journal/summary/report. Retitle or supersede #57, whose other items have landed.",
+      "task_ids": [
+        "A22"
+      ]
+    },
+    {
+      "title": "eval: durable run manifest, append-only journal and hash-safe resume",
+      "labels": [
+        "area:eval",
+        "release-blocker",
+        "risk:benchmark-integrity"
+      ],
+      "milestone": "M5 - Evidence-ready benchmark",
+      "body": "Implement ADR-0006 so a paid interruption cannot discard prior results and report provenance is reconstructable.",
+      "task_ids": [
+        "A24",
+        "A25"
+      ]
+    },
+    {
+      "title": "eval: classify infrastructure, ambiguous-sent and provider failures",
+      "labels": [
+        "area:eval",
+        "release-blocker",
+        "decision",
+        "risk:benchmark-integrity"
+      ],
+      "milestone": "M5 - Evidence-ready benchmark",
+      "body": "Ratify and implement ADR-0007. Move remaining transport-policy work from #74 here, then close the historical omnibus.",
+      "task_ids": [
+        "H23",
+        "A23"
+      ]
+    },
+    {
+      "title": "fixtures: import and review stratified synthetic DRAFT corpus",
+      "labels": [
+        "area:fixtures",
+        "release-blocker",
+        "human-required"
+      ],
+      "milestone": "M6 - Measured v0.1.0",
+      "body": "Import the bundle candidate fixtures as DRAFT only, generate a coverage sidecar, and prepare low-to-high ambiguity human review batches. This is the fixture half of #79.",
+      "task_ids": [
+        "A30",
+        "A31",
+        "H30",
+        "H31"
+      ]
+    },
+    {
+      "title": "fixtures: source and provenance-review real-anonymized invoice/job corpora",
+      "labels": [
+        "area:fixtures",
+        "release-blocker",
+        "human-required"
+      ],
+      "milestone": "M6 - Measured v0.1.0",
+      "body": "Fill real-world strata, anonymise and record provenance/licence review. No agent may self-certify REVIEWED ground truth.",
+      "task_ids": [
+        "H32",
+        "H33"
+      ]
+    },
+    {
+      "title": "eval: test-only full-corpus ASGI rehearsal with perfect and failure maps",
+      "labels": [
+        "area:eval",
+        "release-blocker"
+      ],
+      "milestone": "M5 - Evidence-ready benchmark",
+      "body": "Implement the rehearsal half of #79 without adding a production expected-label echo path. Cover perfect, error, interruption, resume and mixed-identity cases.",
+      "task_ids": [
+        "A40",
+        "A41",
+        "A42"
+      ]
+    },
+    {
+      "title": "schema(job): reject negative salary values and blank strings before baseline",
+      "labels": [
+        "area:schema",
+        "decision"
+      ],
+      "milestone": "M5 - Evidence-ready benchmark",
+      "body": "Split from #80. Decide and, if approved, apply targeted job v1 tightening without whitespace/value coercion.",
+      "task_ids": [
+        "H26",
+        "A26"
+      ]
+    },
+    {
+      "title": "cleanup: either wire normalize.py into explicit label tooling or remove it",
+      "labels": [
+        "area:eval",
+        "post-evidence"
+      ],
+      "milestone": "M8 - Operational hardening",
+      "body": "Split from #80. Green tests for unwired code are false confidence. Prefer deletion unless a named label-authoring workflow consumes the module.",
+      "task_ids": [
+        "A71"
+      ]
+    },
+    {
+      "title": "agent-harness: prove PreToolUse wiring, pin floor digests and gate the canonical matrix",
+      "labels": [
+        "area:agent-harness",
+        "decision"
+      ],
+      "milestone": "M8 - Operational hardening",
+      "body": "Rewrite #88 for current main. Verify whether a global adapter wires the floor, add portable provenance and avoid running the expensive matrix on unrelated PRs.",
+      "task_ids": [
+        "H09",
+        "A70"
+      ]
+    },
+    {
+      "title": "docs: establish canonical project-state facts and drift checks",
+      "labels": [
+        "tracking-hygiene"
+      ],
+      "milestone": "M5 - Evidence-ready benchmark",
+      "body": "Reconcile STATUS/PLAN/ADR/CLAUDE/README and make volatile facts generated or checked rather than repeated manually.",
+      "task_ids": [
+        "A13"
+      ]
+    },
+    {
+      "title": "release: publish measured v0.1.0 with report, manifest and journal-derived summary",
+      "labels": [
+        "release-blocker",
+        "human-required",
+        "paid-call"
+      ],
+      "milestone": "M6 - Measured v0.1.0",
+      "body": "Pilot, full frozen run, outlier review, public-claim approval and formal release. No paid action without explicit run approval.",
+      "task_ids": [
+        "H50",
+        "A50",
+        "H51",
+        "A51",
+        "H52",
+        "A52",
+        "H53",
+        "A60",
+        "H60",
+        "A61"
+      ]
+    },
+    {
+      "title": "gate: promote human-approved extract-api baseline and compare regressions",
+      "labels": [
+        "area:eval",
+        "post-evidence"
+      ],
+      "milestone": "M7 - Release-gate workload",
+      "body": "Implement ADR-0009 and a cheap canary/full-release cadence. Thresholds must be derived from measured data/variance.",
+      "task_ids": [
+        "A62",
+        "H62"
+      ]
+    },
+    {
+      "title": "ops: gateway-only external deployment, request IDs, structured logs and container limits",
+      "labels": [
+        "area:ops",
+        "post-evidence"
+      ],
+      "milestone": "M8 - Operational hardening",
+      "body": "Do not expose the current unauthenticated Compose service directly. Add gateway runbook, correlation IDs, redacted logs and untrusted-PDF resource controls.",
+      "task_ids": [
+        "A72"
+      ]
+    }
+  ]
+}
