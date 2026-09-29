@@ -15,8 +15,8 @@ Positioning line for every README / title / CV line: "I make LLM systems cheap,
 reliable, and provably valuable in production." Lead with measured numbers; until
 they exist, carry "Numbers pending: measured, not promised."
 
-**Authority: T2** (`.agent-harness/tier.json`) - push and merge free on green
-proving checks. Review and merge policy lives once, in `~/.claude/CLAUDE.md` (the
+**Authority: T2** (`.agent-harness/tier.json`) - push and merge free behind global
+law 2's gate. Review and merge policy lives once, in `~/.claude/rules/laws.md` (the
 twelve laws, auto-injected); do not restate it here. `AGENTS.md` holds the
 Definition of Done and the repo review lenses; `tasks/BACKLOG.md` is both the task
 list and the human-action file (only Chris ticks its human-blocked items);
