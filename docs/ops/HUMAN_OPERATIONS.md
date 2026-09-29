@@ -30,5 +30,6 @@ These require repo-admin access in the GitHub UI. Do them once; record the date.
 ## The merge gate
 
 Declared once in `.agent-harness/tier.json` and defined by the global laws (see
-`AGENTS.md`). This repo is T2: green CI plus comments triaged once is the whole
-gate.
+`AGENTS.md`). This repo is T2: green CI plus global law 2's risk-calibrated review
+(a clean connector outcome only for documentation-only or very-low-risk work, otherwise one
+fresh-context review), with comments triaged once.
