@@ -6,7 +6,7 @@ and defers to this file. Precedence: an explicit instruction from Chris > this
 file > inline code comments.
 
 Review, merge, and commit policy has one home: the twelve global laws in
-`~/.claude/CLAUDE.md`, applied at this repo's declared tier (**T2**,
+`~/.claude/rules/laws.md` (Codex: `~/.codex/AGENTS.md`), applied at this repo's declared tier (**T2**,
 `.agent-harness/tier.json`). Nothing here restates it.
 
 ## Review lenses specific to this repo
