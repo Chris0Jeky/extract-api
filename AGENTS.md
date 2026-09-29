@@ -35,6 +35,6 @@ Carry these into whatever review the tier calls for:
 ## Security baseline
 
 - No secrets committed; ship `.env.example` only. `gitleaks` scans every PR.
-- The runtime guard is the vendored deny floor at `.claude/hooks/dispatch.py`
-  (canonical bytes from agent-harness). Do not edit it here; sync it from
+- The runtime guard: the vendored floor `.claude/hooks/dispatch.py` is not wired by the committed settings (no `PreToolUse` hook) and no Claude floor runs on DESKTOP-IHKOOJS, so nothing enforces command safety at runtime: act as if nothing catches an irreversible command. `.claude/settings.json` keeps a small permission-level
+  deny tripwire. The vendored copy holds canonical bytes from agent-harness: do not edit it here; sync it from
   upstream. Repo git conventions: `docs/agentic/GIT_WORKFLOW.md`.
