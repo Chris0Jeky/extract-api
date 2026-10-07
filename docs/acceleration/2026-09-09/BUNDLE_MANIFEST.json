@@ -177,13 +177,13 @@
     },
     {
       "path": "tools/bundle.mjs",
-      "bytes": 8171,
-      "sha256": "ed603939605ea7104c18b04ea23183d2e2b0b0bae4b49ae62a40827af344a563"
+      "bytes": 8608,
+      "sha256": "10d4b4bab13da5525f4db4b4888d6aa7aba82baa5ac6af64b89bd138309d8167"
     },
     {
       "path": "tools/bundle.test.mjs",
-      "bytes": 3510,
-      "sha256": "fa0acda41fda31eb283481871648eb239cb041b091064f14cc528ef0c2ea5353"
+      "bytes": 5317,
+      "sha256": "7c9cca05e561f88d92e0bb47eed4f0e19d81f31307a435acf714e6a590d9cd98"
     },
     {
       "path": "tools/deck.template.html",

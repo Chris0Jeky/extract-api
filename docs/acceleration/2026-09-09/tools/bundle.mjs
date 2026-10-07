@@ -90,17 +90,22 @@ export function validateContent(base = root) {
 
 export function buildManifest(base = root) {
   validateContent(base);
+  const catalog = readJSON(join(base, 'source/machine/decisions.json'));
   const entries = files(base).filter(p => relative(base, p) !== manifestName).map(p => {
     const bytes = readFileSync(p);
     return { path: relative(base, p).replaceAll('\\', '/'), bytes: bytes.length, sha256: digest(bytes) };
   });
-  const manifest = { schema_version: '1.0', repository: 'Chris0Jeky/extract-api', snapshot_sha: 'aeacafa63685af3b47030375d13b2b5c1d5979f9', packaged_on: '2026-09-09', scope: 'Recovered planning material and newly completed offline decision/handoff tooling; no production changes', files: entries };
+  const manifest = { schema_version: '1.0', repository: catalog.snapshot.repository, snapshot_sha: catalog.snapshot.snapshot_sha, packaged_on: '2026-09-09', scope: 'Recovered planning material and newly completed offline decision/handoff tooling; no production changes', files: entries };
   writeFileSync(join(base, manifestName), JSON.stringify(manifest, null, 2) + '\n');
   return entries.length;
 }
 
 export function validateManifest(base = root) {
   const report = validateContent(base), manifest = readJSON(join(base, manifestName));
+  const catalog = readJSON(join(base, 'source/machine/decisions.json'));
+  check(manifest.schema_version === '1.0', 'Manifest schema_version must be 1.0');
+  check(manifest.repository === catalog.snapshot.repository, 'Manifest repository does not match catalog');
+  check(manifest.snapshot_sha === catalog.snapshot.snapshot_sha, 'Manifest snapshot does not match catalog');
   const expected = manifest.files.map(f => f.path), actual = files(base).map(p => relative(base, p).replaceAll('\\', '/')).filter(p => p !== manifestName);
   check(expected.length === new Set(expected).size, 'Duplicate manifest path');
   check(JSON.stringify([...expected].sort()) === JSON.stringify(actual.sort()), 'Manifest file set differs from disk');

@@ -37,3 +37,33 @@ test('manifest detects modification and extra files', () => {
     writeFileSync(p, before); writeFileSync(join(dir, 'unexpected.txt'), 'extra'); assert.throws(() => validateManifest(dir), /file set/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+test('fresh manifest validates and a foreign repository is rejected', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'extract-bundle-'));
+  try {
+    cpSync(root, dir, { recursive: true }); buildManifest(dir); assert.equal(validateManifest(dir).recovered_files, 26);
+    const manifestPath = join(dir, 'BUNDLE_MANIFEST.json'), manifest = readJSON(manifestPath);
+    manifest.repository = 'other/repo';
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+    assert.throws(() => validateManifest(dir), /Manifest repository/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test('manifest snapshot must match the catalog', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'extract-bundle-'));
+  try {
+    cpSync(root, dir, { recursive: true }); buildManifest(dir); assert.equal(validateManifest(dir).recovered_files, 26);
+    const manifestPath = join(dir, 'BUNDLE_MANIFEST.json'), manifest = readJSON(manifestPath);
+    manifest.snapshot_sha = 'f'.repeat(40);
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+    assert.throws(() => validateManifest(dir), /Manifest snapshot/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+test('manifest schema_version must be 1.0', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'extract-bundle-'));
+  try {
+    cpSync(root, dir, { recursive: true }); buildManifest(dir); assert.equal(validateManifest(dir).recovered_files, 26);
+    const manifestPath = join(dir, 'BUNDLE_MANIFEST.json'), manifest = readJSON(manifestPath);
+    manifest.schema_version = '9.9';
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
+    assert.throws(() => validateManifest(dir), /Manifest schema_version/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
