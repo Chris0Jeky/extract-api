@@ -23,12 +23,13 @@ import time
 from typing import Annotated, Any
 
 import anyio
-from fastapi import FastAPI, Header
+from fastapi import FastAPI, Header, Response
 
 from api.budget import BudgetGuard, budget_from_env
 from api.content import resolve_content
 from api.errors import ErrorCode, ExtractError, install_error_handlers
 from api.idempotency import (
+    EphemeralStoreError,
     IdempotencyStore,
     SqliteIdempotencyStore,
     StoredResponse,
@@ -135,9 +136,13 @@ _MAX_IDEMPOTENCY_KEY_LEN = 255
 
 def _store_from_env() -> IdempotencyStore:
     """Build the default SQLite idempotency store from env (ADR 0004)."""
+    raw_require = os.environ.get("IDEMPOTENCY_REQUIRE_PERSISTENT_MOUNT", "0")
+    if raw_require not in {"0", "1"}:
+        raise ValueError(f"env IDEMPOTENCY_REQUIRE_PERSISTENT_MOUNT={raw_require!r} must be 0 or 1")
     return SqliteIdempotencyStore(
         os.environ.get("IDEMPOTENCY_DB_PATH", "idempotency.sqlite"),
         int(os.environ.get("IDEMPOTENCY_TTL_HOURS", "24")),
+        require_persistent_mount=raw_require == "1",
     )
 
 
@@ -232,8 +237,19 @@ def create_app(
 
     @app.get("/readyz")
     async def readyz() -> dict[str, str]:
+        def probe() -> str:
+            store = _store()
+            store.probe()
+            return store.store_id
+
         try:
-            await anyio.to_thread.run_sync(lambda: _store().probe(), limiter=probe_limiter)
+            store_id = await anyio.to_thread.run_sync(probe, limiter=probe_limiter)
+        except EphemeralStoreError as exc:
+            logger.error("readiness probe failed: %s", exc)
+            raise ExtractError(
+                ErrorCode.internal_error,
+                detail="the idempotency store is not on a persistent mount",
+            ) from exc
         except Exception as exc:
             # Unready is an internal fault, so it renders as internal_error (500) like any
             # other: no new taxonomy member. The client body stays generic; the log names it.
@@ -246,6 +262,7 @@ def create_app(
         return {
             "status": "ready",
             "revision": os.environ.get("EXTRACT_API_REVISION") or "unknown",
+            "idempotency_store_id": store_id,
             "provider_mode": (
                 "fixture" if os.environ.get("LLM_PROVIDER_MODE") == "fixture" else "live"
             ),
@@ -257,6 +274,7 @@ def create_app(
     @app.post("/v1/extract", response_model=ExtractResponse)
     def extract(
         request: ExtractRequest,
+        response: Response,
         idempotency_key: Annotated[str | None, Header()] = None,
     ) -> ExtractResponse:
         # Without a key, every request runs; with one, the store is consulted before any
@@ -264,7 +282,11 @@ def create_app(
         if idempotency_key is None:
             return _run_extract(request, budget_guard)
         key = _validate_idempotency_key(idempotency_key)
-        return _run_extract_idempotent(_store(), key, request, budget_guard)
+        store = _store()
+        # Name the store that answered, so a client retrying a key can see when the retry
+        # reached a different store (a second replica or a replaced disk) and was not replayed.
+        response.headers["X-Idempotency-Store"] = store.store_id
+        return _run_extract_idempotent(store, key, request, budget_guard)
 
     return app
 

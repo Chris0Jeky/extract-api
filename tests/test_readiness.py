@@ -22,7 +22,12 @@ def test_ready_with_a_writable_store(store, monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER_MODE", "fixture")
     resp = TestClient(create_app(idempotency_store=store)).get("/readyz")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "ready", "revision": "a" * 40, "provider_mode": "fixture"}
+    assert resp.json() == {
+        "status": "ready",
+        "revision": "a" * 40,
+        "idempotency_store_id": store.store_id,
+        "provider_mode": "fixture",
+    }
 
 
 def test_unset_revision_and_live_mode_are_reported_not_guessed(store, monkeypatch):

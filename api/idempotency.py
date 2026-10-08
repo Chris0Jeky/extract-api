@@ -14,8 +14,10 @@ The store is a thin interface so the gateway-era Postgres swap is one adapter.
 from __future__ import annotations
 
 import hashlib
+import os
 import sqlite3
 import time
+import uuid
 from contextlib import closing
 from dataclasses import dataclass
 from typing import Protocol
@@ -34,7 +36,16 @@ class StoredResponse:
     created_at_epoch: float
 
 
+class EphemeralStoreError(RuntimeError):
+    """The store file lives on the container's root filesystem, not on a persistent mount."""
+
+
 class IdempotencyStore(Protocol):
+    @property
+    def store_id(self) -> str:
+        """Stable identity of this store, so a client or probe can see two stores serving."""
+        ...
+
     def get(self, key: str) -> StoredResponse | None: ...
 
     def put(self, key: str, stored: StoredResponse) -> None: ...
@@ -57,16 +68,28 @@ class SqliteIdempotencyStore:
     as absent on read and removed; `sweep` reclaims them in bulk.
     """
 
-    def __init__(self, db_path: str, ttl_hours: int = 24, *, busy_timeout_s: float = 5.0) -> None:
+    def __init__(
+        self,
+        db_path: str,
+        ttl_hours: int = 24,
+        *,
+        busy_timeout_s: float = 5.0,
+        require_persistent_mount: bool = False,
+    ) -> None:
         self._db_path = db_path
         self._ttl_hours = ttl_hours
         self._busy_timeout_s = busy_timeout_s
-        self._init_db()
+        self._require_persistent_mount = require_persistent_mount
+        self._store_id = self._init_db()
+
+    @property
+    def store_id(self) -> str:
+        return self._store_id
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self._db_path, timeout=self._busy_timeout_s)
 
-    def _init_db(self) -> None:
+    def _init_db(self) -> str:
         with closing(self._connect()) as conn:
             # WAL lets readers proceed alongside a single writer under the request
             # threadpool (ADR 0004's concurrency rationale). It is a persistent property of
@@ -87,9 +110,26 @@ class SqliteIdempotencyStore:
                 " id INTEGER PRIMARY KEY CHECK (id = 1),"
                 " probed_at_epoch REAL NOT NULL)"
             )
+            # The store's identity is minted once and lives in the file, so it survives
+            # restarts and redeploys onto the same disk, and a second disk (a second replica,
+            # or a lost disk replaced by an empty one) shows up as a different id (ADR 0004).
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS store_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO store_meta (key, value) VALUES ('store_id', ?)",
+                (uuid.uuid4().hex,),
+            )
             conn.commit()
+            row = conn.execute("SELECT value FROM store_meta WHERE key = 'store_id'").fetchone()
+        return str(row[0])
 
     def probe(self) -> None:
+        if self._require_persistent_mount and _on_root_filesystem(self._db_path):
+            raise EphemeralStoreError(
+                f"{os.path.dirname(os.path.abspath(self._db_path))} is on the root filesystem,"
+                " not a persistent mount"
+            )
         # A real committed write, not a read: a read-only mount, a root-owned disk or a full
         # volume all still serve SELECTs, and only a write proves keyed requests can be stored.
         # One fixed row, so probing never grows the file.
@@ -166,3 +206,17 @@ class SqliteIdempotencyStore:
                 (key, created_at_epoch),
             )
             conn.commit()
+
+
+def _on_root_filesystem(db_path: str) -> bool:
+    """True when the store's directory shares a device with `/`, i.e. no disk is mounted there.
+
+    On a container platform the root filesystem is the image's writable layer, discarded on
+    every deploy, and each replica gets its own. A disk or volume mounted for the store is a
+    different device. Requiring that turns "forgot the disk" into a failed readiness check,
+    and because Render and Railway both refuse to add instances while a disk or volume is
+    attached, it also keeps the service on exactly one store (ADR 0004).
+    """
+    directory = os.path.dirname(os.path.abspath(db_path))
+    root = os.path.abspath(os.sep)
+    return os.stat(directory).st_dev == os.stat(root).st_dev
