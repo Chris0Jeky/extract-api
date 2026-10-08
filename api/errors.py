@@ -14,6 +14,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from api.observability import REQUEST_ID_HEADER, SCOPE_KEY, note
 from schemas.registry import UnknownSchema
 
 logger = logging.getLogger("extract.api")
@@ -89,6 +90,7 @@ class ExtractError(Exception):
 def error_response(
     code: ErrorCode, body: dict[str, object], *, headers: dict[str, str] | None = None
 ) -> JSONResponse:
+    note(result=code.value)  # the access line's `result` for every non-200
     return JSONResponse(status_code=STATUS_BY_CODE[code], content=body, headers=headers)
 
 
@@ -161,11 +163,15 @@ def install_error_handlers(app: FastAPI) -> None:
         )
 
     @app.exception_handler(Exception)
-    async def _handle_unexpected(_: Request, exc: Exception) -> JSONResponse:
+    async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
         # Any otherwise-unmapped exception still carries exactly one ErrorCode. The full
         # error is logged server-side; the client gets a generic detail (no internal leak).
         logger.exception("unhandled exception during request: %s", type(exc).__name__)
+        # This handler runs in ServerErrorMiddleware, outside the request-id middleware, so
+        # echo the id from the scope here.
+        rid = request.scope.get(SCOPE_KEY)
         return error_response(
             ErrorCode.internal_error,
             {"error": ErrorCode.internal_error.value, "detail": "internal error"},
+            headers={REQUEST_ID_HEADER: rid} if rid else None,
         )

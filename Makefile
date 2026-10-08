@@ -14,7 +14,7 @@ help: ## List targets
 		| awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
 dev: ## Run the API locally (uvicorn, autoreload)
-	$(PYTHON) -m uvicorn api.main:app --reload --port $(PORT)
+	$(PYTHON) -m uvicorn api.main:app --reload --no-access-log --port $(PORT)
 
 test: ## Run pytest with coverage (ratchet floor in pyproject)
 	$(PYTHON) -m pytest
