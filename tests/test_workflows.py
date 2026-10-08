@@ -269,12 +269,13 @@ def test_unprovisioned_dispatch_fails_before_any_deploy(target: str, missing: li
     assert result.returncode != 0
     for name in missing:
         assert f"not provisioned: {name} missing" in result.stderr
+    assert "EXTRACT_API_SMOKE_MODE must be fixture or live" in result.stderr
 
 
 @pytest.mark.parametrize("target", ["render", "railway"])
 def test_provisioning_guard_accepts_only_the_selected_targets_settings(target: str) -> None:
     guard = _workflow("deploy.yml")["jobs"]["deploy"]["steps"][0]["run"]
-    variables = {"TARGET": target, "EXTRACT_API_BASE_URL": "present"}
+    variables = {"TARGET": target, "EXTRACT_API_BASE_URL": "present", "SMOKE_MODE": "fixture"}
     variables.update(
         {"RENDER_DEPLOY_HOOK_URL": "present"}
         if target == "render"

@@ -67,6 +67,12 @@ jobs:
               missing=1
             fi
           done
+          # Declared, never defaulted: a missing or misspelled mode would silently skip the
+          # extraction check. `fixture` runs it; `live` skips it (no paid calls from CI).
+          case "$SMOKE_MODE" in
+            fixture|live) ;;
+            *) echo "not provisioned: EXTRACT_API_SMOKE_MODE must be fixture or live" >&2; missing=1 ;;
+          esac
           exit "$missing"
       - name: Validate revision
         run: |
@@ -103,7 +109,7 @@ jobs:
         run: |
           gh attestation verify "oci://$IMAGE_REF" --repo Chris0Jeky/extract-api \
             --signer-workflow Chris0Jeky/extract-api/.github/workflows/image.yml \
-            --source-ref refs/heads/main --deny-self-hosted-runners
+            --source-ref refs/heads/main --source-digest "$REVISION" --deny-self-hosted-runners
       - name: Record the previous revision for rollback
         id: previous
         run: |
