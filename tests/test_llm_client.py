@@ -80,3 +80,32 @@ def test_fixture_client_without_canned_text_fails_loud():
     # An unconfigured fixture client must not return an empty-but-valid extraction.
     with pytest.raises(ProviderError, match="canned text"):
         FixtureClient().complete(system="s", prompt="p", json_schema={})
+
+
+@pytest.mark.parametrize("raw, expected", [(None, 0), ("0", 0), ("25", 25)])
+def test_fixture_latency_env(monkeypatch, raw, expected):
+    monkeypatch.setenv("LLM_PROVIDER_MODE", "fixture")
+    monkeypatch.setenv("FIXTURE_CANNED_TEXT", '{"ok": true}')
+    if raw is None:
+        monkeypatch.delenv("FIXTURE_LATENCY_MS", raising=False)
+    else:
+        monkeypatch.setenv("FIXTURE_LATENCY_MS", raw)
+    client = get_client("default")
+    result = client.complete(system="s", prompt="p", json_schema={})
+    assert result.latency_ms >= expected
+    assert result.cost_usd == 0
+
+
+@pytest.mark.parametrize("raw", ["", "bad", "-1", "2.5", "1_0", " 4", "٤"])
+def test_fixture_latency_invalid_fails_loud(monkeypatch, raw):
+    monkeypatch.setenv("LLM_PROVIDER_MODE", "fixture")
+    monkeypatch.setenv("FIXTURE_LATENCY_MS", raw)
+    with pytest.raises(ValueError, match="FIXTURE_LATENCY_MS must be a non-negative integer"):
+        get_client("default")
+
+
+def test_real_providers_ignore_fixture_latency(monkeypatch):
+    monkeypatch.delenv("LLM_PROVIDER_MODE", raising=False)
+    monkeypatch.setenv("FIXTURE_LATENCY_MS", "invalid")
+    assert isinstance(get_client("openai"), OpenAIClient)
+    assert isinstance(get_client("anthropic"), AnthropicClient)

@@ -31,6 +31,9 @@ def test_render_runs_exactly_one_instance_with_a_data_disk():
     env = {var["key"]: var for var in service["envVars"]}
     assert env["IDEMPOTENCY_DB_PATH"]["value"].startswith("/data/")
     assert env["IDEMPOTENCY_REQUIRE_PERSISTENT_MOUNT"]["value"] == "1"
+    # Starter is 512 MB; docs/ops/SIZING.md measured 4 in flight as the safe ceiling there.
+    assert service["plan"] == "starter"
+    assert env["EXTRACT_MAX_CONCURRENCY"]["value"] == "4"
 
 
 def test_render_promotes_the_ci_image_rather_than_building():

@@ -43,6 +43,10 @@ services:
         value: fixture
       - key: FIXTURE_CANNED_TEXT
         value: '{"invoice_number":"NW-1001","issue_date":"2026-01-15","due_date":"2026-02-14","currency":"GBP","subtotal_minor":50000,"tax_minor":10000,"total_minor":60000,"vendor_name":"Northwind Supplies Ltd","vendor_tax_id":null,"buyer_name":null,"line_items":[{"description":"Office chairs","quantity":4,"unit_price_minor":12500,"amount_minor":50000}]}'
+      # In-flight extractions. Memory-bound and measured for Starter's 512 MB: the old default
+      # of 40 was OOM-killed at 8 in flight; 4 peaked at 351 MiB (docs/ops/SIZING.md).
+      - key: EXTRACT_MAX_CONCURRENCY
+        value: "4"
       # Process-lifetime spend cap (api/budget.py). Set, never unset: unset disables the guard.
       - key: EXTRACT_BUDGET_USD
         value: "2.00"
