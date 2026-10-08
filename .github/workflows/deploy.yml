@@ -1,0 +1,233 @@
+# Inert until the owner provisions the target and adds its secrets/vars.
+# GitHub can auto-create an UNPROTECTED production environment; the FIRST step
+# therefore fails loudly when provisioning is missing. The owner must configure
+# production protection before adding credentials. Nothing here provisions a host.
+# Rollback dispatches this same workflow with the previous revision; no second path.
+# Render's default image URL must be ghcr.io/chris0jeky/extract-api (tag may differ).
+name: deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Full lowercase git SHA of the proven image
+        required: true
+        type: string
+      target:
+        description: Provisioned deployment adapter
+        type: choice
+        options: [render, railway]
+        default: render
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+      attestations: read
+    defaults:
+      run:
+        shell: bash
+    env:
+      REVISION: ${{ inputs.revision }}
+      TARGET: ${{ inputs.target }}
+      BASE_URL: ${{ vars.EXTRACT_API_BASE_URL }}
+      SMOKE_MODE: ${{ vars.EXTRACT_API_SMOKE_MODE }}
+      IMAGE: ghcr.io/chris0jeky/extract-api
+    steps:
+      - name: Fail loudly unless the target is provisioned
+        env:
+          EXTRACT_API_BASE_URL: ${{ vars.EXTRACT_API_BASE_URL }}
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
+          RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+        run: |
+          required=(EXTRACT_API_BASE_URL)
+          case "$TARGET" in
+            render) required+=(RENDER_DEPLOY_HOOK_URL) ;;
+            railway) required+=(RAILWAY_PROJECT_TOKEN RAILWAY_SERVICE_ID RAILWAY_ENVIRONMENT_ID) ;;
+            *) echo 'invalid deployment target' >&2; exit 1 ;;
+          esac
+          missing=0
+          for name in "${required[@]}"; do
+            if [[ -z "${!name}" ]]; then
+              echo "not provisioned: $name missing" >&2
+              missing=1
+            fi
+          done
+          # Declared, never defaulted: a missing or misspelled mode would silently skip the
+          # extraction check. `fixture` runs it; `live` skips it (no paid calls from CI).
+          case "$SMOKE_MODE" in
+            fixture|live) ;;
+            *) echo "not provisioned: EXTRACT_API_SMOKE_MODE must be fixture or live" >&2; missing=1 ;;
+          esac
+          exit "$missing"
+      - name: Validate revision
+        run: |
+          if [[ ! "$REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo 'revision must match ^[0-9a-f]{40}$' >&2
+            exit 1
+          fi
+      # The deployed revision's own fixtures, so a rollback verifies against its labels.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.revision }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Authenticate for registry reads
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Resolve immutable digest
+        id: resolve
+        run: |
+          digest=$(docker buildx imagetools inspect "$IMAGE:sha-$REVISION" \
+            --format '{{json .Manifest}}' | jq -er '.digest')
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo 'registry returned an invalid image digest' >&2
+            exit 1
+          fi
+          printf 'digest=%s\nimage_ref=%s@%s\n' "$digest" "$IMAGE" "$digest" >> "$GITHUB_OUTPUT"
+      - name: Verify build provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE_REF: ${{ steps.resolve.outputs.image_ref }}
+        run: |
+          gh attestation verify "oci://$IMAGE_REF" --repo Chris0Jeky/extract-api \
+            --signer-workflow Chris0Jeky/extract-api/.github/workflows/image.yml \
+            --source-ref refs/heads/main --source-digest "$REVISION" --deny-self-hosted-runners
+      - name: Record the previous revision for rollback
+        id: previous
+        run: |
+          previous=''
+          if curl --fail -sS --max-time 15 "${BASE_URL%/}/readyz" \
+              -o "$RUNNER_TEMP/previous-ready.json"; then
+            previous=$(jq -er '.revision | select(type == "string")' \
+              "$RUNNER_TEMP/previous-ready.json") || previous=''
+          fi
+          if [[ "$previous" =~ ^[0-9a-f]{40}$ ]]; then
+            printf 'revision=%s\n' "$previous" >> "$GITHUB_OUTPUT"
+            printf 'Rollback target: `%s`\n' "$previous" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '::warning::No deployed revision available; a first deploy has no rollback target.'
+            echo 'Rollback target: unavailable (first deploy or readiness failure).' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Deploy the digest to Render
+        if: inputs.target == 'render'
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          IMAGE_REF: ${{ steps.resolve.outputs.image_ref }}
+        run: |
+          encoded=$(jq -rn --arg image "$IMAGE_REF" '$image | @uri')
+          curl --fail-with-body -sS --max-time 60 -X POST \
+            "${RENDER_DEPLOY_HOOK_URL}&imgURL=${encoded}" \
+            -o "$RUNNER_TEMP/render-deploy.json"
+      - name: Update Railway source and deploy the digest
+        if: inputs.target == 'railway'
+        env:
+          RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
+          SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+          ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+          IMAGE_REF: ${{ steps.resolve.outputs.image_ref }}
+        # source.image on serviceInstanceUpdate is unverified against a live project;
+        # the owner's first Railway dispatch proves it. Docs show it on serviceCreate.
+        run: |
+          jq -n --arg service "$SERVICE_ID" --arg environment "$ENVIRONMENT_ID" \
+            --arg image "$IMAGE_REF" '{
+              query: "mutation($service: String!, $environment: String!, $image: String!) { serviceInstanceUpdate(serviceId: $service, environmentId: $environment, input: { source: { image: $image } }) }",
+              variables: {service: $service, environment: $environment, image: $image}
+            }' > "$RUNNER_TEMP/railway-update.json"
+          curl --fail-with-body -sS --max-time 60 https://backboard.railway.com/graphql/v2 \
+            -H "Project-Access-Token: ${RAILWAY_PROJECT_TOKEN}" -H 'Content-Type: application/json' \
+            --data-binary "@$RUNNER_TEMP/railway-update.json" \
+            -o "$RUNNER_TEMP/railway-update-response.json"
+          if ! jq -e '((.errors // []) | length == 0) and (.data.serviceInstanceUpdate == true)' \
+              "$RUNNER_TEMP/railway-update-response.json" > /dev/null; then
+            echo 'Railway update failed: GraphQL errors or missing success response' >&2
+            exit 1
+          fi
+          jq -n --arg service "$SERVICE_ID" --arg environment "$ENVIRONMENT_ID" '{
+              query: "mutation($service: String!, $environment: String!) { serviceInstanceDeployV2(serviceId: $service, environmentId: $environment) }",
+              variables: {service: $service, environment: $environment}
+            }' > "$RUNNER_TEMP/railway-deploy.json"
+          curl --fail-with-body -sS --max-time 60 https://backboard.railway.com/graphql/v2 \
+            -H "Project-Access-Token: ${RAILWAY_PROJECT_TOKEN}" -H 'Content-Type: application/json' \
+            --data-binary "@$RUNNER_TEMP/railway-deploy.json" \
+            -o "$RUNNER_TEMP/railway-deploy-response.json"
+          if ! jq -e '((.errors // []) | length == 0) and
+              (.data.serviceInstanceDeployV2 | type == "string" and length > 0)' \
+              "$RUNNER_TEMP/railway-deploy-response.json" > /dev/null; then
+            echo 'Railway deploy failed: GraphQL errors or missing deployment ID' >&2
+            exit 1
+          fi
+      - name: Verify the deployed revision
+        env:
+          PREVIOUS_REVISION: ${{ steps.previous.outputs.revision }}
+        run: |
+          deadline=$((SECONDS + 600))
+          while (( SECONDS < deadline )); do
+            if status=$(curl --fail -sS --max-time 10 "${BASE_URL%/}/readyz" \
+                -o "$RUNNER_TEMP/ready.json" -w '%{http_code}') &&
+                [[ "$status" == 200 ]] &&
+                jq -e --arg revision "$REVISION" '.revision == $revision' \
+                  "$RUNNER_TEMP/ready.json" > /dev/null; then
+              printf 'Verified deployed revision: `%s`\n' "$REVISION" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo 'deployment timed out waiting for the requested revision' >&2
+          printf 'Rollback: gh workflow run deploy.yml -f revision=%s -f target=%s\n' \
+            "${PREVIOUS_REVISION:-<previous-revision-unavailable>}" "$TARGET" >&2
+          exit 1
+      - name: Verify exactly one idempotency store serves
+        # ADR 0004: two stores would silently break replay. Sample readiness repeatedly; the
+        # platform's load balancer would spread these across any second replica.
+        run: |
+          ids=()
+          for _ in $(seq 1 10); do
+            id=$(curl --fail -sS --max-time 10 "${BASE_URL%/}/readyz" \
+              | jq -er '.idempotency_store_id | select(type == "string" and length > 0)')
+            ids+=("$id")
+          done
+          distinct=$(printf '%s\n' "${ids[@]}" | sort -u)
+          if [[ $(printf '%s\n' "$distinct" | wc -l) -ne 1 ]]; then
+            printf 'more than one idempotency store is serving:\n%s\n' "$distinct" >&2
+            exit 1
+          fi
+          printf 'Idempotency store: `%s`\n' "$distinct" >> "$GITHUB_STEP_SUMMARY"
+      - name: Verify one deterministic fixture extraction
+        if: vars.EXTRACT_API_SMOKE_MODE == 'fixture'
+        # The owner sets LLM_PROVIDER_MODE=fixture for the first deploy. No live smoke.
+        run: |
+          jq '{doc_type, schema_version, content, provider: "openai"}' \
+            fixtures/invoices/invoice_0001.json > "$RUNNER_TEMP/fixture-request.json"
+          status=$(curl --fail-with-body -sS --max-time 30 \
+            -H 'Content-Type: application/json' \
+            --data-binary "@$RUNNER_TEMP/fixture-request.json" \
+            -o "$RUNNER_TEMP/fixture-response.json" -w '%{http_code}' \
+            "${BASE_URL%/}/v1/extract")
+          if [[ "$status" != 200 ]]; then
+            echo 'fixture extraction did not return HTTP 200' >&2
+            exit 1
+          fi
+          if ! jq -e --slurpfile fixture fixtures/invoices/invoice_0001.json \
+              '.data == $fixture[0].expected and .meta.provider == "fixture"' \
+              "$RUNNER_TEMP/fixture-response.json" > /dev/null; then
+            echo 'fixture extraction returned a record other than the labelled fixture' >&2
+            exit 1
+          fi

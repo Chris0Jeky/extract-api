@@ -75,11 +75,13 @@ only drops the 24-hour replay window (ADR 0004).
   Dockerfile itself; that is a fallback, not the promoted artefact. The promoted path is an
   image-sourced service, whose volume, env and health check the runbook sets in the dashboard
   to match `railway.json`.
-- Railway volumes need `RAILWAY_RUN_UID=0`, and Render does not document who owns a mounted
-  disk. The image entrypoint (added with the image pipeline) therefore fixes `/data` ownership
-  when started as root and drops to the unprivileged `extract` user before the app starts, so
-  the app never runs as root on any platform. If a mount is still unwritable, `/readyz` fails
-  and the deploy never goes live.
+- Railway mounts volumes root-owned (its workaround for non-root images is
+  `RAILWAY_RUN_UID=0`), and Render does not document who owns a mounted disk. The image
+  therefore starts as root, its entrypoint fixes ownership of the store's directory and SQLite
+  files only, and it execs the app through `setpriv` as `extract` (10001) with no new
+  privileges and no inheritable capabilities. No platform needs a UID setting, and the app
+  never runs as root; the docker smoke asserts PID 1's every UID is 10001. If a mount is still
+  unwritable, `/readyz` fails and the deploy never goes live.
 - The deploy workflow's Railway step updates the service's image source through Railway's
   public GraphQL API. Railway documents `source.image` only on service creation, so that step
   is unverified until the owner's first Railway deploy.
