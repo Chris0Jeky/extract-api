@@ -4,6 +4,9 @@ FROM ghcr.io/astral-sh/uv:0.11.21 AS uv
 
 FROM python:3.13-slim
 
+ARG EXTRACT_API_REVISION=unknown
+ENV EXTRACT_API_REVISION=${EXTRACT_API_REVISION}
+
 WORKDIR /app
 
 # Keep Docker's lock reader aligned with CI. The final image contains only the
@@ -36,11 +39,18 @@ RUN groupadd --gid 10001 extract \
 # replay state in the container layer, which every deploy (and every replica) replaces.
 ENV IDEMPOTENCY_DB_PATH=/data/idempotency.sqlite     IDEMPOTENCY_REQUIRE_PERSISTENT_MOUNT=1
 
-USER extract
+# The image starts as root on purpose and the entrypoint drops to `extract` (10001) before
+# the app starts. Platforms mount /data as they please: Railway documents root-owned volumes
+# and Render documents nothing, so the entrypoint repairs the mount's ownership first. The app
+# process never runs as root; the docker smoke asserts PID 1's every UID is 10001. util-linux
+# supplies setpriv in the Debian slim base; fail the build if it is absent.
+RUN command -v setpriv
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8200
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8200/healthz').status==200 else 1)"
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8200", "--no-access-log"]

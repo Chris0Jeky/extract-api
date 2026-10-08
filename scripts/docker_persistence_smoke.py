@@ -104,18 +104,24 @@ def _assert_compose_contract() -> None:
         raise RuntimeError("compose must declare the idempotency-data named volume")
 
 
-def _assert_image_user(image: str) -> None:
-    user = _run(
-        "docker",
-        "image",
-        "inspect",
-        image,
-        "--format",
-        "{{.Config.User}}",
-        capture_output=True,
-    ).stdout.strip()
-    if not user or user in {"0", "0:0", "root", "root:root"}:
-        raise RuntimeError(f"Docker image must configure a non-root user, got {user!r}")
+def _assert_app_uid(container: str) -> None:
+    # The image starts as root so its entrypoint can repair a root-owned mount, then drops to
+    # 10001 before the app starts. `docker exec` runs as root, so read PID 1's identity.
+    status = _run("docker", "exec", container, "cat", "/proc/1/status", capture_output=True).stdout
+    uid_fields = next(
+        (line.split()[1:] for line in status.splitlines() if line.startswith("Uid:")), []
+    )
+    if uid_fields != ["10001"] * 4:
+        raise RuntimeError(f"app process did not drop every UID to 10001: {uid_fields!r}")
+
+
+def _assert_ready(port: int) -> None:
+    # /readyz commits a write to the store, so this proves the mounted volume is writable by
+    # the app user and (with IDEMPOTENCY_REQUIRE_PERSISTENT_MOUNT=1) a distinct device from /.
+    with urlopen(f"http://127.0.0.1:{port}/readyz", timeout=5) as response:
+        body = json.loads(response.read())
+    if response.status != 200 or body.get("status") != "ready":
+        raise RuntimeError(f"/readyz is not ready: {response.status} {body}")
 
 
 def _locked_runtime_versions() -> dict[str, str]:
@@ -211,7 +217,11 @@ def _start_container(
     volume: str,
     port: int,
     canned_text: str,
+    root_owned_mount: bool = False,
 ) -> None:
+    # nocopy leaves the new volume empty and root-owned, as a platform disk may arrive,
+    # instead of copying the image's extract-owned /data into it.
+    mount = f"{volume}:/data:nocopy" if root_owned_mount else f"{volume}:/data"
     _run(
         "docker",
         "run",
@@ -219,7 +229,7 @@ def _start_container(
         "--name",
         container,
         "-v",
-        f"{volume}:/data",
+        mount,
         "-p",
         f"127.0.0.1:{port}:8200",
         "-e",
@@ -261,9 +271,10 @@ def _post(port: int, payload: dict[str, str], key: str) -> tuple[int, dict[str, 
 
 def _is_replayed(body: dict[str, object]) -> bool:
     meta = body.get("meta")
-    if not isinstance(meta, dict) or not isinstance(meta.get("replayed"), bool):
+    replayed = meta.get("replayed") if isinstance(meta, dict) else None
+    if not isinstance(replayed, bool):
         raise RuntimeError(f"response has no boolean meta.replayed: {body}")
-    return meta["replayed"]
+    return replayed
 
 
 def _remove_container(container: str) -> None:
@@ -278,6 +289,43 @@ def _cleanup(container: str | None, volume: str | None) -> None:
         _run("docker", "volume", "rm", volume, check=False, capture_output=True)
 
 
+def _assert_root_owned_mount(image: str, payload: dict[str, str], canned_text: str) -> None:
+    suffix = uuid.uuid4().hex[:12]
+    container = f"extract-api-root-smoke-{suffix}"
+    volume = f"extract-api-root-smoke-{suffix}"
+    port = _free_port()
+    try:
+        _run("docker", "volume", "create", volume)
+        _start_container(
+            image=image,
+            container=container,
+            volume=volume,
+            port=port,
+            canned_text=canned_text,
+            root_owned_mount=True,
+        )
+        _wait_for_health(port)
+        _assert_app_uid(container)
+        _assert_ready(port)
+        response_status, body = _post(port, payload, "docker-root-start-key")
+        if response_status != 200 or _is_replayed(body):
+            raise RuntimeError(f"root-owned mount keyed request failed: {response_status} {body}")
+        owner = _run(
+            "docker",
+            "exec",
+            container,
+            "stat",
+            "-c",
+            "%u:%g",
+            "/data/idempotency.sqlite",
+            capture_output=True,
+        ).stdout.strip()
+        if owner != "10001:10001":
+            raise RuntimeError(f"root-owned mount SQLite file has wrong ownership: {owner!r}")
+    finally:
+        _cleanup(container, volume)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--image", required=True, help="already-built image to exercise")
@@ -288,7 +336,6 @@ def main() -> int:
     try:
         _assert_compose_contract()
         _assert_locked_runtime(args.image)
-        _assert_image_user(args.image)
         payload, valid_canned_text = _fixture_request()
         resource_suffix = uuid.uuid4().hex[:12]
         container = f"extract-api-persistence-smoke-{resource_suffix}"
@@ -304,9 +351,8 @@ def main() -> int:
             canned_text=valid_canned_text,
         )
         _wait_for_health(port)
-        uid = _run("docker", "exec", container, "id", "-u", capture_output=True).stdout.strip()
-        if uid == "0":
-            raise RuntimeError("Docker service is running as root")
+        _assert_app_uid(container)
+        _assert_ready(port)
 
         first_status, first_body = _post(port, payload, "docker-persistence-key")
         if first_status != 200 or _is_replayed(first_body):
@@ -338,9 +384,10 @@ def main() -> int:
     finally:
         _cleanup(container, volume)
 
+    _assert_root_owned_mount(args.image, payload, valid_canned_text)
     print(
-        "DOCKER RUNTIME SMOKE OK: locked non-dev dependencies, non-root image, "
-        "writable /data, replay survives recreate"
+        "DOCKER RUNTIME SMOKE OK: locked non-dev dependencies, app runs as UID 10001, "
+        "/readyz ready, replay survives recreate, a root-owned mount is repaired"
     )
     return 0
 
