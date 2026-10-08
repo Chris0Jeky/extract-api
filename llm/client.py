@@ -416,9 +416,10 @@ class FixtureClient:
 
     provider = "fixture"
 
-    def __init__(self, canned_text: str = "") -> None:
+    def __init__(self, canned_text: str = "", *, latency_ms: int = 0) -> None:
         self.model = "fixture"
         self._canned_text = canned_text
+        self._latency_ms = latency_ms
 
     def complete(
         self,
@@ -433,13 +434,16 @@ class FixtureClient:
                 provider=self.provider,
                 detail="FixtureClient has no canned text (set FIXTURE_CANNED_TEXT)",
             )
+        started = time.perf_counter()
+        if self._latency_ms:
+            time.sleep(self._latency_ms / 1000)
         return CompletionResult(
             text=self._canned_text,
             model=self.model,
             tokens_in=0,
             tokens_out=0,
             cost_usd=0.0,
-            latency_ms=0.0,
+            latency_ms=(time.perf_counter() - started) * 1000,
             stop_reason="completed",
         )
 
@@ -447,7 +451,10 @@ class FixtureClient:
 def get_client(provider: str) -> LLMClient:
     """Resolve a provider client from env + the request's provider field."""
     if os.environ.get("LLM_PROVIDER_MODE") == "fixture":
-        return FixtureClient(os.environ.get("FIXTURE_CANNED_TEXT", ""))
+        raw = os.environ.get("FIXTURE_LATENCY_MS", "0")
+        if not raw.isascii() or not raw.isdecimal():
+            raise ValueError(f"FIXTURE_LATENCY_MS must be a non-negative integer; got {raw!r}")
+        return FixtureClient(os.environ.get("FIXTURE_CANNED_TEXT", ""), latency_ms=int(raw))
     resolved = provider
     if provider == "default":
         # Both providers have real call paths now (T02 OpenAI, T09 Anthropic); openai

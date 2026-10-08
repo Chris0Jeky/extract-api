@@ -20,9 +20,12 @@ from __future__ import annotations
 import logging
 import os
 import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
 import anyio
+import anyio.to_thread
 from fastapi import FastAPI, Header, Response
 
 from api.budget import BudgetGuard, budget_from_env
@@ -245,10 +248,20 @@ def create_app(
             cached_store = _store_from_env()
         return cached_store
 
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        raw = os.environ.get("EXTRACT_MAX_CONCURRENCY", "40")
+        if not raw.isascii() or not raw.isdecimal() or int(raw) <= 0:
+            raise ValueError(f"EXTRACT_MAX_CONCURRENCY must be a positive integer; got {raw!r}")
+        # Sync endpoints queue for a token; async health probes never use this pool.
+        anyio.to_thread.current_default_thread_limiter().total_tokens = int(raw)
+        yield
+
     app = FastAPI(
         title="extract-api",
         version="0.1.0",
         summary="Strict-schema LLM extraction with validation-retry and per-field accuracy.",
+        lifespan=lifespan,
     )
     install_error_handlers(app)
     if not logging_configured():
