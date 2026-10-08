@@ -1,13 +1,23 @@
 # Extraction hosting reference
 
-Reference-only preparation, 2026-09-10. `manifest.json` is inert metadata. It changes no API, provider, database, credentials, hostname or deployment trigger. Existing workflows may still run after a future merge.
+`manifest.json` declares where and how extract-api runs, in agent-hq's hosting-manifest v2
+(`agent-hq/hosting-manifest@2`, defined by agent-hq `docs/hosting/HOSTING_MANIFEST_V2.md`). It is
+metadata: it provisions nothing, and `activation_authorized` stays `false` until the owner
+authorizes spend.
 
-Keep the service local/private until a separately approved host is justified. A static demo does not execute Python/PyMuPDF extraction. Do not publish an unauthenticated paid-model endpoint or silently add this workload to Taskdeck's small instance.
+- The decision and the portability boundary: `docs/adr/0005-hosting-platform.md`.
+- The single-store guarantee and the shared-authority design: `docs/adr/0004-idempotency-store.md`.
+- Deploy, verify, roll back, rotate: `docs/ops/RUNBOOK.md`.
+- Measured sizing: `docs/ops/SIZING.md`. Logs and the five signals: `docs/ops/OBSERVABILITY.md`.
+- Owner provisioning steps: `tasks/BACKLOG.md`, M5.
 
-EX1 specifies gateway authentication, per-caller limits, bounded PDF/text input and finite provider spend before external exposure. CORS and a per-run model cap are not substitutes for caller authentication and aggregate abuse control. EX2 proves fixture-mode restart/idempotency persistence on `/data`, strict validation and no paid-provider calls for invalid input. EX3 permits only a separately reviewed synthetic demonstration, not real documents or live keys.
+Validate after any edit, from an agent-hq checkout:
 
-Preserve key-plus-payload idempotency, conflict semantics and the existing retry/error contracts. Do not log document text, credential values or raw provider failures. Host/container compatibility is not a reason to change extraction semantics.
+```sh
+py -3 scripts/hosting.py validate <path to this repo>/.hosting/manifest.json
+```
 
-Follow `AGENTS.md` and the existing CLAUDE orientation and task queue. Syntax: `python -m json.tool .hosting/manifest.json`. Future implementation requires `make ci-quick` and the narrowest existing seam tests. Hosted, budget and restore acceptance need actual receipts; JSON validation does not establish them.
-
-Record the previous image and compatible idempotency database before promotion. Do not delete the persistent volume to obtain a clean deployment. Purchases, live provider activation, public branding and domain changes are separate owner actions.
+The invariants hold whatever the platform: no unauthenticated public paid-model endpoint (fixture
+mode until caller authentication exists), strict validation and idempotency semantics unchanged,
+document content and credentials never in logs, exactly one idempotency store, and no spend,
+public branding or domain change without the owner.

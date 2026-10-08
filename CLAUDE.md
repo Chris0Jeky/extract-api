@@ -26,7 +26,8 @@ list and the human-action file (only Chris ticks its human-blocked items);
 
 | Region | What lives there | Its tests |
 | --- | --- | --- |
-| `api/` | FastAPI app (`main.py` `create_app`), taxonomy rendering (`errors.py`), SQLite idempotency, budget guard, PDF/text decode (`content.py`) | `test_api`, `test_extract_endpoint`, `test_errors`, `test_idempotency`, `test_budget`, `test_content` |
+| `api/` | FastAPI app (`main.py` `create_app`, `/readyz`, the `ExtractAdmission` cap), taxonomy rendering (`errors.py`), SQLite idempotency with store identity, budget guard, PDF/text decode (`content.py`), JSON logs and request ids (`observability.py`) | `test_api`, `test_extract_endpoint`, `test_errors`, `test_idempotency`, `test_budget`, `test_content`, `test_readiness`, `test_replica_guard`, `test_concurrency`, `test_observability`, `test_uvicorn_logging` |
+| Hosting | `Dockerfile` + `docker-entrypoint.sh`, `render.yaml`, `railway.json`, `.github/workflows/image.yml` (build, scan, attest) and `deploy.yml` (dispatch-only digest deploy), `.hosting/manifest.json` (agent-hq manifest v2), `docs/ops/` (RUNBOOK, SIZING, OBSERVABILITY), ADRs 0004-0005 | `test_deploy_descriptors`, `test_workflows`; `scripts/docker_persistence_smoke.py` and `scripts/load_test.py` in CI |
 | `llm/` | The only provider seam. `client.py` (both SDKs, 467 lines), `pipeline.py:run_extraction` (validation-retry), `schema_utils`, `prompts`, `errors` | `test_llm_client`, `test_openai_client`, `test_anthropic_client`, `test_pipeline`, `test_schema_utils`, `test_prompts`, `test_import_boundary` |
 | `schemas/` | Strict `invoice.v1` + `job_posting.v1`, ISO-4217 set, `registry.py` | `test_schemas`, `test_iso4217`, `test_registry` |
 | `harness/` | Deterministic accuracy scoring (`run_accuracy.py`, `scoring.py`) and `normalize.py` | `test_run_accuracy`, `test_scoring`, `test_normalize` |

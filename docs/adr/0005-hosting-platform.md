@@ -91,7 +91,9 @@ only drops the 24-hour replay window (ADR 0004).
 - Horizontal scale is off on both platforms, and both platforms enforce it while a disk or
   volume is attached. Scaling out first needs a shared idempotency authority (ADR 0004).
 - Every Render deploy has a short gap while the old instance stops before the new one starts.
-  Accepted for a single-owner API; a client retrying with the same `Idempotency-Key` is safe.
+  Accepted for a single-owner API. In-flight requests get up to 60 s (`maxShutdownDelaySeconds`)
+  to finish; one cut off before completing was never stored, so its retry with the same
+  `Idempotency-Key` runs and bills again (only a completed 200 is stored, ADR 0004).
 - Sizing (512 MB Starter or the 2 GB `1c-2g` size) is decided by the fixture-mode load test,
   not guessed; until it is recorded, `plan: starter` stands.
 - Cost at the recommended size: about $7.25 a month on Render, or the $5 Railway floor.

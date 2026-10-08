@@ -109,6 +109,33 @@ This file is also the human-action backlog (`human_todo` in
   extraction around the `LLM_BASE_URL` flip; `GATEWAY_BYPASS` documented;
   `cost_usd` confirmed emitted.
 
+## M5 - hosting (owner provisioning; 2026-10-08 hosting wave)
+
+Everything up to provisioning is built and proven in CI (ADR 0005, `docs/ops/RUNBOOK.md`,
+`docs/ops/SIZING.md`). Each step below is the owner's: it creates an account, a service, a
+secret, a public effect or spend. Nothing is provisioned until then.
+
+- [ ] **extract-api-caller-auth: How should extract-api authenticate callers before it goes live on Render with a paid model behind it?**
+  - (a) API keys checked by the app, new 401 code (recommended): agents add an `unauthorized` (401) error code and require `Authorization: Bearer <key>` on /v1/extract, storing only SHA-256 hashes in a secret named EXTRACT_API_KEY_SHA256S; two keys valid at once for rotation; fails closed without keys; /healthz and /readyz stay open.
+  - (b) An edge gateway in front (Cloudflare Access): needs the domain and a Cloudflare setup, and every direct address of the service must also be closed.
+  - (c) No public live service for now: fixture-mode demonstration only.
+  - Why (a): it closes the paid endpoint on every platform and every address, at no cost; the new code is the part that needs your approval.
+  - Source: agent-hq `decisions/extract-api-caller-auth.json` (answer in the cockpit). Blocks H6 only.
+- [ ] **H1 Make the GHCR image public** after the first main build of the image pipeline
+  (RUNBOOK 1.1). Verify: an anonymous `docker pull ghcr.io/chris0jeky/extract-api:main` works.
+- [ ] **H2 Create and protect the `production` environment** (RUNBOOK 1.2): you as required
+  reviewer, deployment branches `main` only. Do this before H4 puts any secret in it.
+- [ ] **H3 Create the Render service from the Blueprint** (RUNBOOK 1.3): Starter, Frankfurt, 1 GB
+  disk, about $7.25 a month; this is the spend decision. Leave the prompted keys blank.
+- [ ] **H4 Wire the deploy workflow** (RUNBOOK 1.4): secret `RENDER_DEPLOY_HOOK_URL`, variables
+  `EXTRACT_API_BASE_URL` and `EXTRACT_API_SMOKE_MODE=fixture` in `production`.
+- [ ] **H5 First deploy in fixture mode** (RUNBOOK 2): dispatch `deploy.yml`, approve it; it
+  verifies itself. An agent can run the dispatch once H1 to H4 are done; the approval is yours.
+- [ ] **H6 Go live** (RUNBOOK 4), only after the caller-auth decision is built and deployed: provider
+  key, models, prices, `EXTRACT_API_SMOKE_MODE=live`.
+- [ ] **H7 Domain** (RUNBOOK 7), after buying deliverasoft.com: custom domain
+  `api.deliverasoft.com` in Render plus its CNAME.
+
 ## Cut line
 
 If hours overrun: ship invoices only (M1 + T16-T20 for invoice alone); job
