@@ -130,11 +130,21 @@ container serves `/v1/extract` deterministically offline. `FIXTURE_CANNED_TEXT` 
 string that validates against the requested `doc_type`/`schema_version` (e.g. a valid `invoice.v1`
 object); arbitrary text will fail the validation-retry loop and return a 422, by design.
 
-The image runs as an unprivileged user and defaults `IDEMPOTENCY_DB_PATH` to
-`/data/idempotency.sqlite`. Compose mounts its named `idempotency-data` volume at `/data` and
+The image starts as root only long enough for its entrypoint to fix ownership of the `/data`
+mount, then runs the app as the unprivileged `extract` user (uid 10001, no capabilities), and
+defaults `IDEMPOTENCY_DB_PATH` to `/data/idempotency.sqlite`. Compose mounts its named `idempotency-data` volume at `/data` and
 forces the same path over the relative local default in `.env`, so replay records survive container
 replacement or recreation while that volume is retained. `docker compose down --volumes`
 intentionally destroys those replay records.
+
+## Deploy (hosted)
+
+CI builds one image per main commit, smokes it, scans it, attests it and publishes it to
+`ghcr.io/chris0jeky/extract-api`; a dispatch-only workflow promotes a chosen commit's image by
+digest to Render (`render.yaml`, primary) or Railway (`railway.json`). One instance, a disk at
+`/data`, readiness at `/readyz`, at most `EXTRACT_MAX_CONCURRENCY` extractions in flight (4 on a
+512 MB instance, measured in `docs/ops/SIZING.md`). The decision is ADR 0005; the steps, rollback
+and secret rotation are `docs/ops/RUNBOOK.md`. Nothing is provisioned yet.
 
 ## License
 
