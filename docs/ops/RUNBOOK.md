@@ -35,7 +35,8 @@ under deployment branches choose "Selected branches" with only `main`.
 
 **1.3 Create the Render service.** Render dashboard, New, Blueprint, connect
 `Chris0Jeky/extract-api`. Render reads `render.yaml` and prompts for each `sync: false` value: the
-provider keys, models and prices. Leave them all blank for now; fixture mode reads none of them.
+provider keys, models and prices. Leave them blank, or enter `unset` if Render insists on a value:
+fixture mode reads none of them, and going live (section 4) replaces them.
 This creates the Starter service ($7 a month) and its 1 GB disk ($0.25 a month) in Frankfurt, and
 deploys the current `main` image.
 
@@ -87,16 +88,20 @@ The API has no caller authentication yet. Until the owner decision `extract-api-
 (agent-hq inbox) is answered and its result is merged and deployed, keep the service in fixture
 mode: a live provider behind a public URL would let anyone spend on your provider account. When it is:
 
-1. In Render's environment for the service: delete `LLM_PROVIDER_MODE` and `FIXTURE_CANNED_TEXT`;
+1. First, set the GitHub variable `EXTRACT_API_SMOKE_MODE` to `live`, before any further deploy:
+   with `fixture` still set, a deploy's smoke extraction would reach the live provider. With
+   `live`, CI never calls a paid provider; the deploy checks readiness and the store only.
+2. In Render's environment for the service: delete `LLM_PROVIDER_MODE` and `FIXTURE_CANNED_TEXT`;
    set `OPENAI_API_KEY` (and/or `ANTHROPIC_API_KEY`), the model ids and the four per-million-token
    prices for the models you chose, from the provider's own pricing page; set the caller-key
    secret that the auth change names. Keep `EXTRACT_BUDGET_USD` set: it caps spend per process
    lifetime (it resets on every restart), and unset disables it.
-2. Set the GitHub variable `EXTRACT_API_SMOKE_MODE` to `live`. CI never calls a paid provider, so
-   the deploy then checks readiness and the store only.
-3. Render restarts the service on an environment change. Check `/readyz` reports
-   `"provider_mode":"live"`, then make one real extraction yourself and read its `extract.access`
-   log line for `result`, `cost_usd` and `duration_ms`.
+3. Saving environment changes redeploys the service, and Render does not document whether that
+   redeploy keeps the digest the deploy hook set or re-pulls the service's `:main` tag. So
+   re-run the deploy workflow (section 2) with the revision you mean to run: it pins the digest
+   and verifies it.
+4. Check `/readyz` reports `"provider_mode":"live"`, then make one real extraction yourself and
+   read its `extract.access` log line for `result`, `cost_usd` and `duration_ms`.
 
 ## 5. Roll back
 
@@ -125,7 +130,9 @@ written to a file, a commit, a command line or a chat.
 | `RAILWAY_PROJECT_TOKEN` | Railway project Settings, Tokens | GitHub `production` environment secret | The next Railway deploy run | Delete the old token in Railway |
 | Caller API keys (after the auth decision) | Per the auth change's docs | Per the auth change's docs | | |
 
-A provider key rotation restarts the instance (a short gap, as in a deploy). Rotate the deploy hook
+Changing a Render environment value redeploys the instance (a short gap, as in a deploy); re-run
+the deploy workflow with the running revision afterwards, as in section 4 step 3, so the image is
+the verified digest. Rotate the deploy hook
 whenever anyone who should not have it may have seen it: it can redeploy, though only images that
 exist in GHCR.
 
@@ -144,6 +151,7 @@ Railway runs the same image. Its config-as-code (`railway.json`) only applies to
 from the repository, so for the promoted image set the same values in the dashboard:
 
 1. New project, Deploy from Docker image, `ghcr.io/chris0jeky/extract-api:main` (public, step 1.1).
+   In the service's Networking settings, generate a public domain: that is `EXTRACT_API_BASE_URL`.
 2. Add a volume mounted at `/data`. Leave `RAILWAY_RUN_UID` unset: the image starts as root, repairs
    the volume's ownership and drops to uid 10001 itself.
 3. Settings: one replica (Railway refuses replicas with a volume anyway), health check path
