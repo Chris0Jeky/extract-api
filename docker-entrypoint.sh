@@ -7,18 +7,22 @@ set -eu
 # user (a platform forcing a UID), run the app unchanged.
 if [ "$(id -u)" = 0 ]; then
     database_path=${IDEMPOTENCY_DB_PATH:-/data/idempotency.sqlite}
+    # Allowlist, checked before creating anything and again after resolving symlinks: root
+    # only ever touches the data mount, whatever IDEMPOTENCY_DB_PATH says.
     directory=$(realpath -m -- "$(dirname -- "$database_path")")
     case "$directory" in
-        /|/app)
-            echo "refusing to change idempotency ownership in $directory" >&2
+        /data|/data/*) ;;
+        *)
+            echo "refusing to change idempotency ownership outside /data: $directory" >&2
             exit 1
             ;;
     esac
     mkdir -p -- "$directory"
     directory=$(cd "$directory" && pwd -P)
     case "$directory" in
-        /|/app)
-            echo "refusing to change idempotency ownership in $directory" >&2
+        /data|/data/*) ;;
+        *)
+            echo "refusing to change idempotency ownership outside /data: $directory" >&2
             exit 1
             ;;
     esac
@@ -26,7 +30,7 @@ if [ "$(id -u)" = 0 ]; then
     # Only regular database files and SQLite sidecars immediately in this directory.
     # Do not follow symlinks, recurse into subdirectories, or change other files.
     database_name=$(basename -- "$database_path")
-    find "$directory" -maxdepth 1 -type f \
+    find "$directory" -maxdepth 1 -type f -links 1 \
         \( -name "$database_name" -o -name "$database_name-wal" \
         -o -name "$database_name-shm" -o -name "$database_name-journal" \
         -o -name '*.sqlite' -o -name '*.sqlite-*' \

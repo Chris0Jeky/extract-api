@@ -4,9 +4,6 @@ FROM ghcr.io/astral-sh/uv:0.11.21 AS uv
 
 FROM python:3.13-slim
 
-ARG EXTRACT_API_REVISION=unknown
-ENV EXTRACT_API_REVISION=${EXTRACT_API_REVISION}
-
 WORKDIR /app
 
 # Keep Docker's lock reader aligned with CI. The final image contains only the
@@ -52,6 +49,9 @@ EXPOSE 8200
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8200/healthz').status==200 else 1)"
+
+ARG EXTRACT_API_REVISION=unknown
+ENV EXTRACT_API_REVISION=${EXTRACT_API_REVISION}
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8200", "--no-access-log"]

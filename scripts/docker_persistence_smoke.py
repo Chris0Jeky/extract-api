@@ -108,11 +108,22 @@ def _assert_app_uid(container: str) -> None:
     # The image starts as root so its entrypoint can repair a root-owned mount, then drops to
     # 10001 before the app starts. `docker exec` runs as root, so read PID 1's identity.
     status = _run("docker", "exec", container, "cat", "/proc/1/status", capture_output=True).stdout
-    uid_fields = next(
-        (line.split()[1:] for line in status.splitlines() if line.startswith("Uid:")), []
-    )
-    if uid_fields != ["10001"] * 4:
-        raise RuntimeError(f"app process did not drop every UID to 10001: {uid_fields!r}")
+    fields = {
+        name: value.split()
+        for name, _, value in (line.partition(":") for line in status.splitlines())
+    }
+    expected = {
+        "Uid": ["10001"] * 4,
+        "Gid": ["10001"] * 4,
+        "Groups": ["10001"],
+        "CapPrm": ["0000000000000000"],
+        "CapEff": ["0000000000000000"],
+        "CapInh": ["0000000000000000"],
+        "NoNewPrivs": ["1"],
+    }
+    wrong = {name: fields.get(name) for name, want in expected.items() if fields.get(name) != want}
+    if wrong:
+        raise RuntimeError(f"app process did not fully drop privileges: {wrong!r}")
 
 
 def _assert_ready(port: int) -> None:

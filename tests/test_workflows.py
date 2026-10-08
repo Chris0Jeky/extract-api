@@ -85,7 +85,12 @@ def test_build_once_per_event_with_revision_labels_and_no_latest() -> None:
             in (config["labels"])
         )
     assert ":main" not in str(image["jobs"]["local-image"])
-    assert "${{ env.IMAGE }}:main" in str(image["jobs"]["published-image"])
+    # :main moves only after smoke, scan and attestation, and only to the proven digest.
+    steps = image["jobs"]["published-image"]["steps"]
+    names = [step.get("name", "") for step in steps]
+    retag = names.index("Move the main tag to the proven digest")
+    assert retag > names.index("Attest the proven image")
+    assert ":main" not in str(steps[:retag])
 
 
 def test_published_digest_is_smoked_scanned_and_attested_after_proof() -> None:
@@ -165,6 +170,7 @@ def test_deploy_resolves_verifies_and_promotes_only_a_digest() -> None:
     verify = _step(job, "Verify build provenance")
     assert 'gh attestation verify "oci://$IMAGE_REF" --repo Chris0Jeky/extract-api' in verify["run"]
     assert "--signer-workflow Chris0Jeky/extract-api/.github/workflows/image.yml" in verify["run"]
+    assert "--source-ref refs/heads/main" in verify["run"]
     assert verify["env"]["GH_TOKEN"] == "${{ github.token }}"
     for name in ("Deploy the digest to Render", "Update Railway source and deploy the digest"):
         step = _step(job, name)
@@ -240,7 +246,7 @@ def test_revision_guard_accepts_a_full_lowercase_sha() -> None:
             "railway",
             [
                 "EXTRACT_API_BASE_URL",
-                "RAILWAY_TOKEN",
+                "RAILWAY_PROJECT_TOKEN",
                 "RAILWAY_SERVICE_ID",
                 "RAILWAY_ENVIRONMENT_ID",
             ],
@@ -253,7 +259,7 @@ def test_unprovisioned_dispatch_fails_before_any_deploy(target: str, missing: li
         [
             "EXTRACT_API_BASE_URL",
             "RENDER_DEPLOY_HOOK_URL",
-            "RAILWAY_TOKEN",
+            "RAILWAY_PROJECT_TOKEN",
             "RAILWAY_SERVICE_ID",
             "RAILWAY_ENVIRONMENT_ID",
         ],
@@ -273,7 +279,7 @@ def test_provisioning_guard_accepts_only_the_selected_targets_settings(target: s
         {"RENDER_DEPLOY_HOOK_URL": "present"}
         if target == "render"
         else {
-            "RAILWAY_TOKEN": "present",
+            "RAILWAY_PROJECT_TOKEN": "present",
             "RAILWAY_SERVICE_ID": "present",
             "RAILWAY_ENVIRONMENT_ID": "present",
         }
