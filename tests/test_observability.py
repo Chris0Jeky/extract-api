@@ -376,6 +376,24 @@ def test_text_format_is_opt_in_and_json_is_restored(monkeypatch, capsys):
     assert json.loads(capsys.readouterr().out.strip())["msg"] == "json line"
 
 
+def test_text_format_redacts_exceptions_like_json(monkeypatch, capsys, caplog):
+    monkeypatch.setenv("LOG_FORMAT", "text")
+    configure_logging()
+    try:
+        try:
+            raise ValueError(f"bad input {CANARY}")
+        except ValueError:
+            # caplog's handler formats first and caches the message in record.exc_text;
+            # our formatter must not reuse that cache.
+            logging.getLogger("t").exception("it failed")
+    finally:
+        monkeypatch.delenv("LOG_FORMAT")
+        configure_logging()
+    out = capsys.readouterr().out
+    assert CANARY not in out
+    assert "it failed" in out and "ValueError" in out and "test_observability.py" in out
+
+
 def test_lifespan_scope_passes_through_the_middleware(client_factory):
     with client_factory() as client:  # entering the context runs the ASGI lifespan
         assert client.get("/healthz").status_code == 200

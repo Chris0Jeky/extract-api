@@ -89,6 +89,30 @@ def _scalar(value: Any) -> Any:
     return str(value)[:_MAX_STR]
 
 
+def _redacted_exc(exc_info: Any) -> tuple[str, list[str]]:
+    """Exception type and stack frames only: the message is deliberately omitted."""
+    frames = [f"{f.filename}:{f.lineno} in {f.name}" for f in traceback.extract_tb(exc_info[2])]
+    return exc_info[0].__name__, frames[-12:]
+
+
+class TextFormatter(logging.Formatter):
+    """LOG_FORMAT=text: the plain line, with exceptions redacted exactly like the JSON one."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        # Hide the exception from the base class (it prints the message and caches it in
+        # record.exc_text, which another handler may already have filled), then append ours.
+        exc_info, exc_text = record.exc_info, record.exc_text
+        record.exc_info = record.exc_text = None
+        try:
+            line = super().format(record)
+        finally:
+            record.exc_info, record.exc_text = exc_info, exc_text
+        if exc_info and exc_info[0] is not None:
+            exc_type, frames = _redacted_exc(exc_info)
+            line += "\n" + exc_type + "".join(f"\n  {f}" for f in frames)
+        return line
+
+
 class JsonFormatter(logging.Formatter):
     """One JSON object per line: ts, level, logger, msg, request_id, allowlisted extras."""
 
@@ -106,12 +130,7 @@ class JsonFormatter(logging.Formatter):
             if name != "request_id" and hasattr(record, name):
                 out[name] = _scalar(getattr(record, name))
         if record.exc_info and record.exc_info[0] is not None:
-            # Type and stack frames only: the exception message is deliberately omitted.
-            out["exc_type"] = record.exc_info[0].__name__
-            out["stack"] = [
-                f"{f.filename}:{f.lineno} in {f.name}"
-                for f in traceback.extract_tb(record.exc_info[2])
-            ][-12:]
+            out["exc_type"], out["stack"] = _redacted_exc(record.exc_info)
         return json.dumps(out, separators=(",", ":"), ensure_ascii=True)
 
 
@@ -159,7 +178,7 @@ def configure_logging() -> None:
     handler.setFormatter(
         JsonFormatter()
         if fmt == "json"
-        else logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+        else TextFormatter("%(asctime)s %(levelname)s %(name)s %(message)s")
     )
     root.setLevel(level)
     # uvicorn's default config gives the PARENT `uvicorn` logger its own stderr handler with
