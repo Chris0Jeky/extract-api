@@ -37,7 +37,8 @@ RUN groupadd --gid 10001 extract \
 
 # A platform that forgets to mount a disk at /data fails /readyz instead of silently keeping
 # replay state in the container layer, which every deploy (and every replica) replaces.
-ENV IDEMPOTENCY_DB_PATH=/data/idempotency.sqlite     IDEMPOTENCY_REQUIRE_PERSISTENT_MOUNT=1
+ENV IDEMPOTENCY_DB_PATH=/data/idempotency.sqlite \
+    IDEMPOTENCY_REQUIRE_PERSISTENT_MOUNT=1
 
 # The image starts as root on purpose and the entrypoint drops to `extract` (10001) before
 # the app starts. Platforms mount /data as they please: Railway documents root-owned volumes
