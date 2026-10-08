@@ -185,6 +185,22 @@ jobs:
           printf 'Rollback: gh workflow run deploy.yml -f revision=%s -f target=%s\n' \
             "${PREVIOUS_REVISION:-<previous-revision-unavailable>}" "$TARGET" >&2
           exit 1
+      - name: Verify exactly one idempotency store serves
+        # ADR 0004: two stores would silently break replay. Sample readiness repeatedly; the
+        # platform's load balancer would spread these across any second replica.
+        run: |
+          ids=()
+          for _ in $(seq 1 10); do
+            id=$(curl --fail -sS --max-time 10 "${BASE_URL%/}/readyz" \
+              | jq -er '.idempotency_store_id | select(type == "string" and length > 0)')
+            ids+=("$id")
+          done
+          distinct=$(printf '%s\n' "${ids[@]}" | sort -u)
+          if [[ $(printf '%s\n' "$distinct" | wc -l) -ne 1 ]]; then
+            printf 'more than one idempotency store is serving:\n%s\n' "$distinct" >&2
+            exit 1
+          fi
+          printf 'Idempotency store: `%s`\n' "$distinct" >> "$GITHUB_STEP_SUMMARY"
       - name: Verify one deterministic fixture extraction
         if: vars.EXTRACT_API_SMOKE_MODE == 'fixture'
         # The owner sets LLM_PROVIDER_MODE=fixture for the first deploy. No live smoke.
@@ -198,5 +214,11 @@ jobs:
             "${BASE_URL%/}/v1/extract")
           if [[ "$status" != 200 ]]; then
             echo 'fixture extraction did not return HTTP 200' >&2
+            exit 1
+          fi
+          if ! jq -e --slurpfile fixture fixtures/invoices/invoice_0001.json \
+              '.data == $fixture[0].expected and .meta.provider == "fixture"' \
+              "$RUNNER_TEMP/fixture-response.json" > /dev/null; then
+            echo 'fixture extraction returned a record other than the labelled fixture' >&2
             exit 1
           fi
