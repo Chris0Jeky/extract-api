@@ -45,7 +45,8 @@ live is a runbook step, gated on caller authentication: the API has none today, 
 hosting manifest's invariant forbids an unauthenticated public paid-model endpoint.
 
 **Readiness gates deploys.** `/readyz` commits a one-row write to the idempotency store and
-reports the image revision and provider mode; it renders `internal_error` (500) when the store
+reports the image revision (`EXTRACT_API_REVISION`, baked in by the image pipeline; `unknown`
+until then) and provider mode; it renders `internal_error` (500) when the store
 cannot write. Because a disk prevents zero-downtime deploys on Render, a new instance replaces
 the old one; pointing the platform health check at `/readyz` instead of `/healthz` means a
 deploy with a missing, read-only or root-owned disk fails its health check instead of serving
@@ -62,7 +63,7 @@ Everything platform-neutral is the contract; everything else is an adapter of a 
 | Env vars documented in `.env.example`; secrets named only | Where secrets are entered (Render prompt, Railway variables, VPS `.env`) |
 | Port 8200, `/healthz` liveness, `/readyz` readiness | The platform's health-check field |
 | Persistent volume at `/data`, exactly one writer | Disk, volume or named volume |
-| Deploy = promote a digest; rollback = promote the previous digest | Render deploy hook; Railway API; `docker compose pull && up -d` |
+| Deploy = promote a digest; rollback = promote the previous digest | Render deploy hook; Railway API; on a VPS, the compose service's `image:` set to the digest (today the compose file still builds locally) |
 
 Switching platform is: create the service from its adapter, enter the named secrets, deploy
 the current digest, and point DNS. The idempotency cache does not need migrating: losing it
@@ -74,9 +75,11 @@ only drops the 24-hour replay window (ADR 0004).
   Dockerfile itself; that is a fallback, not the promoted artefact. The promoted path is an
   image-sourced service, whose volume, env and health check the runbook sets in the dashboard
   to match `railway.json`.
-- Railway volumes need `RAILWAY_RUN_UID=0`. The image entrypoint (added with the image pipeline) therefore drops back to the
-  unprivileged `extract` user after fixing `/data` ownership when started as root, so the app
-  never runs as root on any platform.
+- Railway volumes need `RAILWAY_RUN_UID=0`, and Render does not document who owns a mounted
+  disk. The image entrypoint (added with the image pipeline) therefore fixes `/data` ownership
+  when started as root and drops to the unprivileged `extract` user before the app starts, so
+  the app never runs as root on any platform. If a mount is still unwritable, `/readyz` fails
+  and the deploy never goes live.
 - The deploy workflow's Railway step updates the service's image source through Railway's
   public GraphQL API. Railway documents `source.image` only on service creation, so that step
   is unverified until the owner's first Railway deploy.

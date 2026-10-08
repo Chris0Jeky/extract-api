@@ -9,8 +9,9 @@ services:
   - type: web
     name: extract-api
     # Build once, promote the artefact: Render never builds this service. It pulls the image
-    # CI built, smoked and attested. The deploy workflow deploys by digest through the deploy
-    # hook's imgURL parameter, so this tag is only the service's default image URL.
+    # CI builds, smokes and attests (the image pipeline in .github/workflows), and the deploy
+    # workflow deploys by digest through the deploy hook's imgURL parameter, so this tag is
+    # only the service's default image URL. The tag exists once the pipeline first runs on main.
     runtime: image
     image:
       url: ghcr.io/chris0jeky/extract-api:main
@@ -25,6 +26,9 @@ services:
       mountPath: /data
       sizeGB: 1
     envVars:
+      # The port the image's CMD binds; set so Render routes to it without port detection.
+      - key: PORT
+        value: "8200"
       - key: IDEMPOTENCY_DB_PATH
         value: /data/idempotency.sqlite
       - key: IDEMPOTENCY_TTL_HOURS

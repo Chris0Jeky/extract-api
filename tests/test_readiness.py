@@ -51,7 +51,7 @@ def test_read_only_store_is_not_ready(store, tmp_path):
         os.chmod(db, stat.S_IREAD | stat.S_IWRITE)
     assert resp.status_code == 500
     assert resp.json()["error"] == "internal_error"
-    assert "not writable" in resp.json()["detail"]
+    assert "not ready" in resp.json()["detail"]
 
 
 def test_unopenable_store_path_is_not_ready(tmp_path, monkeypatch):

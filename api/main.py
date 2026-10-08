@@ -241,7 +241,7 @@ def create_app(
                 "readiness probe failed: idempotency store: %s: %s", type(exc).__name__, exc
             )
             raise ExtractError(
-                ErrorCode.internal_error, detail="the idempotency store is not writable"
+                ErrorCode.internal_error, detail="the idempotency store is not ready"
             ) from exc
         return {
             "status": "ready",
