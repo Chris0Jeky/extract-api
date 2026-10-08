@@ -9,6 +9,7 @@ reach the code under test, so a pass cannot mean "the canary never got in".
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import logging
@@ -20,7 +21,12 @@ from fastapi.testclient import TestClient
 
 from api.idempotency import SqliteIdempotencyStore
 from api.main import create_app
-from api.observability import JsonFormatter, configure_logging
+from api.observability import (
+    EXTRACT_FIELDS,
+    JsonFormatter,
+    RequestContextMiddleware,
+    configure_logging,
+)
 from llm.client import CompletionResult, FixtureClient
 from llm.errors import ProviderError
 
@@ -408,3 +414,64 @@ def test_lone_surrogate_content_is_sized_not_a_500(monkeypatch, client_factory, 
     assert resp.status_code == 200
     (line,) = logs.access()
     assert line["content_bytes"] == 3
+
+
+def _assert_full_extract_set(line: dict) -> None:
+    assert set(EXTRACT_FIELDS) <= set(line), set(EXTRACT_FIELDS) - set(line)
+
+
+def test_extract_line_has_full_field_set_on_early_error(client_factory, logs):
+    resp = client_factory().post("/v1/extract", json=_body(content="   "))
+    assert resp.status_code == 422
+    (line,) = logs.access()
+    _assert_full_extract_set(line)
+    assert line["doc_type"] == "invoice" and line["content_bytes"] == 3
+    assert line["provider"] is None and line["attempts"] is None and line["cost_usd"] is None
+    assert line["retry_class"] is None and line["result"] == "validation_failed"
+
+
+def test_extract_line_has_full_field_set_on_unparsable_body(client_factory, logs):
+    client_factory().post("/v1/extract", json={"nope": 1})
+    (line,) = logs.access()
+    _assert_full_extract_set(line)
+    assert line["doc_type"] is None and line["status"] == 422
+
+
+def test_extract_line_has_full_field_set_on_replay_and_provider_error(
+    monkeypatch, client_factory, logs
+):
+    client = client_factory(_Scripted([VALID]), monkeypatch)
+    for _ in range(2):
+        client.post("/v1/extract", json=_body(), headers={"Idempotency-Key": "k"})
+    client_factory(_Scripted([ProviderError(provider="fake", detail="x")]), monkeypatch).post(
+        "/v1/extract", json=_body()
+    )
+    lines = logs.access()
+    assert len(lines) == 3
+    for line in lines:
+        _assert_full_extract_set(line)
+    assert lines[1]["replayed"] is True
+    assert lines[2]["result"] == "provider_error" and lines[2]["attempts"] is None
+    assert lines[2]["provider"] == "fake"
+
+
+def test_non_extract_lines_do_not_carry_extract_fields(client_factory, logs):
+    client_factory().get("/healthz")
+    (line,) = logs.access()
+    assert not set(EXTRACT_FIELDS) & set(line)
+
+
+def test_client_disconnect_still_logs_exactly_one_line(logs):
+    async def cancelled(scope, receive, send):
+        raise asyncio.CancelledError
+
+    scope = {"type": "http", "method": "POST", "headers": [], "path": "/v1/extract"}
+
+    async def run():
+        await RequestContextMiddleware(cancelled)(scope, None, None)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(run())
+    (line,) = logs.access()
+    assert line["status"] is None and line["result"] == "client_disconnect"
+    assert line["method"] == "POST"

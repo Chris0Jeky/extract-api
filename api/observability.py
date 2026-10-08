@@ -74,6 +74,21 @@ ALLOWED_FIELDS = (
     "attempt",
     "retry_kinds",
 )
+# Fields every /v1/extract access line carries (null when unknown on that path).
+EXTRACT_FIELDS = (
+    "doc_type",
+    "schema_version",
+    "provider_requested",
+    "provider",
+    "model",
+    "attempts",
+    "retry_class",
+    "cost_usd",
+    "replayed",
+    "idempotency_keyed",
+    "content_kind",
+    "content_bytes",
+)
 _MAX_STR = 256
 _ACCESS = logging.getLogger("extract.access")
 
@@ -211,6 +226,7 @@ def note_request(request: ExtractRequest, *, keyed: bool) -> None:
         schema_version=request.schema_version,
         provider_requested=request.provider,
         content_kind="pdf" if request.content_format == "pdf_base64" else "text",
+        # surrogatepass: a lone JSON surrogate must size, not raise.
         content_bytes=len(request.content.encode("utf-8", "surrogatepass")),
         idempotency_keyed=keyed,
         replayed=False,
@@ -266,7 +282,8 @@ class RequestContextMiddleware:
         facts: dict[str, Any] = {}
         rid_token = _request_id.set(rid)
         facts_token = _facts.set(facts)
-        status = 500
+        status: int | None = None  # None until a response starts
+        failed = False
         started = time.perf_counter()
 
         async def send_wrapper(message: Message) -> None:
@@ -280,23 +297,38 @@ class RequestContextMiddleware:
             await self.app(scope, receive, send_wrapper)
         except Exception:
             # ServerErrorMiddleware (outside us) renders the 500 after this propagates.
-            # The context stays bound so its handler's log line carries the request id;
-            # each request runs in its own task, so nothing leaks to the next one.
+            failed = True
             facts.setdefault("result", "internal_error")
-            self._log(scope, 500, started, facts)
+            if status is None:
+                status = 500
             raise
-        self._log(scope, status, started, facts)
-        _facts.reset(facts_token)
-        _request_id.reset(rid_token)
+        # A BaseException (CancelledError: the client left) skips the handler above but the
+        # finally still writes exactly one line, with status null.
+        finally:
+            self._log(scope, status, started, facts)
+            if not failed:
+                # On failure the context stays bound so ServerErrorMiddleware's handler logs
+                # carry the request id; each request runs in its own task.
+                _facts.reset(facts_token)
+                _request_id.reset(rid_token)
 
     @staticmethod
-    def _log(scope: Scope, status: int, started: float, facts: MutableMapping[str, Any]) -> None:
+    def _log(
+        scope: Scope, status: int | None, started: float, facts: MutableMapping[str, Any]
+    ) -> None:
         route = scope.get("route")
         # The template ("/v1/extract"), never the raw path or query string.
         path = getattr(route, "path", None) or "unmatched"
-        result = facts.pop("result", None) or ("ok" if status < 400 else f"http_{status}")
+        if status is None:
+            result = facts.pop("result", None) or "client_disconnect"
+        else:
+            result = facts.pop("result", None) or ("ok" if status < 400 else f"http_{status}")
+        # Every extract line carries the full field set (null where unknown on that path),
+        # so dashboards can rely on the schema.
+        fields: dict[str, Any] = dict.fromkeys(EXTRACT_FIELDS) if path == "/v1/extract" else {}
+        fields.update({k: v for k, v in facts.items() if k in ALLOWED_FIELDS})
         _ACCESS.log(
-            logging.ERROR if status >= 500 else logging.INFO,
+            logging.ERROR if status is not None and status >= 500 else logging.INFO,
             "request",
             extra={
                 "method": scope["method"],
@@ -304,6 +336,6 @@ class RequestContextMiddleware:
                 "status": status,
                 "duration_ms": round((time.perf_counter() - started) * 1000, 2),
                 "result": result,
-                **{k: v for k, v in facts.items() if k in ALLOWED_FIELDS},
+                **fields,
             },
         )
