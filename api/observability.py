@@ -162,10 +162,16 @@ def configure_logging() -> None:
         else logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
     )
     root.setLevel(level)
-    # uvicorn installs its own stderr handler on uvicorn.error; route it through ours.
-    uv = logging.getLogger("uvicorn.error")
-    uv.handlers.clear()
-    uv.propagate = True
+    # uvicorn's default config gives the PARENT `uvicorn` logger its own stderr handler with
+    # propagate False (uvicorn.error just propagates into it), so clearing only uvicorn.error
+    # leaves "Exception in ASGI application" tracebacks, message included, on plain stderr.
+    # Route both through ours. Its access log prints the raw path and query: keep it off even
+    # if --no-access-log is forgotten (uvicorn applies its config before the app is imported).
+    for name in ("uvicorn", "uvicorn.error"):
+        uv = logging.getLogger(name)
+        uv.handlers.clear()
+        uv.propagate = True
+    logging.getLogger("uvicorn.access").disabled = True
     for name in _QUIET:
         lg = logging.getLogger(name)
         if lg.level == logging.NOTSET or lg.level < logging.WARNING:
