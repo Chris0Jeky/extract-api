@@ -211,7 +211,7 @@ def note_request(request: ExtractRequest, *, keyed: bool) -> None:
         schema_version=request.schema_version,
         provider_requested=request.provider,
         content_kind="pdf" if request.content_format == "pdf_base64" else "text",
-        content_bytes=len(request.content.encode()),
+        content_bytes=len(request.content.encode("utf-8", "surrogatepass")),
         idempotency_keyed=keyed,
         replayed=False,
     )

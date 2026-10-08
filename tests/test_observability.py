@@ -397,3 +397,14 @@ def test_text_format_redacts_exceptions_like_json(monkeypatch, capsys, caplog):
 def test_lifespan_scope_passes_through_the_middleware(client_factory):
     with client_factory() as client:  # entering the context runs the ASGI lifespan
         assert client.get("/healthz").status_code == 200
+
+
+def test_lone_surrogate_content_is_sized_not_a_500(monkeypatch, client_factory, logs):
+    # JSON "D800" decodes to a lone surrogate; plain .encode() raised on it.
+    raw = rb'{"doc_type": "invoice", "content": "\ud800"}'
+    resp = client_factory(_Scripted([VALID]), monkeypatch).post(
+        "/v1/extract", content=raw, headers={"Content-Type": "application/json"}
+    )
+    assert resp.status_code == 200
+    (line,) = logs.access()
+    assert line["content_bytes"] == 3
