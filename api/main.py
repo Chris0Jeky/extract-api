@@ -36,6 +36,16 @@ from api.idempotency import (
     payload_hash,
 )
 from api.models import ExtractMeta, ExtractRequest, ExtractResponse
+from api.observability import (
+    RequestContextMiddleware,
+    configure_logging,
+    logging_configured,
+    note,
+    note_client,
+    note_meta,
+    note_request,
+    note_retry,
+)
 from llm.client import get_client
 from llm.errors import ProviderError, ProviderTimeout
 from llm.pipeline import ExtractionFailed, run_extraction
@@ -54,6 +64,16 @@ def _field_confidence(data: dict[str, Any]) -> dict[str, float]:
     the honest reading, not a low-quality extraction.
     """
     return {key: (0.0 if value is None else 1.0) for key, value in data.items()}
+
+
+def _bounded(detail: str) -> str:
+    """Provider error text for the log: one line, capped.
+
+    Logged on purpose (#21: clients get a sanitized message, operators the detail). It is
+    upstream text, so it is the one place a provider echo of the prompt could surface;
+    cap it so a pathological echo cannot dump a document.
+    """
+    return " ".join(detail.split())[:300]
 
 
 def _run_extract(request: ExtractRequest, budget: BudgetGuard) -> ExtractResponse:
@@ -80,16 +100,20 @@ def _run_extract(request: ExtractRequest, budget: BudgetGuard) -> ExtractRespons
     # Enforce the per-run USD budget before spending on the provider call (no-op if disabled).
     budget.check()
     client = get_client(request.provider)
+    note_client(client)
     system = build_system_prompt(request.doc_type)
     try:
-        model, result, attempts = run_extraction(client, model_cls, system=system, content=content)
+        model, result, attempts = run_extraction(
+            client, model_cls, system=system, content=content, on_retry=note_retry
+        )
     except ProviderTimeout as exc:
         # Subclass of ProviderError, so it must be caught first to keep its 504 code. Log the
         # full provider detail server-side but return a sanitized client message, so an
         # upstream provider/gateway error string is never echoed to external callers (#21).
         # Reconcile any spend incurred before the failure so the budget cannot be defeated.
         budget.add(exc.cost_usd)
-        logger.warning("provider timeout (%s): %s", exc.provider, exc.detail)
+        note(cost_usd=exc.cost_usd)
+        logger.warning("provider timeout (%s): %s", exc.provider, _bounded(exc.detail))
         raise ExtractError(
             ErrorCode.provider_timeout, detail=f"the {exc.provider} provider timed out"
         ) from exc
@@ -98,7 +122,8 @@ def _run_extract(request: ExtractRequest, budget: BudgetGuard) -> ExtractRespons
         # dedicated refusal/truncation code is a future taxonomy decision). Same sanitization:
         # the provider's raw message is logged, not returned in the body.
         budget.add(exc.cost_usd)
-        logger.warning("provider error (%s): %s", exc.provider, exc.detail)
+        note(cost_usd=exc.cost_usd)
+        logger.warning("provider error (%s): %s", exc.provider, _bounded(exc.detail))
         raise ExtractError(
             ErrorCode.provider_error, detail=f"the {exc.provider} provider call failed"
         ) from exc
@@ -108,6 +133,7 @@ def _run_extract(request: ExtractRequest, budget: BudgetGuard) -> ExtractRespons
         # were billed, so reconcile their cost into the budget (a failure-heavy stream must
         # still count against the cap).
         budget.add(exc.cost_usd)
+        note(attempts=exc.attempts, cost_usd=exc.cost_usd)
         raise ExtractError(
             ErrorCode.validation_failed,
             detail=str(exc),
@@ -225,6 +251,9 @@ def create_app(
         summary="Strict-schema LLM extraction with validation-retry and per-field accuracy.",
     )
     install_error_handlers(app)
+    if not logging_configured():
+        configure_logging()
+    app.add_middleware(RequestContextMiddleware)
 
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
@@ -279,14 +308,18 @@ def create_app(
     ) -> ExtractResponse:
         # Without a key, every request runs; with one, the store is consulted before any
         # model call (replay on match, 409 on a payload mismatch).
+        note_request(request, keyed=idempotency_key is not None)
         if idempotency_key is None:
-            return _run_extract(request, budget_guard)
-        key = _validate_idempotency_key(idempotency_key)
-        store = _store()
-        # Name the store that answered, so a client retrying a key can see when the retry
-        # reached a different store (a second replica or a replaced disk) and was not replayed.
-        response.headers["X-Idempotency-Store"] = store.store_id
-        return _run_extract_idempotent(store, key, request, budget_guard)
+            result = _run_extract(request, budget_guard)
+        else:
+            key = _validate_idempotency_key(idempotency_key)
+            store = _store()
+            # Name the store that answered, so a client retrying a key can see when the retry
+            # reached a different store (a second replica or a replaced disk) and was not replayed.
+            response.headers["X-Idempotency-Store"] = store.store_id
+            result = _run_extract_idempotent(store, key, request, budget_guard)
+        note_meta(result.meta)
+        return result
 
     return app
 

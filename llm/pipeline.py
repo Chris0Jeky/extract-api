@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Callable
 
 from pydantic import BaseModel, ValidationError
 from pydantic_core import ErrorDetails
@@ -79,8 +80,12 @@ def run_extraction(
     system: str,
     content: str,
     max_tokens: int = 4096,
+    on_retry: Callable[[list[str]], None] | None = None,
 ) -> tuple[BaseModel, CompletionResult, int]:
     """Call the provider, strict-validate, retry once with the previous response + errors.
+
+    `on_retry(kinds)` is called with the validation error kinds when a retry is about to
+    happen (for the caller's observability; it never sees content).
 
     Returns (validated_model, last_result, attempts). Raises ExtractionFailed after
     MAX_ATTEMPTS validation failures; provider-seam errors (llm.errors.*) propagate.
@@ -122,7 +127,10 @@ def run_extraction(
                 type(exc).__name__,
                 kinds,
                 len(summary),
+                extra={"attempt": attempt, "retry_kinds": kinds},
             )
+            if on_retry is not None and attempt < MAX_ATTEMPTS:
+                on_retry(kinds)
             prompt = _retry_prompt(content, result.text, summary)
             continue
         aggregated = CompletionResult(
