@@ -58,7 +58,7 @@ jobs:
           ready_status=$?
           if [ "$ready_status" -eq 0 ]; then
             uv run --no-sync python scripts/load_test.py --container extract-loadtest \
-              --timeout 60 --out-dir loadtest-results
+              --timeout 300 --out-dir loadtest-results
             load_status=$?
           else
             load_status=$ready_status

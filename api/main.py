@@ -20,13 +20,12 @@ from __future__ import annotations
 import logging
 import os
 import time
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
 import anyio
 import anyio.to_thread
 from fastapi import FastAPI, Header, Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from api.budget import BudgetGuard, budget_from_env
 from api.content import resolve_content
@@ -233,6 +232,36 @@ def _run_extract_idempotent(
     return response
 
 
+def _max_concurrency_from_env() -> int:
+    raw = os.environ.get("EXTRACT_MAX_CONCURRENCY", "4")
+    if not raw.isascii() or not raw.isdecimal() or int(raw) <= 0:
+        raise ValueError(f"EXTRACT_MAX_CONCURRENCY must be a positive integer; got {raw!r}")
+    return int(raw)
+
+
+class ExtractAdmission:
+    """Admit at most `limit` /v1/extract requests at once, before their bodies are read.
+
+    Memory, not CPU, bounds an instance (docs/ops/SIZING.md): each in-flight extraction holds
+    its body, the decoded PDF and its text. Waiting here, ahead of FastAPI, a queued request
+    has not read its body: the server's flow control pauses the socket, so a queue of large
+    PDFs costs connections, not memory. Excess requests wait (bounded by the platform's
+    request timeout) instead of being shed, so no new error code is needed, and every other
+    route, including the health probes, bypasses the gate.
+    """
+
+    def __init__(self, app: ASGIApp, *, limit: int) -> None:
+        self.app = app
+        self.limiter = anyio.CapacityLimiter(limit)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope["path"] == "/v1/extract":
+            async with self.limiter:
+                await self.app(scope, receive, send)
+        else:
+            await self.app(scope, receive, send)
+
+
 def create_app(
     *, idempotency_store: IdempotencyStore | None = None, budget: BudgetGuard | None = None
 ) -> FastAPI:
@@ -248,26 +277,17 @@ def create_app(
             cached_store = _store_from_env()
         return cached_store
 
-    @asynccontextmanager
-    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        raw = os.environ.get("EXTRACT_MAX_CONCURRENCY", "4")
-        if not raw.isascii() or not raw.isdecimal() or int(raw) <= 0:
-            raise ValueError(f"EXTRACT_MAX_CONCURRENCY must be a positive integer; got {raw!r}")
-        # Sync endpoints queue for a token; async health probes never use this pool. The
-        # default is measured, not anyio's 40: at 512 MB that OOM-killed the container at 8
-        # in-flight requests; 4 peaked at 351 MiB (docs/ops/SIZING.md).
-        anyio.to_thread.current_default_thread_limiter().total_tokens = int(raw)
-        yield
-
     app = FastAPI(
         title="extract-api",
         version="0.1.0",
         summary="Strict-schema LLM extraction with validation-retry and per-field accuracy.",
-        lifespan=lifespan,
     )
     install_error_handlers(app)
     if not logging_configured():
         configure_logging()
+    # The last added is outermost: the request context wraps the admission gate, so a queued
+    # extract carries its request id and its access line's duration_ms includes the wait.
+    app.add_middleware(ExtractAdmission, limit=_max_concurrency_from_env())
     app.add_middleware(RequestContextMiddleware)
 
     @app.get("/healthz")
