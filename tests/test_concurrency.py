@@ -14,7 +14,7 @@ from api.main import create_app
 from llm.client import FixtureClient
 
 
-@pytest.mark.parametrize("raw, expected", [(None, 40), ("1", 1), ("7", 7), ("40", 40)])
+@pytest.mark.parametrize("raw, expected", [(None, 4), ("1", 1), ("7", 7), ("40", 40)])
 def test_limiter_is_set_during_startup(monkeypatch, raw, expected):
     if raw is None:
         monkeypatch.delenv("EXTRACT_MAX_CONCURRENCY", raising=False)

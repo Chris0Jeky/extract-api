@@ -250,10 +250,12 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        raw = os.environ.get("EXTRACT_MAX_CONCURRENCY", "40")
+        raw = os.environ.get("EXTRACT_MAX_CONCURRENCY", "4")
         if not raw.isascii() or not raw.isdecimal() or int(raw) <= 0:
             raise ValueError(f"EXTRACT_MAX_CONCURRENCY must be a positive integer; got {raw!r}")
-        # Sync endpoints queue for a token; async health probes never use this pool.
+        # Sync endpoints queue for a token; async health probes never use this pool. The
+        # default is measured, not anyio's 40: at 512 MB that OOM-killed the container at 8
+        # in-flight requests; 4 peaked at 351 MiB (docs/ops/SIZING.md).
         anyio.to_thread.current_default_thread_limiter().total_tokens = int(raw)
         yield
 

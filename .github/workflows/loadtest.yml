@@ -19,13 +19,17 @@ jobs:
       fail-fast: false
       matrix:
         profile:
+          # The recommended cap per size (docs/ops/SIZING.md). The uncapped baseline that
+          # OOM-killed 512 MB at the old default of 40 is recorded there with its run id.
           - memory: 512m
             cpus: "0.5"
+            cap: "4"
           - memory: 1g
             cpus: "1"
+            cap: "16"
         latency_ms: [2000, 8000]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           version: "0.11.21"
@@ -38,15 +42,16 @@ jobs:
           MEMORY: ${{ matrix.profile.memory }}
           CPUS: ${{ matrix.profile.cpus }}
           FIXTURE_LATENCY_MS: ${{ matrix.latency_ms }}
+          EXTRACT_MAX_CONCURRENCY: ${{ matrix.profile.cap }}
         run: |
           mkdir -p loadtest-results
           export FIXTURE_CANNED_TEXT
           FIXTURE_CANNED_TEXT=$(uv run --no-sync python -c 'from scripts.docker_persistence_smoke import _fixture_request; print(_fixture_request()[1])')
-          # No EXTRACT_MAX_CONCURRENCY override: measure the documented default 40.
           docker run -d --name extract-loadtest \
             --memory "$MEMORY" --memory-swap "$MEMORY" --cpus "$CPUS" \
             -p 127.0.0.1:8200:8200 -v extract-loadtest-data:/data \
             -e LLM_PROVIDER_MODE=fixture -e FIXTURE_CANNED_TEXT -e FIXTURE_LATENCY_MS \
+            -e EXTRACT_MAX_CONCURRENCY \
             extract-api:loadtest
           set +e
           uv run --no-sync python -c 'from scripts.docker_persistence_smoke import _wait_for_health; _wait_for_health(8200)'
@@ -74,7 +79,7 @@ jobs:
           profile = {
               "memory": os.environ["MEMORY"], "cpus": os.environ["CPUS"],
               "fixture_latency_ms": int(os.environ["FIXTURE_LATENCY_MS"]),
-              "extract_max_concurrency": 40, "swap": "disabled",
+              "extract_max_concurrency": int(os.environ["EXTRACT_MAX_CONCURRENCY"]), "swap": "disabled",
               "platform": platform.platform(), "oom_killed": oom,
               "load_exit_code": int(os.environ["LOAD_STATUS"]),
               "ready_exit_code": int(os.environ["READY_STATUS"]),
@@ -82,7 +87,7 @@ jobs:
           (output / "profile.json").write_text(json.dumps(profile, indent=2) + "\n")
           with (output / "results.md").open("a") as summary:
               summary.write(f"\nMemory: {profile['memory']}; CPUs: {profile['cpus']}; "
-                            f"fixture latency: {profile['fixture_latency_ms']} ms; cap: 40; "
+                            f"fixture latency: {profile['fixture_latency_ms']} ms; cap: {profile['extract_max_concurrency']}; "
                             f"OOM killed: {oom}; load exit: {profile['load_exit_code']}.\n")
           PY
           echo "LOAD_STATUS=$load_status" >> "$GITHUB_ENV"
