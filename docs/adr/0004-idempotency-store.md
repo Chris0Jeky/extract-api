@@ -35,3 +35,68 @@ replacement or recreation, not across intentional volume deletion.
   `api/idempotency.py` behind the store interface, independent of backend.
 - `docker compose down --volumes`, an explicit volume delete, or a lost host discards
   replay rows. This remains a single-host v1 store, not a shared-volume scaling design.
+
+## Amendment (2026-10-08): single-replica safety and the shared authority
+
+Hosting on a PaaS (ADR 0005) adds a failure the original decision only implied: two replicas
+with two disks are two independent stores. A retry with the same `Idempotency-Key` that lands
+on the other replica is not replayed, so the model runs and bills twice, and a reused key with
+a different payload is not caught as a conflict. Nothing fails; the guarantee just stops
+holding. The store is therefore a single-writer authority, and that is enforced, not assumed.
+
+### How one store is enforced today
+
+1. **The platform.** Render: "You can't scale a service to multiple instances if it has a disk
+   attached." Railway: "Replicas cannot be used with volumes." While the store has a disk, a
+   second replica cannot be created on either platform.
+2. **The app requires the disk.** With `IDEMPOTENCY_REQUIRE_PERSISTENT_MOUNT=1` (set in the
+   image, `docker-compose.yml` and `render.yaml`), `/readyz` fails unless the store's directory
+   is on a different device from `/`. A service whose disk was removed, for example to unlock
+   scaling, fails its health check instead of serving from a disposable container layer. Rule
+   1 then holds by construction: no disk, no ready replica; a disk, one replica.
+3. **The descriptors are pinned.** `tests/test_deploy_descriptors.py` fails CI if
+   `numInstances`, `numReplicas`, autoscaling or the `/data` disk changes.
+4. **The store is visible.** Each store mints a `store_id` once and keeps it in the file. It
+   appears in `/readyz` and in the `X-Idempotency-Store` header of every keyed response. A
+   deploy check that samples `/readyz` repeatedly sees more than one id if two stores ever
+   serve, and a client can see that a retry reached a different store. A replaced or wiped
+   disk also shows up as a new id.
+
+Several processes sharing one file on one host (uvicorn `--workers`, or compose replicas on
+one named volume) are still one store: SQLite's file locking serialises them correctly.
+
+### When to build a shared authority
+
+Build it when any of these is true, not before:
+
+- One instance cannot carry the measured load at the largest single size the platform offers
+  (the load-test numbers in `docs/ops/` are the evidence).
+- Deploys must stop dropping requests: a disk rules out zero-downtime deploys on Render, and
+  overlapping old and new instances is a second writer.
+- The service runs in more than one region.
+- The gateway era (PLAN week 10) brings a managed Postgres that already exists for other
+  reasons.
+
+### Design (decided now, built later)
+
+- **Backend: Postgres.** One table with the same columns plus `state` (`pending` or `done`)
+  and `lease_expires_at`, keyed on `key`. It gives atomic insert-if-absent and durable rows
+  with plain SQL. Rejected: Redis (a second system whose durability depends on persistence
+  settings, for a few rows a day), Cloudflare KV (eventually consistent, so two replicas can
+  both miss), and D1 (strongly consistent, but only reachable through a Worker, adding a hop
+  and a platform to an API that has neither).
+- **Atomic reservation, which also closes #42.** Before the model call:
+  `INSERT ... ON CONFLICT (key) DO NOTHING RETURNING key` writes a `pending` row with a lease
+  of the provider timeout plus margin. The winner calls the model and updates the row to
+  `done` with the response; on failure it deletes the row so the key stays retryable, as
+  today. A loser reads the row: `done` with the same hash replays; a different hash is still
+  `idempotency_conflict` (409); `pending` with the same hash waits for the lease, polling, then
+  replays or takes over an expired lease. Replay, 409, the 24-hour TTL and "only a 200 is
+  stored" are unchanged.
+- **Seam.** The `IdempotencyStore` protocol gains `reserve` and `release` and keeps `get`,
+  `put`, `sweep`, `probe` and `store_id`. SQLite implements `reserve` as the same insert, so
+  both backends share one code path. `IDEMPOTENCY_BACKEND=postgres` selects it, and the
+  persistent-mount requirement no longer applies there.
+- **Cutover.** The cache is disposable by contract, so the switch deploys the Postgres
+  backend and accepts losing at most 24 hours of replay rows. No data migration. Only after
+  that are replicas raised above one and the disk detached.

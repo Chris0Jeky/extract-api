@@ -30,6 +30,7 @@ def test_render_runs_exactly_one_instance_with_a_data_disk():
     assert service["disk"]["mountPath"] == "/data"
     env = {var["key"]: var for var in service["envVars"]}
     assert env["IDEMPOTENCY_DB_PATH"]["value"].startswith("/data/")
+    assert env["IDEMPOTENCY_REQUIRE_PERSISTENT_MOUNT"]["value"] == "1"
 
 
 def test_render_promotes_the_ci_image_rather_than_building():

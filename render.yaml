@@ -33,6 +33,10 @@ services:
         value: /data/idempotency.sqlite
       - key: IDEMPOTENCY_TTL_HOURS
         value: "24"
+      # Readiness fails unless the store sits on the disk, which also keeps the service on
+      # exactly one store: Render will not add instances while a disk is attached.
+      - key: IDEMPOTENCY_REQUIRE_PERSISTENT_MOUNT
+        value: "1"
       # Safe by default: a fresh service answers from the deterministic FixtureClient and can
       # never spend on a provider. Going live (runbook) removes these two and sets the keys.
       - key: LLM_PROVIDER_MODE

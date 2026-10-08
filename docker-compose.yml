@@ -13,6 +13,7 @@ services:
       # The compose volume owns durable replay state. This intentionally overrides the
       # relative local-host default in .env so a non-root container never writes /app.
       IDEMPOTENCY_DB_PATH: /data/idempotency.sqlite
+      IDEMPOTENCY_REQUIRE_PERSISTENT_MOUNT: "1"
     volumes:
       - idempotency-data:/data
     restart: unless-stopped
