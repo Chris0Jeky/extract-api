@@ -1,0 +1,66 @@
+# Render Blueprint for extract-api (ADR 0005). Inert: nothing exists on Render until the
+# owner creates a Blueprint from this file. Schema: https://render.com/schema/render.yaml.json
+#
+# Single instance by design. The idempotency store is a per-instance SQLite file on the disk
+# below (ADR 0004), and Render itself refuses to scale a service with a disk ("You can't scale a
+# service to multiple instances if it has a disk attached"). tests/test_deploy_descriptors.py
+# pins every invariant in this file.
+services:
+  - type: web
+    name: extract-api
+    # Build once, promote the artefact: Render never builds this service. It pulls the image
+    # CI built, smoked and attested. The deploy workflow deploys by digest through the deploy
+    # hook's imgURL parameter, so this tag is only the service's default image URL.
+    runtime: image
+    image:
+      url: ghcr.io/chris0jeky/extract-api:main
+    plan: starter
+    region: frankfurt
+    numInstances: 1
+    # Readiness, not liveness: a deploy whose idempotency store is unusable never goes live.
+    healthCheckPath: /readyz
+    maxShutdownDelaySeconds: 60
+    disk:
+      name: extract-api-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: IDEMPOTENCY_DB_PATH
+        value: /data/idempotency.sqlite
+      - key: IDEMPOTENCY_TTL_HOURS
+        value: "24"
+      # Safe by default: a fresh service answers from the deterministic FixtureClient and can
+      # never spend on a provider. Going live (runbook) removes these two and sets the keys.
+      - key: LLM_PROVIDER_MODE
+        value: fixture
+      - key: FIXTURE_CANNED_TEXT
+        value: '{"invoice_number":"NW-1001","issue_date":"2026-01-15","due_date":"2026-02-14","currency":"GBP","subtotal_minor":50000,"tax_minor":10000,"total_minor":60000,"vendor_name":"Northwind Supplies Ltd","vendor_tax_id":null,"buyer_name":null,"line_items":[{"description":"Office chairs","quantity":4,"unit_price_minor":12500,"amount_minor":50000}]}'
+      # Process-lifetime spend cap (api/budget.py). Set, never unset: unset disables the guard.
+      - key: EXTRACT_BUDGET_USD
+        value: "2.00"
+      - key: LLM_REQUEST_TIMEOUT_S
+        value: "60"
+      - key: LLM_MAX_RETRIES
+        value: "2"
+      - key: LLM_DEFAULT_PROVIDER
+        value: openai
+      - key: GATEWAY_BYPASS
+        value: "1"
+      # Named only. sync: false makes Render prompt the owner for each value at Blueprint
+      # creation; no value ever lives in this repository.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        sync: false
+      - key: ANTHROPIC_MODEL
+        sync: false
+      - key: OPENAI_PRICE_IN_PER_M
+        sync: false
+      - key: OPENAI_PRICE_OUT_PER_M
+        sync: false
+      - key: ANTHROPIC_PRICE_IN_PER_M
+        sync: false
+      - key: ANTHROPIC_PRICE_OUT_PER_M
+        sync: false
