@@ -1,15 +1,42 @@
 {
-  "schema_version":1,"reviewed_on":"2026-09-10","repository":"Chris0Jeky/extract-api","stable_id":"extract-api","runtime_class":"private",
-  "public_origin":null,"origin_evidence":"not-configured",
-  "target":"Remain local/private; a later separate container is optional",
-  "source_paths":["README.md","AGENTS.md"],
-  "persistent_state":["Persistent SQLite idempotency at /data"],
-  "invariants":["No unauthenticated public paid-model endpoint","Preserve strict validation, retries and idempotency semantics","Document content and credentials never enter logs or public fixtures","Do not co-locate heavy processing on Taskdeck by default"],
-  "gates":["Gateway authentication and caller budgets","Persistent idempotency/restart proof","PDF resource and provider-spend acceptance","Separate host and cost authorization"],
-  "tasks":[
-    {"id":"EX1","goal":"Prepare the private deployment contract","acceptance":"Authentication, payload bounds and finite caller/provider budgets are specified before external exposure"},
-    {"id":"EX2","goal":"Prove persistence and isolation offline","acceptance":"Fixture-mode restart preserves idempotency; malformed/oversized inputs never call a paid provider"},
-    {"id":"EX3","goal":"Publish only a bounded synthetic demonstration","acceptance":"No live keys, documents or new service are introduced by this compatibility slice"}
+  "schema": "agent-hq/hosting-manifest@2",
+  "stable_id": "extract-api",
+  "repository": "Chris0Jeky/extract-api",
+  "reviewed_on": "2026-10-08",
+  "status": "planned",
+  "workload": {"class": "container", "serves": "dynamic", "package": "oci-image", "host_bound": false, "always_on": true},
+  "state": {"authority": "sqlite", "writers": "single", "replicas": 1, "path": "/data", "live_gb_max": 0.5, "ephemeral": true},
+  "ingress": {"mode": "public", "private_by_design": false, "access_layer": "api-key gateway (owner decision extract-api-caller-auth; fixture mode until built)",
+              "hostnames": ["api.deliverasoft.com"]},
+  "data_classes": ["third-party-content", "telemetry"],
+  "backup": {"policy": "none-needed"},
+  "deploy": {"lane": "single-writer-stateful", "artifact": "oci-image-sha", "strategy": "stop-first"},
+  "health": {"endpoint": "/readyz", "observer": "external-probe",
+             "signals": ["readiness", "red", "resources", "disk"]},
+  "resources": {"vcpu": 0.5, "vcpu_avg": 0.1, "ram_mb": 512, "disk_gb": 1},
+  "cost": {"envelope_usd_month": 10},
+  "adapters": [
+    {"provider": "render", "role": "primary", "status": "drafted", "descriptor": "render.yaml"},
+    {"provider": "railway", "role": "alternate", "status": "drafted", "descriptor": "railway.json"},
+    {"provider": "vps-compose", "role": "alternate", "status": "drafted", "descriptor": "docker-compose.yml"}
   ],
-  "activation_authorized":false
+  "growth_triggers": [
+    {"signal": "peak RSS at the concurrency cap (docs/ops/SIZING.md: 351 MiB at 4 on 512 MB)", "threshold": "over 420 MiB", "action": "lower EXTRACT_MAX_CONCURRENCY, or move to Render 1c-2g / Railway 1 GB with a cap of 16"},
+    {"signal": "sustained queueing in extract.access duration_ms over the provider's own latency", "threshold": "p95 above twice the provider latency for a day", "action": "move to Render 1c-2g / Railway 1 GB with a cap of 16"},
+    {"signal": "replicas wanted or zero-downtime deploys required", "threshold": "more than 1 instance", "action": "move idempotency to the shared Postgres authority first (ADR 0004 amendment)"}
+  ],
+  "source_paths": ["render.yaml", "railway.json", "docker-compose.yml", "Dockerfile", "docs/adr/0005-hosting-platform.md", "docs/ops/RUNBOOK.md", "docs/ops/SIZING.md"],
+  "invariants": [
+    "No unauthenticated public paid-model endpoint: fixture mode until caller authentication is built",
+    "Preserve strict validation, retries and idempotency semantics",
+    "Document content and credentials never enter logs or public fixtures (tests/test_observability.py)",
+    "Exactly one idempotency store serves (ADR 0004 amendment; deploy.yml checks it)",
+    "Do not co-locate heavy processing on Taskdeck by default"
+  ],
+  "gates": [
+    "Owner decision extract-api-caller-auth answered, built and deployed before a live provider",
+    "Owner provisioning steps H1 to H7 in tasks/BACKLOG.md",
+    "Separate host and cost authorization"
+  ],
+  "activation_authorized": false
 }
