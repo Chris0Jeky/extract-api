@@ -125,10 +125,6 @@ class _StdoutHandler(logging.StreamHandler):  # type: ignore[type-arg]
     def stream(self) -> Any:
         return sys.stdout
 
-    @stream.setter
-    def stream(self, _value: Any) -> None:  # StreamHandler.setStream assigns; we ignore it.
-        pass
-
 
 _MARK = "_extract_observability"
 # Third-party loggers whose DEBUG output includes request bodies (the OpenAI SDK logs

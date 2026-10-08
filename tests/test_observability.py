@@ -358,3 +358,24 @@ def test_invalid_logging_env_fails_loud(monkeypatch, name, value):
     monkeypatch.setenv(name, value)
     with pytest.raises(ValueError, match=name):
         configure_logging()
+
+
+def test_formatter_stringifies_and_bounds_unexpected_value_types():
+    line = json.loads(JsonFormatter().format(_record(model={"k": "v"}, retry_kinds=["a", 1])))
+    assert line["model"] == "{'k': 'v'}" and line["retry_kinds"] == ["a", 1]
+
+
+def test_text_format_is_opt_in_and_json_is_restored(monkeypatch, capsys):
+    monkeypatch.setenv("LOG_FORMAT", "text")
+    configure_logging()
+    logging.getLogger("t").warning("plain line")
+    assert "WARNING t plain line" in capsys.readouterr().out
+    monkeypatch.delenv("LOG_FORMAT")
+    configure_logging()  # back to the default for the rest of the session
+    logging.getLogger("t").warning("json line")
+    assert json.loads(capsys.readouterr().out.strip())["msg"] == "json line"
+
+
+def test_lifespan_scope_passes_through_the_middleware(client_factory):
+    with client_factory() as client:  # entering the context runs the ASGI lifespan
+        assert client.get("/healthz").status_code == 200
