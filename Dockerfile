@@ -32,7 +32,9 @@ RUN groupadd --gid 10001 extract \
     && useradd --uid 10001 --gid extract --no-create-home --shell /usr/sbin/nologin extract \
     && install --directory --owner=extract --group=extract /data
 
-ENV IDEMPOTENCY_DB_PATH=/data/idempotency.sqlite
+# A platform that forgets to mount a disk at /data fails /readyz instead of silently keeping
+# replay state in the container layer, which every deploy (and every replica) replaces.
+ENV IDEMPOTENCY_DB_PATH=/data/idempotency.sqlite     IDEMPOTENCY_REQUIRE_PERSISTENT_MOUNT=1
 
 USER extract
 
