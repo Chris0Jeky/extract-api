@@ -10,7 +10,9 @@ request-shape errors (validation_failed / unsupported_doc_type) and any unmapped
 exception (internal_error) through it too (T05). When an `Idempotency-Key` header is
 present, a key + payload-hash match replays the stored response with no model call
 (`replayed:true`), and a key reused with a different payload returns
-`idempotency_conflict` (409) (T12). `/healthz` stays a trivial liveness probe.
+`idempotency_conflict` (409) (T12). `/healthz` stays a trivial liveness probe; `/readyz` is
+the platform health check (ADR 0005): it proves the idempotency store can write and reports
+the image revision and provider mode, so a deploy with a broken disk never goes live.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ import os
 import time
 from typing import Annotated, Any
 
+import anyio
 from fastapi import FastAPI, Header
 
 from api.budget import BudgetGuard, budget_from_env
@@ -221,6 +224,32 @@ def create_app(
     @app.get("/healthz")
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    # The probe gets its own one-token limiter instead of the default threadpool, so a
+    # saturated extraction pool (every worker waiting on a provider) cannot queue the platform
+    # health check behind it and get a healthy-but-busy instance restarted.
+    probe_limiter = anyio.CapacityLimiter(1)
+
+    @app.get("/readyz")
+    async def readyz() -> dict[str, str]:
+        try:
+            await anyio.to_thread.run_sync(lambda: _store().probe(), limiter=probe_limiter)
+        except Exception as exc:
+            # Unready is an internal fault, so it renders as internal_error (500) like any
+            # other: no new taxonomy member. The client body stays generic; the log names it.
+            logger.error(
+                "readiness probe failed: idempotency store: %s: %s", type(exc).__name__, exc
+            )
+            raise ExtractError(
+                ErrorCode.internal_error, detail="the idempotency store is not writable"
+            ) from exc
+        return {
+            "status": "ready",
+            "revision": os.environ.get("EXTRACT_API_REVISION") or "unknown",
+            "provider_mode": (
+                "fixture" if os.environ.get("LLM_PROVIDER_MODE") == "fixture" else "live"
+            ),
+        }
 
     # A plain `def` (not async): the provider call is blocking I/O, so Starlette runs
     # it in a threadpool and the event loop is never pinned. The API is synchronous by

@@ -43,6 +43,10 @@ class IdempotencyStore(Protocol):
         """Delete entries older than the TTL; return how many were removed."""
         ...
 
+    def probe(self) -> None:
+        """Raise unless the store can durably write right now (the readiness check)."""
+        ...
+
 
 class SqliteIdempotencyStore:
     """File-backed idempotency store (ADR 0004).
@@ -77,6 +81,22 @@ class SqliteIdempotencyStore:
                 " response_json TEXT NOT NULL,"
                 " status_code INTEGER NOT NULL,"
                 " created_at_epoch REAL NOT NULL)"
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS readiness_probe ("
+                " id INTEGER PRIMARY KEY CHECK (id = 1),"
+                " probed_at_epoch REAL NOT NULL)"
+            )
+            conn.commit()
+
+    def probe(self) -> None:
+        # A real committed write, not a read: a read-only mount, a root-owned disk or a full
+        # volume all still serve SELECTs, and only a write proves keyed requests can be stored.
+        # One fixed row, so probing never grows the file.
+        with closing(self._connect()) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO readiness_probe (id, probed_at_epoch) VALUES (1, ?)",
+                (time.time(),),
             )
             conn.commit()
 
