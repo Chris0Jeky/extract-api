@@ -68,7 +68,9 @@ extraction returns exactly the labelled `invoice_0001` record. Its job summary r
 previously deployed revision, which is the rollback target.
 
 A Render deploy stops the old instance before starting the new one (a disk rules out overlap), so
-expect a short gap. Clients retrying with the same `Idempotency-Key` are safe.
+expect a short gap. Render allows in-flight requests up to 60 s to finish (`maxShutdownDelaySeconds`);
+a request cut off before it completed was never stored, so a client's retry with the same
+`Idempotency-Key` runs, and bills, again. Deploy when traffic is quiet.
 
 ## 3. Verify by hand
 
