@@ -48,7 +48,7 @@ Summary line, logger `extract.access`, one per request, level INFO (ERROR for 5x
 | Field | Meaning |
 | --- | --- |
 | `method`, `route`, `status`, `duration_ms` | Always. `route` is the path template or `unmatched`. `status` is null if the client disconnected before a response (`result` is then `client_disconnect`). |
-| `result` | Always. `ok` or the `ErrorCode` value (`validation_failed`, `provider_error`, `idempotency_conflict`, `internal_error`, `not_found`, ...). |
+| `result` | Always. `ok` or the `ErrorCode` value (`validation_failed`, `provider_error`, `idempotency_conflict`, `internal_error`, `not_found`, `unauthorized`, ...). A rejected key is a 401 line on route `/v1/extract` with every extract field null. |
 | `doc_type`, `schema_version`, `provider_requested`, `content_kind` (`text`/`pdf`), `content_bytes`, `idempotency_keyed`, `replayed` | `/v1/extract` only. Every `/v1/extract` line carries the full set below, with `null` for anything unknown on that path (for example everything on an unparsable body, `attempts` on a provider error). `content_bytes` is the size of the submitted `content` field (base64 length for a PDF). |
 | `provider`, `model` | Resolved client; null until a client was built. |
 | `attempts` | Provider calls made by this request (0 on a replay). Null when a provider error ended the run. |

@@ -21,7 +21,8 @@ capability claim.
 
 ```
 POST /v1/extract
-Headers: Idempotency-Key: <client uuid>
+Headers: Authorization: Bearer <api key>      // required; see "Caller authentication"
+         Idempotency-Key: <client uuid>
 Body: {
   "doc_type": "invoice" | "uk_job_posting",
   "schema_version": "v1",
@@ -53,7 +54,21 @@ Body: {
 
 409 Conflict:
 { "error": "idempotency_conflict" }   // same key, different payload hash
+
+401 Unauthorized (header: WWW-Authenticate: Bearer):
+{ "error": "unauthorized", "detail": "a valid API key is required (Authorization: Bearer <key>)" }
+// Missing, malformed and wrong keys are indistinguishable. Checked before the body is read.
 ```
+
+### Caller authentication
+
+`/v1/extract` requires `Authorization: Bearer <key>`. The service holds only SHA-256 hashes of the
+keys, in `EXTRACT_API_KEY_SHA256S` (comma-separated hex digests; two or more may be valid at once, so
+a key rotates without downtime). A service started with no hash refuses every extraction with a
+500 `internal_error` instead of serving unauthenticated. `/healthz` and `/readyz` need no key.
+Making a key and its hash, setting the secret and rotating: `docs/ops/RUNBOOK.md` sections 1.5 and 6.1.
+The `--live` accuracy harness, the load test and the Docker smoke read the caller key from the
+`EXTRACT_API_KEY` environment variable.
 
 Idempotency: `Idempotency-Key` + `sha256(payload)` is stored with the response.
 For a successful response, same key + same hash replays the stored response with
@@ -83,12 +98,13 @@ request path emits it yet because confidence-gating is unbuilt.
 | `internal_error` | 500 | unexpected or unmapped server error | TBD |
 | `not_found` | 404 | no such route | TBD |
 | `method_not_allowed` | 405 | wrong HTTP method for the route | TBD |
+| `unauthorized` | 401 | missing, malformed or wrong API key on `/v1/extract` | TBD |
 
 ## Non-goals
 
 Async job queue; OCR (text and pre-extracted PDF text only); more than two doc
-types in v1; LLM-judge scoring; calibrated confidence; auth and multi-tenant (the
-gateway owns keys and budgets).
+types in v1; LLM-judge scoring; calibrated confidence; per-caller accounts, quotas
+and multi-tenancy (one shared key set gates access; the gateway owns budgets).
 
 ## Status
 

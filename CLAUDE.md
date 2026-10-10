@@ -26,7 +26,7 @@ list and the human-action file (only Chris ticks its human-blocked items);
 
 | Region | What lives there | Its tests |
 | --- | --- | --- |
-| `api/` | FastAPI app (`main.py` `create_app`, `/readyz`, the `ExtractAdmission` cap), taxonomy rendering (`errors.py`), SQLite idempotency with store identity, budget guard, PDF/text decode (`content.py`), JSON logs and request ids (`observability.py`) | `test_api`, `test_extract_endpoint`, `test_errors`, `test_idempotency`, `test_budget`, `test_content`, `test_readiness`, `test_replica_guard`, `test_concurrency`, `test_observability`, `test_uvicorn_logging` |
+| `api/` | FastAPI app (`main.py` `create_app`, `/readyz`, the `ExtractAdmission` cap), caller keys (`auth.py`), taxonomy rendering (`errors.py`), SQLite idempotency with store identity, budget guard, PDF/text decode (`content.py`), JSON logs and request ids (`observability.py`) | `test_api`, `test_caller_auth`, `test_extract_endpoint`, `test_errors`, `test_idempotency`, `test_budget`, `test_content`, `test_readiness`, `test_replica_guard`, `test_concurrency`, `test_observability`, `test_uvicorn_logging` |
 | Hosting | `Dockerfile` + `docker-entrypoint.sh`, `render.yaml`, `railway.json`, `.github/workflows/image.yml` (build, scan, attest) and `deploy.yml` (dispatch-only digest deploy), `.hosting/manifest.json` (agent-hq manifest v2), `docs/ops/` (RUNBOOK, SIZING, OBSERVABILITY), ADRs 0004-0005 | `test_deploy_descriptors`, `test_workflows`; `scripts/docker_persistence_smoke.py` and `scripts/load_test.py` in CI |
 | `llm/` | The only provider seam. `client.py` (both SDKs, 467 lines), `pipeline.py:run_extraction` (validation-retry), `schema_utils`, `prompts`, `errors` | `test_llm_client`, `test_openai_client`, `test_anthropic_client`, `test_pipeline`, `test_schema_utils`, `test_prompts`, `test_import_boundary` |
 | `schemas/` | Strict `invoice.v1` + `job_posting.v1`, ISO-4217 set, `registry.py` | `test_schemas`, `test_iso4217`, `test_registry` |
@@ -82,6 +82,11 @@ gitleaks, on Python 3.13. There is no extra lint config to satisfy.
   Log every retry with its error class.
 - Exactly one `ErrorCode` per non-200. `api/errors.py` is the single source of
   truth; new members need owner approval. The invariant is locked, not the count.
+  `unauthorized` (401) was approved by owner decision `extract-api-caller-auth` (2026-10-10).
+- Caller auth: `Authorization: Bearer <key>` on `/v1/extract` only (`api/auth.py`, a middleware
+  outside `ExtractAdmission`). The service stores SHA-256 hashes only, in
+  `EXTRACT_API_KEY_SHA256S` (comma separated, several valid at once). No hash set means
+  `/v1/extract` fails closed with 500 `internal_error`. Never log a token or a hash.
 - Idempotency: `Idempotency-Key` + `sha256(payload)`; same key+hash replays
   (`replayed:true`, no model call); same key+different hash is 409; TTL 24h;
   SQLite (ADR 0004).
