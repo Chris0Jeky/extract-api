@@ -23,6 +23,7 @@ def test_every_code_has_exactly_one_status():
     assert STATUS_BY_CODE[ErrorCode.idempotency_conflict] == 409
     assert STATUS_BY_CODE[ErrorCode.validation_failed] == 422
     assert STATUS_BY_CODE[ErrorCode.internal_error] == 500
+    assert STATUS_BY_CODE[ErrorCode.unauthorized] == 401
 
 
 @pytest.mark.parametrize("code", list(ErrorCode))
@@ -38,7 +39,8 @@ def test_every_code_renders_its_status_and_body(code):
 # unbuilt feature. Each live-reachable code below is produced end-to-end by a real request
 # elsewhere: validation_failed / unsupported_doc_type / provider_error / provider_timeout /
 # idempotency_conflict / internal_error / budget_exceeded in tests/test_extract_endpoint.py;
-# not_found / method_not_allowed in tests/test_api.py.
+# not_found / method_not_allowed in tests/test_api.py; unauthorized in tests/test_caller_auth.py
+# (owner decision extract-api-caller-auth, 2026-10-10).
 _RESERVED_CODES = {
     ErrorCode.low_confidence,  # needs confidence-gating (not built)
 }
@@ -52,6 +54,7 @@ _LIVE_REACHABLE_CODES = {
     ErrorCode.budget_exceeded,  # reachable via the per-run budget guard (T18)
     ErrorCode.not_found,
     ErrorCode.method_not_allowed,
+    ErrorCode.unauthorized,  # owner decision extract-api-caller-auth (a), 2026-10-10
 }
 
 

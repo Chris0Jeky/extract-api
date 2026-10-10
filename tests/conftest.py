@@ -2,6 +2,8 @@
 
 import pytest
 
+from caller_keys import TEST_KEY_SHA256
+
 
 @pytest.fixture(autouse=True)
 def _openai_prices(monkeypatch):
@@ -36,3 +38,10 @@ def _gateway_env(monkeypatch):
     # and GATEWAY_BYPASS / per-test overrides still win where a test sets them.
     monkeypatch.setenv("LLM_BASE_URL", "https://gateway.test")
     monkeypatch.setenv("LLM_API_KEY", "test-gateway-key")
+
+
+@pytest.fixture(autouse=True)
+def _caller_key(monkeypatch):
+    # /v1/extract fails closed without caller key hashes, so every test app starts with the
+    # test key valid (tests/caller_keys.py). The auth tests set or delete this explicitly.
+    monkeypatch.setenv("EXTRACT_API_KEY_SHA256S", TEST_KEY_SHA256)

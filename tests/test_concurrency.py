@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import ExtractAdmission, create_app
+from caller_keys import AUTH
 from llm.client import FixtureClient
 
 
@@ -97,7 +98,7 @@ def test_saturated_pool_queues_extracts_and_health_stays_responsive(monkeypatch)
     async def waiting():
         return gate.limiter.statistics().tasks_waiting
 
-    with TestClient(app) as client, ThreadPoolExecutor(max_workers=3) as pool:
+    with TestClient(app, headers=AUTH) as client, ThreadPoolExecutor(max_workers=3) as pool:
         body = {"doc_type": "invoice", "content": fixture["content"]}
         first = pool.submit(client.post, "/v1/extract", json=body)
         try:

@@ -18,6 +18,7 @@ import openai
 from fastapi.testclient import TestClient
 
 from api.main import create_app
+from caller_keys import AUTH
 
 _INVOICE = json.dumps(
     {
@@ -76,7 +77,7 @@ def _mock_anthropic(monkeypatch, *, model="claude-test"):
 def _post(provider):
     # No raise_server_exceptions=False: these are happy-path 200 assertions, so letting an
     # unexpected exception propagate gives a real traceback instead of a generic 500.
-    client = TestClient(create_app())
+    client = TestClient(create_app(), headers=AUTH)
     return client.post(
         "/v1/extract",
         json={"doc_type": "invoice", "schema_version": "v1", "content": "x", "provider": provider},

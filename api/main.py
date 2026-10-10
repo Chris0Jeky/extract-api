@@ -27,6 +27,7 @@ import anyio.to_thread
 from fastapi import FastAPI, Header, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from api.auth import CallerAuth, key_hashes_from_env
 from api.budget import BudgetGuard, budget_from_env
 from api.content import resolve_content
 from api.errors import ErrorCode, ExtractError, install_error_handlers
@@ -288,6 +289,10 @@ def create_app(
     # The last added is outermost: the request context wraps the admission gate, so a queued
     # extract carries its request id and its access line's duration_ms includes the wait.
     app.add_middleware(ExtractAdmission, limit=_max_concurrency_from_env())
+    # Outside the admission gate: a rejected caller never takes an extraction slot, and is
+    # refused before its body is read. Hashes are read once here, so a malformed
+    # EXTRACT_API_KEY_SHA256S fails startup like the other env settings.
+    app.add_middleware(CallerAuth, key_hashes=key_hashes_from_env())
     app.add_middleware(RequestContextMiddleware)
 
     @app.get("/healthz")

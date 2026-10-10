@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import logging
 import re
@@ -27,6 +28,7 @@ from api.observability import (
     RequestContextMiddleware,
     configure_logging,
 )
+from caller_keys import AUTH, TEST_KEY_SHA256
 from llm.client import CompletionResult, FixtureClient
 from llm.errors import ProviderError
 
@@ -116,13 +118,23 @@ def logs(caplog, capsys):
     return Captured()
 
 
+@pytest.fixture(autouse=True)
+def _canary_is_a_valid_caller_key(monkeypatch):
+    # The Authorization canary must be a key the service accepts, so those requests get past
+    # authentication and the redaction proof covers the whole request path.
+    canary_hash = hashlib.sha256(CANARY.encode()).hexdigest()
+    monkeypatch.setenv("EXTRACT_API_KEY_SHA256S", f"{TEST_KEY_SHA256},{canary_hash}")
+
+
 @pytest.fixture
 def client_factory(tmp_path):
     def make(fake: object | None = None, monkeypatch=None) -> TestClient:
         if fake is not None:
             monkeypatch.setattr("api.main.get_client", lambda provider: fake)
         store = SqliteIdempotencyStore(str(tmp_path / "idem.sqlite"))
-        return TestClient(create_app(idempotency_store=store), raise_server_exceptions=False)
+        return TestClient(
+            create_app(idempotency_store=store), raise_server_exceptions=False, headers=AUTH
+        )
 
     return make
 
