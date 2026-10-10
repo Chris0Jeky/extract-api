@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -83,7 +84,10 @@ _PROVIDERS = ("openai", "anthropic", "default")
 _FIXTURES_ROOT = Path(__file__).resolve().parent.parent / "fixtures"
 # Taxonomy codes that mean "rejected by a control-plane guard before any model call"; these
 # are not extraction-quality signals, so the harness skips them rather than scoring them (#52).
-_CONTROL_PLANE_CODES = frozenset({"budget_exceeded", "idempotency_conflict"})
+# `unauthorized` is the caller-key check (owner decision extract-api-caller-auth).
+_CONTROL_PLANE_CODES = frozenset({"budget_exceeded", "idempotency_conflict", "unauthorized"})
+# The caller's plaintext key for --live runs. The service stores only its SHA-256 hash.
+_API_KEY_ENV = "EXTRACT_API_KEY"
 
 
 def _preflight_fixtures(
@@ -258,7 +262,9 @@ def run_accuracy(
     )
 
 
-def live_predictor(base_url: str, provider: str, *, timeout: float = 120.0) -> Predictor:
+def live_predictor(
+    base_url: str, provider: str, *, timeout: float = 120.0, api_key: str | None = None
+) -> Predictor:
     """A predictor that POSTs each fixture to a serving /v1/extract and reads the result.
 
     An extraction-quality non-2xx (a terminal validation_failed 422, provider_error 502, ...)
@@ -270,9 +276,12 @@ def live_predictor(base_url: str, provider: str, *, timeout: float = 120.0) -> P
     ExtractResponse (a gateway login/HTML page, an older server shape) is likewise a
     PredictionFailed, not an uncaught crash that aborts the whole run (issue #57). `timeout`
     is the per-request HTTP timeout in seconds, configurable so a legitimately slow extraction
-    is not spuriously failed.
+    is not spuriously failed. `api_key`, when given, is sent as the bearer key the service
+    requires; a keyless or wrong-key run comes back `unauthorized` and is skipped, not scored.
     """
     import httpx  # local import: only --live needs an HTTP client
+
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
     def predict(fx: dict[str, object]) -> Prediction:
         fixture_id = fx.get("fixture_id", "?")
@@ -285,6 +294,7 @@ def live_predictor(base_url: str, provider: str, *, timeout: float = 120.0) -> P
                     "content": fx["content"],
                     "provider": provider,
                 },
+                headers=headers,
                 timeout=timeout,
             )
             resp.raise_for_status()
@@ -360,12 +370,18 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    api_key = os.environ.get(_API_KEY_ENV, "").strip()
+    if not api_key:
+        # The service answers a keyless caller 401 on every fixture; fail now rather than print
+        # a table of skipped rows.
+        print(f"--live needs the caller's API key in the {_API_KEY_ENV} env var.", file=sys.stderr)
+        return 1
     if args.out:
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     report = run_accuracy(
         args.doc_type,
         args.provider,
-        live_predictor(args.base_url, args.provider, timeout=args.timeout),
+        live_predictor(args.base_url, args.provider, timeout=args.timeout, api_key=api_key),
     )
     markdown = render_markdown(report)
     stdout_error: Exception | None = None

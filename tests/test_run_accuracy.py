@@ -22,6 +22,13 @@ from harness.run_accuracy import (
     run_accuracy,
 )
 
+
+@pytest.fixture(autouse=True)
+def _caller_key(monkeypatch):
+    # --live sends the caller's key from the environment (the service refuses a keyless caller).
+    monkeypatch.setenv("EXTRACT_API_KEY", "test-caller-key-not-a-secret")
+
+
 _BASE: dict[str, object] = {
     "invoice_number": "INV-1",
     "issue_date": "2026-01-15",
@@ -261,14 +268,16 @@ def test_run_accuracy_labels_report_with_server_resolved_provider():
 def test_live_predictor_posts_and_parses(monkeypatch):
     captured: dict[str, object] = {}
 
-    def fake_post(url, *, json, timeout):
+    def fake_post(url, *, json, headers, timeout):
         captured["url"] = url
         captured["json"] = json
+        captured["headers"] = headers
         return _resp(200, _ok_body(provider="openai", cost=0.5, latency=99.0))
 
     monkeypatch.setattr(httpx, "post", fake_post)
-    pred = live_predictor("http://host:8200/", "anthropic")(_fixture("c"))
+    pred = live_predictor("http://host:8200/", "anthropic", api_key="k-123")(_fixture("c"))
     assert captured["url"] == "http://host:8200/v1/extract"  # trailing slash trimmed
+    assert captured["headers"] == {"Authorization": "Bearer k-123"}  # the caller key is sent
     assert captured["json"]["provider"] == "anthropic"  # the requested provider is sent
     assert pred.record == _BASE
     assert (pred.cost_usd, pred.latency_ms) == (0.5, 99.0)
@@ -292,7 +301,7 @@ def test_live_predictor_transport_error_raises_prediction_failed(monkeypatch):
 
 @pytest.mark.parametrize(
     ("status", "code"),
-    [(402, "budget_exceeded"), (409, "idempotency_conflict")],
+    [(402, "budget_exceeded"), (409, "idempotency_conflict"), (401, "unauthorized")],
 )
 def test_live_predictor_control_plane_rejection_is_skipped(monkeypatch, status, code):
     # A coded control-plane non-2xx is a ControlPlaneRejection (skipped), not a quality failure.
@@ -372,7 +381,7 @@ def test_live_predictor_non_finite_metric_is_failure(monkeypatch, over):
 def test_live_predictor_respects_configurable_timeout(monkeypatch):
     captured: dict[str, object] = {}
 
-    def fake_post(url, *, json, timeout):
+    def fake_post(url, *, json, headers, timeout):
         captured["timeout"] = timeout
         return _resp(200, _ok_body())
 
@@ -529,10 +538,49 @@ def test_main_live_passes_timeout_through(tmp_path, monkeypatch):
     _write(tmp_path / "invoices", "a.json", "REVIEWED")
     captured: dict[str, object] = {}
 
-    def fake_post(url, *, json, timeout):
+    def fake_post(url, *, json, headers, timeout):
         captured["timeout"] = timeout
         return _resp(200, _ok_body())
 
     monkeypatch.setattr(httpx, "post", fake_post)
     assert main(["--doc-type", "invoice", "--live", "--timeout", "33"]) == 0
     assert captured["timeout"] == 33.0  # the CLI flag reaches the HTTP client
+
+
+def test_main_live_sends_the_caller_key_from_the_environment(tmp_path, monkeypatch):
+    monkeypatch.setattr("harness.run_accuracy._FIXTURES_ROOT", tmp_path)
+    _write(tmp_path / "invoices", "a.json", "REVIEWED")
+    sent: list[object] = []
+
+    def fake_post(url, *, json, headers, timeout):
+        sent.append(headers)
+        return _resp(200, _ok_body())
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    monkeypatch.setenv("EXTRACT_API_KEY", " env-key ")
+    assert main(["--doc-type", "invoice", "--live"]) == 0
+    assert sent == [{"Authorization": "Bearer env-key"}]  # surrounding whitespace is stripped
+
+
+@pytest.mark.parametrize("value", [None, "", "  "])
+def test_main_live_without_a_caller_key_fails_before_any_request(
+    tmp_path, monkeypatch, capsys, value
+):
+    # /v1/extract now answers 401 to a keyless caller; scoring that as a run of failed
+    # extractions would print a table of zeros, so a missing key is a setup error.
+    monkeypatch.setattr("harness.run_accuracy._FIXTURES_ROOT", tmp_path)
+    _write(tmp_path / "invoices", "a.json", "REVIEWED")
+    calls = {"n": 0}
+
+    def fake_post(*args, **kwargs):
+        calls["n"] += 1
+        return _resp(200, _ok_body())
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    if value is None:
+        monkeypatch.delenv("EXTRACT_API_KEY", raising=False)
+    else:
+        monkeypatch.setenv("EXTRACT_API_KEY", value)
+    assert main(["--doc-type", "invoice", "--live"]) == 1
+    assert "EXTRACT_API_KEY" in capsys.readouterr().err
+    assert calls["n"] == 0
