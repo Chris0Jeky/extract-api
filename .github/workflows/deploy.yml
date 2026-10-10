@@ -53,6 +53,7 @@ jobs:
           RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
           RAILWAY_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
           RAILWAY_ENVIRONMENT_ID: ${{ vars.RAILWAY_ENVIRONMENT_ID }}
+          EXTRACT_API_KEY: ${{ secrets.EXTRACT_API_KEY }}
         run: |
           required=(EXTRACT_API_BASE_URL)
           case "$TARGET" in
@@ -60,6 +61,9 @@ jobs:
             railway) required+=(RAILWAY_PROJECT_TOKEN RAILWAY_SERVICE_ID RAILWAY_ENVIRONMENT_ID) ;;
             *) echo 'invalid deployment target' >&2; exit 1 ;;
           esac
+          # The fixture smoke calls the key-protected /v1/extract, so it needs a caller key;
+          # live mode makes no extraction call and needs none.
+          if [[ "$SMOKE_MODE" == fixture ]]; then required+=(EXTRACT_API_KEY); fi
           missing=0
           for name in "${required[@]}"; do
             if [[ -z "${!name}" ]]; then
@@ -213,11 +217,14 @@ jobs:
       - name: Verify one deterministic fixture extraction
         if: vars.EXTRACT_API_SMOKE_MODE == 'fixture'
         # The owner sets LLM_PROVIDER_MODE=fixture for the first deploy. No live smoke.
+        env:
+          EXTRACT_API_KEY: ${{ secrets.EXTRACT_API_KEY }}
         run: |
           jq '{doc_type, schema_version, content, provider: "openai"}' \
             fixtures/invoices/invoice_0001.json > "$RUNNER_TEMP/fixture-request.json"
           status=$(curl --fail-with-body -sS --max-time 30 \
             -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer $EXTRACT_API_KEY" \
             --data-binary "@$RUNNER_TEMP/fixture-request.json" \
             -o "$RUNNER_TEMP/fixture-response.json" -w '%{http_code}' \
             "${BASE_URL%/}/v1/extract")
