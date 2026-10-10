@@ -47,11 +47,17 @@ jobs:
           mkdir -p loadtest-results
           export FIXTURE_CANNED_TEXT
           FIXTURE_CANNED_TEXT=$(uv run --no-sync python -c 'from scripts.docker_persistence_smoke import _fixture_request; print(_fixture_request()[1])')
+          # A throwaway caller key for this run: the container gets only its hash, the load
+          # runner reads the key from its environment.
+          export EXTRACT_API_KEY EXTRACT_API_KEY_SHA256S
+          EXTRACT_API_KEY=$(uv run --no-sync python -c 'import secrets; print(secrets.token_hex(16))')
+          echo "::add-mask::$EXTRACT_API_KEY"
+          EXTRACT_API_KEY_SHA256S=$(printf %s "$EXTRACT_API_KEY" | sha256sum | cut -d' ' -f1)
           docker run -d --name extract-loadtest \
             --memory "$MEMORY" --memory-swap "$MEMORY" --cpus "$CPUS" \
             -p 127.0.0.1:8200:8200 -v extract-loadtest-data:/data \
             -e LLM_PROVIDER_MODE=fixture -e FIXTURE_CANNED_TEXT -e FIXTURE_LATENCY_MS \
-            -e EXTRACT_MAX_CONCURRENCY \
+            -e EXTRACT_MAX_CONCURRENCY -e EXTRACT_API_KEY_SHA256S \
             extract-api:loadtest
           set +e
           uv run --no-sync python -c 'from scripts.docker_persistence_smoke import _wait_for_health; _wait_for_health(8200)'
