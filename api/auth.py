@@ -22,6 +22,7 @@ import logging
 import os
 import re
 
+from starlette._utils import get_route_path
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from api.errors import ErrorCode, error_response
@@ -30,8 +31,22 @@ from api.observability import note
 logger = logging.getLogger("extract.api")
 
 ENV_VAR = "EXTRACT_API_KEY_SHA256S"
-GUARDED_PATH = "/v1/extract"
+EXTRACT_PATH = "/v1/extract"
+# The only unauthenticated routes (the platform's health probes). Everything else is guarded.
+_OPEN_PATHS = frozenset({"/healthz", "/readyz"})
 _SHA256_HEX = re.compile(r"[0-9a-f]{64}")
+
+
+def is_open_path(scope: Scope) -> bool:
+    """True only for the health probes; every other http request is guarded.
+
+    Guard by default, on the root_path-stripped path Starlette routes with. The earlier
+    allowlist of guarded paths failed open: uvicorn decodes `/v1/extract%0A` to
+    a trailing-newline path, which an exact comparison does not recognise but the route regex
+    (`$` matches before a trailing newline) still sends to the endpoint. Shared with
+    `ExtractAdmission`, so the two gates cannot disagree about a spelling.
+    """
+    return get_route_path(scope) in _OPEN_PATHS
 
 
 def key_hashes_from_env() -> tuple[bytes, ...]:
@@ -79,7 +94,7 @@ def _matches(token: str, hashes: tuple[bytes, ...]) -> bool:
 
 
 class CallerAuth:
-    """Require a valid bearer key on /v1/extract; every other route passes through."""
+    """Require a valid bearer key on every http request except the health probes."""
 
     def __init__(self, app: ASGIApp, *, key_hashes: tuple[bytes, ...]) -> None:
         self.app = app
@@ -91,10 +106,13 @@ class CallerAuth:
             )
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or scope["path"] != GUARDED_PATH:
+        if scope["type"] != "http" or is_open_path(scope):
             await self.app(scope, receive, send)
             return
-        note(route=GUARDED_PATH)  # the access line would otherwise say "unmatched"
+        if get_route_path(scope) == EXTRACT_PATH:
+            note(
+                route=EXTRACT_PATH
+            )  # the router never ran, so the access line would say "unmatched"
         if not self.key_hashes:
             # Fail closed. A service fault, not the caller's credentials, so it is the 500
             # internal_error that /readyz uses for the same class of fault: a 401 would send

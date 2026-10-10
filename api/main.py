@@ -27,7 +27,7 @@ import anyio.to_thread
 from fastapi import FastAPI, Header, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from api.auth import CallerAuth, key_hashes_from_env
+from api.auth import CallerAuth, is_open_path, key_hashes_from_env
 from api.budget import BudgetGuard, budget_from_env
 from api.content import resolve_content
 from api.errors import ErrorCode, ExtractError, install_error_handlers
@@ -241,14 +241,17 @@ def _max_concurrency_from_env() -> int:
 
 
 class ExtractAdmission:
-    """Admit at most `limit` /v1/extract requests at once, before their bodies are read.
+    """Admit at most `limit` guarded requests at once, before their bodies are read.
+
+    "Guarded" is `api.auth.is_open_path`: everything except the health probes, so no spelling
+    of /v1/extract (a trailing newline from `%0A`, a root_path prefix) can skip the cap.
 
     Memory, not CPU, bounds an instance (docs/ops/SIZING.md): each in-flight extraction holds
     its body, the decoded PDF and its text. Waiting here, ahead of FastAPI, a queued request
     has not read its body: the server's flow control pauses the socket, so a queue of large
     PDFs costs connections, not memory. Excess requests wait (bounded by the platform's
-    request timeout) instead of being shed, so no new error code is needed, and every other
-    route, including the health probes, bypasses the gate.
+    request timeout) instead of being shed, so no new error code is needed, and the health
+    probes bypass the gate.
     """
 
     def __init__(self, app: ASGIApp, *, limit: int) -> None:
@@ -256,7 +259,7 @@ class ExtractAdmission:
         self.limiter = anyio.CapacityLimiter(limit)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http" and scope["path"] == "/v1/extract":
+        if scope["type"] == "http" and not is_open_path(scope):
             async with self.limiter:
                 await self.app(scope, receive, send)
         else:

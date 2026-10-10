@@ -83,8 +83,9 @@ gitleaks, on Python 3.13. There is no extra lint config to satisfy.
 - Exactly one `ErrorCode` per non-200. `api/errors.py` is the single source of
   truth; new members need owner approval. The invariant is locked, not the count.
   `unauthorized` (401) was approved by owner decision `extract-api-caller-auth` (2026-10-10).
-- Caller auth: `Authorization: Bearer <key>` on `/v1/extract` only (`api/auth.py`, a middleware
-  outside `ExtractAdmission`). The service stores SHA-256 hashes only, in
+- Caller auth: `Authorization: Bearer <key>` on every path except `/healthz` and `/readyz`
+  (`api/auth.py` `is_open_path`, shared with `ExtractAdmission`; guard by default, never an
+  allowlist of guarded paths: `/v1/extract%0A` once bypassed one). A middleware outside `ExtractAdmission`. The service stores SHA-256 hashes only, in
   `EXTRACT_API_KEY_SHA256S` (comma separated, several valid at once). No hash set means
   `/v1/extract` fails closed with 500 `internal_error`. Never log a token or a hash.
 - Idempotency: `Idempotency-Key` + `sha256(payload)`; same key+hash replays

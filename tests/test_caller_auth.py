@@ -131,8 +131,53 @@ def test_health_and_readiness_stay_open(client, monkeypatch, tmp_path):
     assert app.get("/readyz").status_code == 200
 
 
-def test_unknown_routes_are_not_turned_into_401(client):
-    assert client().get("/nope").status_code == 404
+def test_unknown_routes_are_guarded_too(client):
+    # Guard by default: only /healthz and /readyz are open, so a path that merely routes to
+    # /v1/extract by some other spelling cannot slip past a path comparison.
+    assert client().get("/nope").status_code == 401
+    assert client().get("/nope", headers=AUTH).status_code == 404
+
+
+@pytest.mark.parametrize("suffix", ["%0A", "%0a", "%0D%0A", "%20", "/", "%2F"])
+def test_alternate_spellings_of_the_extract_path_cannot_bypass_auth(client, monkeypatch, suffix):
+    # uvicorn decodes /v1/extract%0A to "/v1/extract\n", which Starlette's route regex
+    # (`$` matches before a trailing newline) still routes to extract().
+    def forbidden(provider):
+        raise AssertionError("the provider seam was reached without a valid key")
+
+    monkeypatch.setattr("api.main.get_client", forbidden)
+    resp = client().post(f"/v1/extract{suffix}", json=BODY)
+    assert resp.status_code == 401
+    assert resp.json()["error"] == "unauthorized"
+
+
+def test_a_newline_spelling_with_a_valid_key_is_still_served(client):
+    # The same quirk, authenticated: the route runs, so the cap and the check both ran first.
+    assert client().post("/v1/extract%0A", json=BODY, headers=AUTH).status_code == 200
+
+
+def test_a_root_path_prefix_does_not_unguard_the_route(client, monkeypatch, tmp_path):
+    app = create_app(
+        idempotency_store=SqliteIdempotencyStore(str(tmp_path / "rp.sqlite")),
+    )
+    prefixed = TestClient(app, root_path="/api", raise_server_exceptions=False)
+    assert prefixed.post("/api/v1/extract", json=BODY).status_code == 401
+    assert prefixed.post("/api/v1/extract", json=BODY, headers=AUTH).status_code == 200
+    monkeypatch.setenv("IDEMPOTENCY_DB_PATH", str(tmp_path / "ready.sqlite"))
+    assert prefixed.get("/api/healthz").status_code == 200  # still open under the prefix
+
+
+@pytest.mark.parametrize("path", ["/healthz", "/readyz", "/api/healthz"])
+def test_only_the_health_probes_are_open(path):
+    scope = {"type": "http", "path": path, "root_path": "/api" if path.startswith("/api") else ""}
+    assert auth.is_open_path(scope)
+
+
+@pytest.mark.parametrize(
+    "path", ["/v1/extract", "/v1/extract\n", "/healthz\n", "/healthz/", "/nope", "/readyz%0A", ""]
+)
+def test_everything_else_is_guarded(path):
+    assert not auth.is_open_path({"type": "http", "path": path})
 
 
 def test_two_keys_are_valid_at_once(client, monkeypatch):

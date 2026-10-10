@@ -65,7 +65,7 @@ Body: {
 `/v1/extract` requires `Authorization: Bearer <key>`. The service holds only SHA-256 hashes of the
 keys, in `EXTRACT_API_KEY_SHA256S` (comma-separated hex digests; two or more may be valid at once, so
 a key rotates without downtime). A service started with no hash refuses every extraction with a
-500 `internal_error` instead of serving unauthenticated. `/healthz` and `/readyz` need no key.
+500 `internal_error` instead of serving unauthenticated. Only `/healthz` and `/readyz` need no key: every other path, unknown ones included, answers 401 without one (guard by default, so no spelling of the path can skip the check).
 Making a key and its hash, setting the secret and rotating: `docs/ops/RUNBOOK.md` sections 1.5 and 6.1.
 The `--live` accuracy harness, the load test and the Docker smoke read the caller key from the
 `EXTRACT_API_KEY` environment variable.
