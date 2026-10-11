@@ -1,16 +1,18 @@
 """Deterministic offline smoke: boot the app in-process and exercise /v1/extract.
 
-No network, no paid model calls, no API key. Routing is pinned to the in-process
+No network, no paid model calls, no provider key. Routing is pinned to the in-process
 FixtureClient (LLM_PROVIDER_MODE=fixture + FIXTURE_CANNED_TEXT), so this proves the
 full endpoint path (resolve -> client -> validation-retry -> taxonomy) offline:
 /healthz is green, a known invoice fixture POSTs to a 200 with the validated record,
 and a deliberately-broken canned output forces a 422 validation_failed. It also
 exercises idempotency: a key + payload match replays (replayed:true, no model call)
-and the same key with a different payload returns 409 idempotency_conflict.
+and the same key with a different payload returns 409 idempotency_conflict. A throwaway
+caller key is pinned for the run, and a request without it must get 401 unauthorized.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sys
@@ -23,7 +25,8 @@ from api.idempotency import SqliteIdempotencyStore
 from api.main import create_app
 
 _FIXTURE = Path(__file__).resolve().parent.parent / "fixtures" / "invoices" / "invoice_0001.json"
-_FIXTURE_ENV = ("LLM_PROVIDER_MODE", "FIXTURE_CANNED_TEXT")
+_CALLER_KEY = "smoke-caller-key-not-a-secret"  # throwaway: exists only for this process
+_FIXTURE_ENV = ("LLM_PROVIDER_MODE", "FIXTURE_CANNED_TEXT", "EXTRACT_API_KEY_SHA256S")
 
 
 def _fail(message: str) -> int:
@@ -101,18 +104,31 @@ def _run_idempotency_smoke(client: TestClient) -> int:
     return 0
 
 
+def _run_auth_smoke(client: TestClient) -> int:
+    body = _extract_body(json.loads(_FIXTURE.read_text(encoding="utf-8")))
+    resp = client.post("/v1/extract", json=body, headers={"Authorization": "Bearer wrong"})
+    if resp.status_code != 401 or resp.json().get("error") != "unauthorized":
+        return _fail(f"/v1/extract (wrong key) -> {resp.status_code}, expected 401: {resp.text}")
+    return 0
+
+
 def main() -> int:
+    saved = {name: os.environ.get(name) for name in _FIXTURE_ENV}
+    os.environ["EXTRACT_API_KEY_SHA256S"] = hashlib.sha256(_CALLER_KEY.encode()).hexdigest()
     with tempfile.TemporaryDirectory() as tmp:
         # Inject a throwaway store so the smoke never touches a real idempotency db.
         store = SqliteIdempotencyStore(str(Path(tmp) / "smoke_idem.sqlite"))
-        client = TestClient(create_app(idempotency_store=store))
-        resp = client.get("/healthz")
-        if resp.status_code != 200 or resp.json() != {"status": "ok"}:
-            return _fail(f"/healthz -> {resp.status_code} {resp.text}")
-
-        saved = {name: os.environ.get(name) for name in _FIXTURE_ENV}
         try:
-            rc = _run_extraction_smoke(client)
+            client = TestClient(
+                create_app(idempotency_store=store),
+                headers={"Authorization": f"Bearer {_CALLER_KEY}"},
+            )
+            resp = client.get("/healthz")
+            if resp.status_code != 200 or resp.json() != {"status": "ok"}:
+                return _fail(f"/healthz -> {resp.status_code} {resp.text}")
+            rc = _run_auth_smoke(client)
+            if rc == 0:
+                rc = _run_extraction_smoke(client)
             if rc == 0:
                 rc = _run_idempotency_smoke(client)
         finally:
@@ -126,7 +142,7 @@ def main() -> int:
             return rc
 
     print(
-        "SMOKE OK: app boots, /healthz green, /v1/extract 200 + forced 422, "
+        "SMOKE OK: app boots, /healthz green, /v1/extract 401 without the key, 200 + forced 422, "
         "idempotency replay + 409, offline"
     )
     return 0

@@ -60,6 +60,10 @@ services:
         value: "1"
       # Named only. sync: false makes Render prompt the owner for each value at Blueprint
       # creation; no value ever lives in this repository.
+      # SHA-256 hashes of the caller keys, comma separated (RUNBOOK 1.5). Required: with none the
+      # service refuses every /v1/extract request. Set it at Blueprint creation, not later.
+      - key: EXTRACT_API_KEY_SHA256S
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY

@@ -35,6 +35,9 @@ class ErrorCode(StrEnum):
     # escapes with a code-less body.
     not_found = "not_found"
     method_not_allowed = "method_not_allowed"
+    # Caller authentication on /v1/extract. Approved by the owner: decision
+    # extract-api-caller-auth, answered (a) on 2026-10-10 (agent-hq PR 356).
+    unauthorized = "unauthorized"
 
 
 # Exactly one HTTP status per taxonomy member.
@@ -49,6 +52,7 @@ STATUS_BY_CODE: dict[ErrorCode, int] = {
     ErrorCode.internal_error: 500,
     ErrorCode.not_found: 404,
     ErrorCode.method_not_allowed: 405,
+    ErrorCode.unauthorized: 401,
 }
 
 # Framework HTTPException statuses we render with a dedicated code; any other status this

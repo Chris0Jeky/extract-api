@@ -6,7 +6,7 @@
   "status": "planned",
   "workload": {"class": "container", "serves": "dynamic", "package": "oci-image", "host_bound": false, "always_on": true},
   "state": {"authority": "sqlite", "writers": "single", "replicas": 1, "path": "/data", "live_gb_max": 0.5, "ephemeral": true},
-  "ingress": {"mode": "public", "private_by_design": false, "access_layer": "api-key gateway (owner decision extract-api-caller-auth; fixture mode until built)",
+  "ingress": {"mode": "public", "private_by_design": false, "access_layer": "bearer API key checked by the app, SHA-256 hashes in EXTRACT_API_KEY_SHA256S (owner decision extract-api-caller-auth, 2026-10-10)",
               "hostnames": ["api.deliverasoft.com"]},
   "data_classes": ["third-party-content", "telemetry"],
   "backup": {"policy": "none-needed"},
@@ -27,14 +27,14 @@
   ],
   "source_paths": ["render.yaml", "railway.json", "docker-compose.yml", "Dockerfile", "docs/adr/0005-hosting-platform.md", "docs/ops/RUNBOOK.md", "docs/ops/SIZING.md"],
   "invariants": [
-    "No unauthenticated public paid-model endpoint: fixture mode until caller authentication is built",
+    "No unauthenticated public paid-model endpoint: /v1/extract needs a bearer key and fails closed without key hashes; fixture mode until a deployed revision proves it",
     "Preserve strict validation, retries and idempotency semantics",
     "Document content and credentials never enter logs or public fixtures (tests/test_observability.py)",
     "Exactly one idempotency store serves (ADR 0004 amendment; deploy.yml checks it)",
     "Do not co-locate heavy processing on Taskdeck by default"
   ],
   "gates": [
-    "Owner decision extract-api-caller-auth answered, built and deployed before a live provider",
+    "Caller-key change (owner decision extract-api-caller-auth) deployed with a hash set, and a keyless request answers 401, before a live provider",
     "Owner provisioning steps H1 to H7 in tasks/BACKLOG.md",
     "Separate host and cost authorization"
   ],

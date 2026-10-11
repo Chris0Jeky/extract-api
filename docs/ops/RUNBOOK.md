@@ -35,8 +35,10 @@ under deployment branches choose "Selected branches" with only `main`.
 
 **1.3 Create the Render service.** Render dashboard, New, Blueprint, connect
 `Chris0Jeky/extract-api`. Render reads `render.yaml` and prompts for each `sync: false` value: the
-provider keys, models and prices. Leave them blank, or enter `unset` if Render insists on a value:
-fixture mode reads none of them, and going live (section 4) replaces them.
+provider keys, models and prices, and `EXTRACT_API_KEY_SHA256S`. Leave the provider values blank, or
+enter `unset` if Render insists on a value: fixture mode reads none of them, and going live
+(section 4) replaces them. Do 1.5 first and enter its hash for `EXTRACT_API_KEY_SHA256S`: without
+a hash the service refuses every extraction, and the deploy's fixture smoke fails.
 This creates the Starter service ($7 a month) and its 1 GB disk ($0.25 a month) in Frankfurt, and
 deploys the current `main` image.
 
@@ -46,7 +48,23 @@ service's `onrender.com` URL. In the GitHub `production` environment add:
 - secret `RENDER_DEPLOY_HOOK_URL`: the deploy hook URL (it is a credential: anyone holding it can
   redeploy the service);
 - variable `EXTRACT_API_BASE_URL`: `https://<service>.onrender.com`;
-- variable `EXTRACT_API_SMOKE_MODE`: `fixture`.
+- variable `EXTRACT_API_SMOKE_MODE`: `fixture`;
+- secret `EXTRACT_API_KEY`: the caller key from 1.5 (the plain key, not its hash). The fixture smoke
+  sends it as the bearer key, and the workflow refuses to start without it in `fixture` mode.
+
+**1.5 Create the first caller key.** `/v1/extract` requires `Authorization: Bearer <key>`. The
+service stores only the SHA-256 hash of each key, in the secret `EXTRACT_API_KEY_SHA256S`
+(owner decision `extract-api-caller-auth`). One command makes a key and its hash:
+
+```bash
+python3 -c 'import hashlib,secrets;k=secrets.token_urlsafe(32);print("key :",k);print("hash:",hashlib.sha256(k.encode()).hexdigest())'
+```
+
+Give the `key` to the caller (and, once, to the GitHub secret `EXTRACT_API_KEY` in 1.4) and keep it
+nowhere else: not in a file, a commit or a chat. Put the `hash` in Render's `EXTRACT_API_KEY_SHA256S`.
+The value is a comma-separated list of 64-character hex digests, so it can hold several (section 6.1).
+The service rejects a malformed entry at startup without echoing it, so a plain key pasted where
+the hash belongs fails the deploy instead of being stored.
 
 ## 2. Deploy
 
@@ -79,24 +97,37 @@ curl -s https://<service>.onrender.com/readyz
 ```
 
 Ready looks like `{"status":"ready","revision":"<sha>","idempotency_store_id":"<id>","provider_mode":"fixture"}`.
+`/healthz` and `/readyz` need no key. Prove the key check from outside:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X POST https://<service>.onrender.com/v1/extract          # 401
+curl -s -w ' %{http_code}\n' -X POST https://<service>.onrender.com/v1/extract -H "Authorization: Bearer $KEY" -H 'Content-Type: application/json' -d '{}'   # 422 validation_failed, so past the check
+```
+
+A 401 body is `{"error":"unauthorized",...}` with `WWW-Authenticate: Bearer`, for a missing, malformed
+or wrong key alike. A 500 `internal_error` on `/v1/extract` with the detail "not configured to serve
+extractions" means `EXTRACT_API_KEY_SHA256S` holds no hash: the log line `holds no key hash` says so
+at startup. Fix the secret; nothing else is wrong.
 A 500 `internal_error` means the store cannot write. The log line `readiness probe failed` names the
 cause: no disk at `/data` ("not on a persistent mount"), or a disk the app cannot write. The
 `idempotency_store_id` should stay the same across deploys; a new one means the disk was replaced
 and the 24-hour replay window restarted.
 
-## 4. Go live (blocked on caller authentication)
+## 4. Go live (needs the caller-key change deployed)
 
-The API has no caller authentication yet. Until the owner decision `extract-api-caller-auth`
-(agent-hq inbox) is answered and its result is merged and deployed, keep the service in fixture
-mode: a live provider behind a public URL would let anyone spend on your provider account. When it is:
+Caller authentication is built (owner decision `extract-api-caller-auth`, answered (a) 2026-10-10)
+but a revision only protects the service once it is deployed with at least one hash in
+`EXTRACT_API_KEY_SHA256S` (1.5). Until a deployed revision answers 401 to a keyless request (section 3),
+keep the service in fixture mode: a live provider behind a public URL without it would let anyone
+spend on your provider account. When it does:
 
 1. First, set the GitHub variable `EXTRACT_API_SMOKE_MODE` to `live`, before any further deploy:
    with `fixture` still set, a deploy's smoke extraction would reach the live provider. With
    `live`, CI never calls a paid provider; the deploy checks readiness and the store only.
 2. In Render's environment for the service: delete `LLM_PROVIDER_MODE` and `FIXTURE_CANNED_TEXT`;
    set `OPENAI_API_KEY` (and/or `ANTHROPIC_API_KEY`), the model ids and the four per-million-token
-   prices for the models you chose, from the provider's own pricing page; set the caller-key
-   secret that the auth change names. Keep `EXTRACT_BUDGET_USD` set: it caps spend per process
+   prices for the models you chose, from the provider's own pricing page; keep
+   `EXTRACT_API_KEY_SHA256S` set. Keep `EXTRACT_BUDGET_USD` set: it caps spend per process
    lifetime (it resets on every restart), and unset disables it.
 3. Saving environment changes redeploys the service, and Render does not document whether that
    redeploy keeps the digest the deploy hook set or re-pulls the service's `:main` tag. So
@@ -130,7 +161,22 @@ written to a file, a commit, a command line or a chat.
 | Provider API key | The provider's console | Render environment (restarts the service) | `/readyz`, then the next real request's access line shows `result: ok` | The provider's console |
 | `RENDER_DEPLOY_HOOK_URL` | Render service Settings, regenerate the deploy hook | GitHub `production` environment secret | The next deploy run reaches "Verify the deployed revision" | Confirm in Render that only the new hook exists |
 | `RAILWAY_PROJECT_TOKEN` | Railway project Settings, Tokens | GitHub `production` environment secret | The next Railway deploy run | Delete the old token in Railway |
-| Caller API keys (after the auth decision) | Per the auth change's docs | Per the auth change's docs | | |
+| Caller API key | Section 6.1: a new key and its hash | Add the hash to `EXTRACT_API_KEY_SHA256S`, beside the old one | A request with each key reaches the service | Remove the old hash |
+
+### 6.1 Rotating a caller key without downtime
+
+`EXTRACT_API_KEY_SHA256S` takes several hashes at once, so old and new keys overlap. Hashes are not
+secrets in the way keys are, but keep them out of commits all the same.
+
+1. Make the new key and hash (1.5). Keep the old hash.
+2. Set `EXTRACT_API_KEY_SHA256S` to `<old hash>,<new hash>` in Render and let it restart. Both keys
+   work now, so callers using the old key notice nothing beyond the restart gap.
+3. Check the new key with the second `curl` in section 3. Update the GitHub secret `EXTRACT_API_KEY`
+   and move each caller to the new key.
+4. Set `EXTRACT_API_KEY_SHA256S` to `<new hash>` alone and restart. The old key now gets 401; check
+   it with the first `curl` using the old key.
+
+To revoke a leaked key at once, skip to step 4 with the leaked hash removed.
 
 Changing a Render environment value redeploys the instance (a short gap, as in a deploy); re-run
 the deploy workflow with the running revision afterwards, as in section 4 step 3, so the image is

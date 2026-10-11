@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import ExtractAdmission, create_app
+from caller_keys import AUTH
 from llm.client import FixtureClient
 
 
@@ -61,6 +62,30 @@ def test_a_queued_extract_is_not_admitted_until_a_slot_frees():
     anyio.run(scenario)
 
 
+def test_a_newline_spelling_of_the_extract_path_takes_a_slot_too():
+    # /v1/extract%0A decodes to "/v1/extract\n" yet still routes to the endpoint, so the cap
+    # must apply to it: the gate guards everything except the health probes.
+    started: list[str] = []
+    release = anyio.Event()
+
+    async def inner(scope, receive, send):
+        started.append(scope["path"])
+        await release.wait()
+
+    gate = ExtractAdmission(inner, limit=1)
+    http = {"type": "http"}
+
+    async def scenario():
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(gate, {**http, "path": "/v1/extract\n"}, None, None)
+            tg.start_soon(gate, {**http, "path": "/v1/extract"}, None, None)
+            await anyio.wait_all_tasks_blocked()
+            assert started == ["/v1/extract\n"]  # the second waits for the first's slot
+            release.set()
+
+    anyio.run(scenario)
+
+
 def test_saturated_pool_queues_extracts_and_health_stays_responsive(monkeypatch):
     monkeypatch.setenv("EXTRACT_MAX_CONCURRENCY", "1")
     fixture = json.loads(Path("fixtures/invoices/invoice_0001.json").read_text(encoding="utf-8"))
@@ -97,7 +122,7 @@ def test_saturated_pool_queues_extracts_and_health_stays_responsive(monkeypatch)
     async def waiting():
         return gate.limiter.statistics().tasks_waiting
 
-    with TestClient(app) as client, ThreadPoolExecutor(max_workers=3) as pool:
+    with TestClient(app, headers=AUTH) as client, ThreadPoolExecutor(max_workers=3) as pool:
         body = {"doc_type": "invoice", "content": fixture["content"]}
         first = pool.submit(client.post, "/v1/extract", json=body)
         try:

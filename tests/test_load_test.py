@@ -88,6 +88,28 @@ def test_pdf_is_deterministic_and_rejects_bad_page_counts():
             generate_pdf(pages)
 
 
+def test_send_request_carries_the_caller_key(monkeypatch):
+    seen = {}
+
+    def capture(request, timeout):
+        seen["authorization"] = request.get_header("Authorization")
+        raise URLError("stop here")
+
+    monkeypatch.setattr(load_test, "urlopen", capture)
+    payload = load_test.Payload("text", b"{}")
+    load_test.send_request("http://test", payload, "unique", 1, api_key="secret-key")
+    assert seen["authorization"] == "Bearer secret-key"
+
+
+def test_main_requires_the_caller_key(monkeypatch, tmp_path, capsys):
+    monkeypatch.delenv("EXTRACT_API_KEY", raising=False)
+    monkeypatch.setattr(load_test.sys, "argv", ["load_test.py", "--out-dir", str(tmp_path)])
+    with pytest.raises(SystemExit) as exit_info:
+        load_test.main()
+    assert exit_info.value.code == 2
+    assert "EXTRACT_API_KEY" in capsys.readouterr().err
+
+
 def test_http_taxonomy_and_transport_errors(monkeypatch):
     from io import BytesIO
 
@@ -128,9 +150,11 @@ def test_docker_memory_peak_fallback_and_cpu(monkeypatch, version):
 
 def test_smoke_writes_results_and_uses_three_fresh_keys(monkeypatch, tmp_path):
     keys = []
+    monkeypatch.setenv("EXTRACT_API_KEY", "env-key")
 
-    def send(base_url, payload, key, timeout):
+    def send(base_url, payload, key, timeout, api_key):
         keys.append(key)
+        assert api_key == "env-key"  # the env key reaches every request
         return Observation(payload.name, 10, 200)
 
     monkeypatch.setattr(load_test, "send_request", send)

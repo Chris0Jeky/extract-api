@@ -41,8 +41,9 @@ valued. `tests/test_deploy_descriptors.py` pins these invariants.
 **Safe by default.** A freshly created service runs `LLM_PROVIDER_MODE=fixture` (answers come
 from the deterministic FixtureClient, so no provider spend is possible) with the process spend
 cap `EXTRACT_BUDGET_USD` set rather than unset (unset disables `api/budget.py`'s guard). Going
-live is a runbook step, gated on caller authentication: the API has none today, and the
-hosting manifest's invariant forbids an unauthenticated public paid-model endpoint.
+live is a runbook step, gated on caller authentication: `/v1/extract` requires a bearer key
+whose SHA-256 hash is in `EXTRACT_API_KEY_SHA256S` (owner decision `extract-api-caller-auth`), and
+the hosting manifest's invariant forbids an unauthenticated public paid-model endpoint.
 
 **Readiness gates deploys.** `/readyz` commits a one-row write to the idempotency store and
 reports the image revision (`EXTRACT_API_REVISION`, baked in by the image pipeline; `unknown`

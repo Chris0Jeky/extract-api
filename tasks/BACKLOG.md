@@ -115,7 +115,7 @@ Everything up to provisioning is built and proven in CI (ADR 0005, `docs/ops/RUN
 `docs/ops/SIZING.md`). Each step below is the owner's: it creates an account, a service, a
 secret, a public effect or spend. Nothing is provisioned until then.
 
-- [ ] **extract-api-caller-auth: How should extract-api authenticate callers before it goes live on Render with a paid model behind it?**
+- [x] **extract-api-caller-auth (answered (a) 2026-10-10, agent-hq PR 356; built on branch feat/caller-api-keys, not yet deployed): How should extract-api authenticate callers before it goes live on Render with a paid model behind it?**
   - (a) API keys checked by the app, new 401 code (recommended): agents add an `unauthorized` (401) error code and require `Authorization: Bearer <key>` on /v1/extract, storing only SHA-256 hashes in a secret named EXTRACT_API_KEY_SHA256S; two keys valid at once for rotation; fails closed without keys; /healthz and /readyz stay open.
   - (b) An edge gateway in front (Cloudflare Access): needs the domain and a Cloudflare setup, and every direct address of the service must also be closed.
   - (c) No public live service for now: fixture-mode demonstration only.
@@ -126,9 +126,11 @@ secret, a public effect or spend. Nothing is provisioned until then.
 - [ ] **H2 Create and protect the `production` environment** (RUNBOOK 1.2): you as required
   reviewer, deployment branches `main` only. Do this before H4 puts any secret in it.
 - [ ] **H3 Create the Render service from the Blueprint** (RUNBOOK 1.3): Starter, Frankfurt, 1 GB
-  disk, about $7.25 a month; this is the spend decision. Leave the prompted keys blank.
-- [ ] **H4 Wire the deploy workflow** (RUNBOOK 1.4): secret `RENDER_DEPLOY_HOOK_URL`, variables
-  `EXTRACT_API_BASE_URL` and `EXTRACT_API_SMOKE_MODE=fixture` in `production`.
+  disk, about $7.25 a month; this is the spend decision. Leave the provider keys blank; enter the
+  caller-key hash from RUNBOOK 1.5 for `EXTRACT_API_KEY_SHA256S`.
+- [ ] **H4 Wire the deploy workflow** (RUNBOOK 1.4): secret `RENDER_DEPLOY_HOOK_URL`, secret
+  `EXTRACT_API_KEY` (the caller key, RUNBOOK 1.5), variables `EXTRACT_API_BASE_URL` and
+  `EXTRACT_API_SMOKE_MODE=fixture` in `production`.
 - [ ] **H5 First deploy in fixture mode** (RUNBOOK 2): dispatch `deploy.yml`, approve it; it
   verifies itself. An agent can run the dispatch once H1 to H4 are done; the approval is yours.
 - [ ] **H6 Go live** (RUNBOOK 4), only after the caller-auth decision is built and deployed: provider

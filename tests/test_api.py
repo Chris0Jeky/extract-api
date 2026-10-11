@@ -5,10 +5,11 @@ liveness and the request boundary."""
 from fastapi.testclient import TestClient
 
 from api.main import create_app
+from caller_keys import AUTH
 
 
 def test_healthz_ok():
-    client = TestClient(create_app())
+    client = TestClient(create_app(), headers=AUTH)
     resp = client.get("/healthz")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
@@ -16,7 +17,7 @@ def test_healthz_ok():
 
 def test_unknown_route_renders_not_found():
     # Framework routing 404 carries a taxonomy code too (issue #28), not the default body.
-    client = TestClient(create_app(), raise_server_exceptions=False)
+    client = TestClient(create_app(), raise_server_exceptions=False, headers=AUTH)
     resp = client.get("/no-such-route")
     assert resp.status_code == 404
     assert resp.json()["error"] == "not_found"
@@ -25,7 +26,7 @@ def test_unknown_route_renders_not_found():
 def test_wrong_method_renders_method_not_allowed():
     # GET on the POST-only extract route: a routing 405 carries the taxonomy code AND the
     # RFC-required Allow header (which the taxonomy handler must forward, not drop).
-    client = TestClient(create_app(), raise_server_exceptions=False)
+    client = TestClient(create_app(), raise_server_exceptions=False, headers=AUTH)
     resp = client.get("/v1/extract")
     assert resp.status_code == 405
     assert resp.json()["error"] == "method_not_allowed"
@@ -33,7 +34,7 @@ def test_wrong_method_renders_method_not_allowed():
 
 
 def test_extract_rejects_unknown_doc_type_at_boundary():
-    client = TestClient(create_app(), raise_server_exceptions=False)
+    client = TestClient(create_app(), raise_server_exceptions=False, headers=AUTH)
     resp = client.post(
         "/v1/extract",
         json={"doc_type": "passport", "schema_version": "v1", "content": "x"},

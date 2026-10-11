@@ -13,6 +13,7 @@ import argparse
 import base64
 import json
 import math
+import os
 import platform
 import subprocess
 import sys
@@ -158,11 +159,17 @@ def build_payloads() -> list[Payload]:
     return payloads
 
 
-def send_request(base_url: str, payload: Payload, key: str, timeout: float) -> Observation:
+def send_request(
+    base_url: str, payload: Payload, key: str, timeout: float, *, api_key: str = ""
+) -> Observation:
     request = Request(
         f"{base_url.rstrip('/')}/v1/extract",
         data=payload.body,
-        headers={"Content-Type": "application/json", "Idempotency-Key": key},
+        headers={
+            "Content-Type": "application/json",
+            "Idempotency-Key": key,
+            "Authorization": f"Bearer {api_key}",
+        },
         method="POST",
     )
     started = time.perf_counter()
@@ -241,6 +248,7 @@ def run_level(
     requests: int,
     timeout: float,
     container: str | None,
+    api_key: str,
 ) -> dict[str, Any]:
     samples: list[dict[str, Any]] = []
     stop = threading.Event()
@@ -265,6 +273,7 @@ def run_level(
                     payloads[index % len(payloads)],
                     f"load-{run_id}-{index}",
                     timeout,
+                    api_key=api_key,
                 )
                 for index in range(requests)
             ]
@@ -328,6 +337,11 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, default=Path("loadtest-results"))
     parser.add_argument("--smoke", action="store_true", help="one level, three requests")
     args = parser.parse_args()
+    # The target requires a caller key (the service stores only its hash); the plaintext comes
+    # from the environment so it never appears on a command line.
+    api_key = os.environ.get("EXTRACT_API_KEY", "").strip()
+    if not api_key:
+        parser.error("EXTRACT_API_KEY must hold the caller key the target accepts")
     try:
         levels = [positive_int(raw) for raw in args.levels.split(",")]
     except argparse.ArgumentTypeError as exc:
@@ -359,7 +373,7 @@ def main() -> int:
     }
     for level in levels:
         result = run_level(
-            args.base_url, payloads, level, args.requests, args.timeout, args.container
+            args.base_url, payloads, level, args.requests, args.timeout, args.container, api_key
         )
         results.append(result)
         if args.container:

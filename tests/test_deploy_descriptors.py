@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from api.main import create_app
 
 _ROOT = Path(__file__).resolve().parent.parent
-_SECRETS = {"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "LLM_API_KEY"}
+_SECRETS = {"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "LLM_API_KEY", "EXTRACT_API_KEY_SHA256S"}
 
 
 def _render_service() -> dict:
@@ -48,6 +48,9 @@ def test_render_starts_safe_and_names_secrets_only():
     assert env["LLM_PROVIDER_MODE"]["value"] == "fixture"
     # The spend cap must be set: unset disables api/budget.py's guard entirely.
     assert float(env["EXTRACT_BUDGET_USD"]["value"]) > 0
+    # Without caller key hashes the service refuses every extraction (owner decision
+    # extract-api-caller-auth), so the Blueprint must prompt for them, value never in the repo.
+    assert "EXTRACT_API_KEY_SHA256S" in env
     for name in _SECRETS & env.keys():
         assert env[name] == {"key": name, "sync": False}
 
