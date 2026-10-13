@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from api import idempotency
 from api.idempotency import SqliteIdempotencyStore
 from api.main import create_app
+from caller_keys import AUTH
 
 _FIXTURE = json.loads(
     (Path(__file__).resolve().parent.parent / "fixtures/invoices/invoice_0001.json").read_text(
@@ -41,7 +42,7 @@ def test_store_id_survives_reopening_the_same_file(tmp_path):
 
 def test_readyz_and_keyed_responses_name_the_store(tmp_path):
     store = SqliteIdempotencyStore(str(tmp_path / "i.sqlite"))
-    client = TestClient(create_app(idempotency_store=store))
+    client = TestClient(create_app(idempotency_store=store), headers=AUTH)
     assert client.get("/readyz").json()["idempotency_store_id"] == store.store_id
     keyed = client.post("/v1/extract", json=_PAYLOAD, headers={"Idempotency-Key": "k1"})
     assert keyed.status_code == 200
@@ -53,8 +54,12 @@ def test_readyz_and_keyed_responses_name_the_store(tmp_path):
 def test_a_second_store_is_visible_to_the_client(tmp_path):
     # The failure the guard exists to expose: a retry that reaches another replica's store
     # is not replayed (the model runs again). The header is how a client can tell.
-    a = TestClient(create_app(idempotency_store=SqliteIdempotencyStore(str(tmp_path / "a.db"))))
-    b = TestClient(create_app(idempotency_store=SqliteIdempotencyStore(str(tmp_path / "b.db"))))
+    a = TestClient(
+        create_app(idempotency_store=SqliteIdempotencyStore(str(tmp_path / "a.db"))), headers=AUTH
+    )
+    b = TestClient(
+        create_app(idempotency_store=SqliteIdempotencyStore(str(tmp_path / "b.db"))), headers=AUTH
+    )
     first = a.post("/v1/extract", json=_PAYLOAD, headers={"Idempotency-Key": "same"})
     retry = b.post("/v1/extract", json=_PAYLOAD, headers={"Idempotency-Key": "same"})
     assert retry.json()["meta"]["replayed"] is False

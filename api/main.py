@@ -27,6 +27,7 @@ import anyio.to_thread
 from fastapi import FastAPI, Header, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
+from api.auth import CallerAuth, is_open_path, key_hashes_from_env
 from api.budget import BudgetGuard, budget_from_env
 from api.content import resolve_content
 from api.errors import ErrorCode, ExtractError, install_error_handlers
@@ -240,14 +241,17 @@ def _max_concurrency_from_env() -> int:
 
 
 class ExtractAdmission:
-    """Admit at most `limit` /v1/extract requests at once, before their bodies are read.
+    """Admit at most `limit` guarded requests at once, before their bodies are read.
+
+    "Guarded" is `api.auth.is_open_path`: everything except the health probes, so no spelling
+    of /v1/extract (a trailing newline from `%0A`, a root_path prefix) can skip the cap.
 
     Memory, not CPU, bounds an instance (docs/ops/SIZING.md): each in-flight extraction holds
     its body, the decoded PDF and its text. Waiting here, ahead of FastAPI, a queued request
     has not read its body: the server's flow control pauses the socket, so a queue of large
     PDFs costs connections, not memory. Excess requests wait (bounded by the platform's
-    request timeout) instead of being shed, so no new error code is needed, and every other
-    route, including the health probes, bypasses the gate.
+    request timeout) instead of being shed, so no new error code is needed, and the health
+    probes bypass the gate.
     """
 
     def __init__(self, app: ASGIApp, *, limit: int) -> None:
@@ -255,7 +259,7 @@ class ExtractAdmission:
         self.limiter = anyio.CapacityLimiter(limit)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http" and scope["path"] == "/v1/extract":
+        if scope["type"] == "http" and not is_open_path(scope):
             async with self.limiter:
                 await self.app(scope, receive, send)
         else:
@@ -288,6 +292,10 @@ def create_app(
     # The last added is outermost: the request context wraps the admission gate, so a queued
     # extract carries its request id and its access line's duration_ms includes the wait.
     app.add_middleware(ExtractAdmission, limit=_max_concurrency_from_env())
+    # Outside the admission gate: a rejected caller never takes an extraction slot, and is
+    # refused before its body is read. Hashes are read once here, so a malformed
+    # EXTRACT_API_KEY_SHA256S fails startup like the other env settings.
+    app.add_middleware(CallerAuth, key_hashes=key_hashes_from_env())
     app.add_middleware(RequestContextMiddleware)
 
     @app.get("/healthz")

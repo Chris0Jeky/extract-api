@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pytest
 
+from caller_keys import AUTH
+
 CANARY = "CANARY-uvicorn-5b1d-DO-NOT-LOG"
 _ROOT = Path(__file__).resolve().parent.parent
 
@@ -51,7 +53,9 @@ def _free_port() -> int:
 
 def _get(url: str) -> int:
     try:
-        with urllib.request.urlopen(url, timeout=3) as resp:
+        # Every path but the health probes needs the caller key (guard by default).
+        request = urllib.request.Request(url, headers=AUTH)
+        with urllib.request.urlopen(request, timeout=3) as resp:
             return int(resp.status)
     except urllib.error.HTTPError as exc:
         return exc.code

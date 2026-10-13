@@ -318,7 +318,8 @@ class RequestContextMiddleware:
     ) -> None:
         route = scope.get("route")
         # The template ("/v1/extract"), never the raw path or query string.
-        path = getattr(route, "path", None) or "unmatched"
+        # A response sent before routing (the auth middleware's) names its route via note().
+        path = getattr(route, "path", None) or facts.pop("route", None) or "unmatched"
         if status is None:
             result = facts.pop("result", None) or "client_disconnect"
         else:

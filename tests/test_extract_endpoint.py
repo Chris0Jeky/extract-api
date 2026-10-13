@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from api.idempotency import SqliteIdempotencyStore
 from api.main import create_app
+from caller_keys import AUTH
 from llm.client import CompletionResult
 from llm.errors import ProviderError, ProviderRefusal, ProviderTimeout, ProviderTruncation
 
@@ -79,7 +80,7 @@ class _FakeClient:
 
 def _client_with(monkeypatch, fake: _FakeClient) -> TestClient:
     monkeypatch.setattr("api.main.get_client", lambda provider: fake)
-    return TestClient(create_app(), raise_server_exceptions=False)
+    return TestClient(create_app(), raise_server_exceptions=False, headers=AUTH)
 
 
 def _post(client: TestClient, *, headers: dict[str, str] | None = None, **overrides) -> object:
@@ -188,7 +189,9 @@ def test_budget_cap_blocks_further_extractions(monkeypatch):
 
     fake = _FakeClient([VALID_JSON, VALID_JSON])
     monkeypatch.setattr("api.main.get_client", lambda provider: fake)
-    client = TestClient(create_app(budget=BudgetGuard(0.001)), raise_server_exceptions=False)
+    client = TestClient(
+        create_app(budget=BudgetGuard(0.001)), raise_server_exceptions=False, headers=AUTH
+    )
 
     first = _post(client)
     assert first.status_code == 200  # spent 0 < cap, then committed 0.0012
@@ -205,7 +208,9 @@ def test_budget_counts_failed_extraction_spend(monkeypatch):
 
     fake = _FakeClient([INVALID_JSON, INVALID_JSON])  # both attempts fail strict validation
     monkeypatch.setattr("api.main.get_client", lambda provider: fake)
-    client = TestClient(create_app(budget=BudgetGuard(0.001)), raise_server_exceptions=False)
+    client = TestClient(
+        create_app(budget=BudgetGuard(0.001)), raise_server_exceptions=False, headers=AUTH
+    )
 
     first = _post(client)
     assert first.status_code == 422  # validation_failed, but its 0.0024 spend is reconciled
@@ -225,7 +230,9 @@ def test_budget_counts_truncated_call_spend(monkeypatch):
     truncated = ProviderTruncation(provider="fake", reason="max_output_tokens", cost_usd=0.0012)
     fake = _FakeClient([truncated])
     monkeypatch.setattr("api.main.get_client", lambda provider: fake)
-    client = TestClient(create_app(budget=BudgetGuard(0.001)), raise_server_exceptions=False)
+    client = TestClient(
+        create_app(budget=BudgetGuard(0.001)), raise_server_exceptions=False, headers=AUTH
+    )
 
     first = _post(client)
     assert first.status_code == 502  # provider_error, but the truncation's 0.0012 is reconciled
@@ -271,14 +278,14 @@ def test_oversized_text_returns_422_before_any_provider_call(monkeypatch):
 def test_missing_required_field_renders_validation_failed():
     # A missing required field is a RequestValidationError -> validation_failed via the
     # T05 handler, not FastAPI's default 422 body. Validation runs before the handler.
-    client = TestClient(create_app(), raise_server_exceptions=False)
+    client = TestClient(create_app(), raise_server_exceptions=False, headers=AUTH)
     resp = client.post("/v1/extract", json={"doc_type": "invoice", "schema_version": "v1"})
     assert resp.status_code == 422
     assert resp.json()["error"] == "validation_failed"
 
 
 def test_extra_forbidden_key_renders_validation_failed():
-    client = TestClient(create_app(), raise_server_exceptions=False)
+    client = TestClient(create_app(), raise_server_exceptions=False, headers=AUTH)
     resp = client.post(
         "/v1/extract",
         json={"doc_type": "invoice", "schema_version": "v1", "content": "x", "bogus": 1},
@@ -290,7 +297,7 @@ def test_extra_forbidden_key_renders_validation_failed():
 def test_missing_doc_type_renders_validation_failed():
     # An OMITTED doc_type is a malformed body (validation_failed), not unsupported_doc_type
     # which is reserved for a genuinely out-of-Literal doc_type value.
-    client = TestClient(create_app(), raise_server_exceptions=False)
+    client = TestClient(create_app(), raise_server_exceptions=False, headers=AUTH)
     resp = client.post("/v1/extract", json={"schema_version": "v1", "content": "x"})
     assert resp.status_code == 422
     assert resp.json()["error"] == "validation_failed"
@@ -299,7 +306,7 @@ def test_missing_doc_type_renders_validation_failed():
 def test_bad_doc_type_wins_over_other_field_errors():
     # An out-of-Literal doc_type renders unsupported_doc_type even when other fields are
     # also invalid (content is missing here): doc_type classification takes precedence.
-    client = TestClient(create_app(), raise_server_exceptions=False)
+    client = TestClient(create_app(), raise_server_exceptions=False, headers=AUTH)
     resp = client.post("/v1/extract", json={"doc_type": "passport"})
     assert resp.status_code == 422
     assert resp.json()["error"] == "unsupported_doc_type"
@@ -322,7 +329,9 @@ def _store(tmp_path) -> SqliteIdempotencyStore:
 
 def _client_with_store(monkeypatch, fake: _FakeClient, store) -> TestClient:
     monkeypatch.setattr("api.main.get_client", lambda provider: fake)
-    return TestClient(create_app(idempotency_store=store), raise_server_exceptions=False)
+    return TestClient(
+        create_app(idempotency_store=store), raise_server_exceptions=False, headers=AUTH
+    )
 
 
 def test_same_key_same_payload_replays_without_a_model_call(monkeypatch, tmp_path):
@@ -461,7 +470,9 @@ def test_default_store_is_built_lazily_from_env(monkeypatch, tmp_path):
     monkeypatch.setenv("IDEMPOTENCY_DB_PATH", str(tmp_path / "default.sqlite"))
     fake = _FakeClient([VALID_JSON])
     monkeypatch.setattr("api.main.get_client", lambda provider: fake)
-    client = TestClient(create_app(), raise_server_exceptions=False)  # no store injected
+    client = TestClient(
+        create_app(), raise_server_exceptions=False, headers=AUTH
+    )  # no store injected
     headers = {"Idempotency-Key": "lazy-1"}
 
     first = _post(client, headers=headers)

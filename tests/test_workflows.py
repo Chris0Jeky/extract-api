@@ -205,6 +205,9 @@ def test_deploy_waits_for_http_200_and_revision_and_gates_fixture_smoke() -> Non
     assert smoke["if"] == "vars.EXTRACT_API_SMOKE_MODE == 'fixture'"
     assert "fixtures/invoices/invoice_0001.json" in smoke["run"]
     assert '[[ "$status" != 200 ]]' in smoke["run"]
+    # The endpoint requires a caller key, so the smoke sends one, from a secret, never inline.
+    assert smoke["env"]["EXTRACT_API_KEY"] == "${{ secrets.EXTRACT_API_KEY }}"
+    assert '-H "Authorization: Bearer $EXTRACT_API_KEY"' in smoke["run"]
 
 
 def _bash(script: str, variables: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -275,7 +278,12 @@ def test_unprovisioned_dispatch_fails_before_any_deploy(target: str, missing: li
 @pytest.mark.parametrize("target", ["render", "railway"])
 def test_provisioning_guard_accepts_only_the_selected_targets_settings(target: str) -> None:
     guard = _workflow("deploy.yml")["jobs"]["deploy"]["steps"][0]["run"]
-    variables = {"TARGET": target, "EXTRACT_API_BASE_URL": "present", "SMOKE_MODE": "fixture"}
+    variables = {
+        "TARGET": target,
+        "EXTRACT_API_BASE_URL": "present",
+        "SMOKE_MODE": "fixture",
+        "EXTRACT_API_KEY": "present",
+    }
     variables.update(
         {"RENDER_DEPLOY_HOOK_URL": "present"}
         if target == "render"
@@ -286,3 +294,21 @@ def test_provisioning_guard_accepts_only_the_selected_targets_settings(target: s
         }
     )
     assert _bash(guard, variables).returncode == 0
+
+
+@pytest.mark.parametrize(("mode", "needs_key"), [("fixture", True), ("live", False)])
+def test_fixture_smoke_needs_the_caller_key_before_any_deploy(mode: str, needs_key: bool) -> None:
+    # The fixture smoke posts to the key-protected /v1/extract, so a dispatch without the
+    # secret must fail up front, not after the new revision is already live. Live mode makes
+    # no extraction call and needs no key.
+    guard = _workflow("deploy.yml")["jobs"]["deploy"]["steps"][0]["run"]
+    variables = {
+        "TARGET": "render",
+        "EXTRACT_API_BASE_URL": "present",
+        "RENDER_DEPLOY_HOOK_URL": "present",
+        "SMOKE_MODE": mode,
+        "EXTRACT_API_KEY": "",
+    }
+    result = _bash(guard, variables)
+    assert (result.returncode != 0) is needs_key
+    assert ("not provisioned: EXTRACT_API_KEY missing" in result.stderr) is needs_key

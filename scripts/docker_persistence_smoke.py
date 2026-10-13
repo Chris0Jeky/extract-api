@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import secrets
 import socket
 import subprocess
 import sys
@@ -19,6 +21,9 @@ from urllib.request import Request, urlopen
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _FIXTURE = _REPO_ROOT / "fixtures" / "invoices" / "invoice_0001.json"
 _READY_TIMEOUT_S = 30.0
+# A throwaway caller key per run. The container is given only its hash, as a deployment is.
+_CALLER_KEY = secrets.token_hex(16)
+_CALLER_KEY_SHA256 = hashlib.sha256(_CALLER_KEY.encode()).hexdigest()
 _RUNTIME_PACKAGES = ("fastapi", "pydantic", "openai", "anthropic", "pymupdf", "uvicorn")
 
 
@@ -246,6 +251,8 @@ def _start_container(
         "-e",
         "LLM_PROVIDER_MODE=fixture",
         "-e",
+        f"EXTRACT_API_KEY_SHA256S={_CALLER_KEY_SHA256}",
+        "-e",
         f"FIXTURE_CANNED_TEXT={canned_text}",
         image,
     )
@@ -269,7 +276,11 @@ def _post(port: int, payload: dict[str, str], key: str) -> tuple[int, dict[str, 
     request = Request(
         f"http://127.0.0.1:{port}/v1/extract",
         data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json", "Idempotency-Key": key},
+        headers={
+            "Content-Type": "application/json",
+            "Idempotency-Key": key,
+            "Authorization": f"Bearer {_CALLER_KEY}",
+        },
         method="POST",
     )
     try:
