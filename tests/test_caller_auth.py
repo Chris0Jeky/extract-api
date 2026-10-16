@@ -63,6 +63,13 @@ def test_the_configured_key_is_accepted(client):
     assert resp.json()["data"]["invoice_number"] == "INV-1"
 
 
+def test_a_non_ascii_key_is_accepted(client, monkeypatch):
+    key = "test-clé-秘密".encode()
+    monkeypatch.setenv(ENV, hashlib.sha256(key).hexdigest())
+    resp = client().post("/v1/extract", json=BODY, headers={b"Authorization": b"Bearer " + key})
+    assert resp.status_code == 200
+
+
 def test_scheme_is_case_insensitive(client):
     resp = client().post("/v1/extract", json=BODY, headers={"Authorization": f"bEaReR {TEST_KEY}"})
     assert resp.status_code == 200
@@ -171,6 +178,35 @@ def test_a_root_path_prefix_does_not_unguard_the_route(client, monkeypatch, tmp_
 def test_only_the_health_probes_are_open(path):
     scope = {"type": "http", "path": path, "root_path": "/api" if path.startswith("/api") else ""}
     assert auth.is_open_path(scope)
+
+
+ROUTE_PATH_CASES = [
+    ("/v1/extract", "", "/v1/extract"),
+    ("/v1/extract", "/api", "/v1/extract"),
+    ("/api/v1/extract", "/api", "/v1/extract"),
+    ("/api/healthz", "/api", "/healthz"),
+    ("/api/readyz", "/api", "/readyz"),
+    ("/api", "/api", ""),
+    ("/api/", "/api", "/"),
+    ("/api/nested/healthz", "/api/nested", "/healthz"),
+    ("/apix/healthz", "/api", "/apix/healthz"),
+]
+
+
+@pytest.mark.parametrize(("path", "root_path", "expected"), ROUTE_PATH_CASES)
+def test_route_path_preserves_root_path_and_mount_behavior(path, root_path, expected):
+    assert auth.get_route_path({"type": "http", "path": path, "root_path": root_path}) == expected
+
+
+@pytest.mark.parametrize(("path", "root_path", "expected"), ROUTE_PATH_CASES)
+def test_vendored_route_path_agrees_with_starlettes(path, root_path, expected):
+    # The vendored copy exists to avoid depending on a private module; this notices drift.
+    module = pytest.importorskip("starlette._utils")
+    upstream = getattr(module, "get_route_path", None)
+    if upstream is None:
+        pytest.skip("starlette._utils no longer has get_route_path")
+    scope = {"type": "http", "path": path, "root_path": root_path}
+    assert upstream(scope) == auth.get_route_path(scope) == expected
 
 
 @pytest.mark.parametrize(

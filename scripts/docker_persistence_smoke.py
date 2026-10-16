@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import secrets
 import socket
 import subprocess
@@ -167,8 +168,15 @@ def _locked_runtime_versions() -> dict[str, str]:
 
 def _assert_locked_runtime(image: str) -> None:
     dockerfile = (_REPO_ROOT / "Dockerfile").read_text(encoding="utf-8")
+    # Both base images are pinned name:tag@sha256:<digest> and Dependabot rewrites tag and digest
+    # together, so require the pin shape rather than a literal version.
+    for from_line in (
+        r"FROM ghcr\.io/astral-sh/uv:[0-9.]+@sha256:[0-9a-f]{64} AS uv",
+        r"FROM python:3\.13-slim@sha256:[0-9a-f]{64}",
+    ):
+        if not re.search(f"^{from_line}$", dockerfile, re.M):
+            raise RuntimeError(f"Dockerfile base image not pinned by sha256 digest: {from_line}")
     required_dockerfile_fragments = (
-        "FROM ghcr.io/astral-sh/uv:0.11.21 AS uv",
         "COPY pyproject.toml uv.lock README.md ./",
         "UV_PYTHON_DOWNLOADS=0",
         "uv sync --locked --no-dev --no-editable --python 3.13",

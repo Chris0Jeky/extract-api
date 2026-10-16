@@ -13,6 +13,7 @@ from llm.client import FixtureClient
 from test_extract_endpoint import VALID_JSON
 
 CAP = 10_000
+JSON = [(b"content-type", b"application/json")]
 
 
 @pytest.fixture(autouse=True)
@@ -66,6 +67,18 @@ def test_content_length_over_the_cap_is_refused_without_reading_the_body():
     assert pulled == 0
 
 
+@pytest.mark.parametrize("digits", [b"9" * 5000, b"0" * 5000 + b"1"], ids=["huge", "padded-one"])
+def test_absurd_content_length_digits_are_handled_not_a_500(digits):
+    # int() raises on more than ~4300 digits; the declared length must fail closed, not 500.
+    # 5000 zeros then 1 is a legitimate length of 1 and is not over the cap.
+    headers = [*JSON, (b"content-length", digits)]
+    status, body, pulled = _asgi(create_app(), [_body("Invoice INV-1")], headers=headers)
+    if digits.startswith(b"9"):
+        assert (status, body["error"], pulled) == (422, "validation_failed", 0)
+    else:
+        assert status == 200
+
+
 def test_chunked_body_over_the_cap_is_refused_mid_stream():
     chunks = [b"x" * 1000] * 1000  # 1 MB offered, no Content-Length
     status, body, pulled = _asgi(create_app(), chunks)
@@ -79,6 +92,22 @@ def test_understated_content_length_does_not_dodge_the_stream_count():
     status, _, pulled = _asgi(create_app(), chunks, headers=[(b"content-length", b"10")])
     assert status == 422
     assert pulled == CAP // 1000 + 1
+
+
+def _padded_body(size: int) -> bytes:
+    raw = _body("Invoice INV-1" + " " * (size - len(_body("Invoice INV-1"))))
+    assert len(raw) == size
+    return raw
+
+
+@pytest.mark.parametrize("size, status", [(CAP, 200), (CAP + 1, 422)])
+def test_streamed_body_cap_is_inclusive(size, status):
+    raw = _padded_body(size)
+    chunks = [raw[i : i + 1000] for i in range(0, len(raw), 1000)]  # no Content-Length
+    got, body, _ = _asgi(create_app(), chunks, headers=JSON)
+    assert got == status
+    if status == 422:
+        assert str(CAP) in body["detail"]
 
 
 def test_body_under_the_cap_still_extracts():
@@ -99,10 +128,15 @@ def test_the_cap_is_inclusive(monkeypatch, slack, status):
     assert resp.status_code == status
 
 
-def test_health_probes_ignore_the_cap(monkeypatch):
-    monkeypatch.setenv("EXTRACT_MAX_BODY_BYTES", "1")
-    client = TestClient(create_app())
-    assert client.get("/healthz").status_code == 200
+@pytest.mark.parametrize("path", ["/healthz", "/readyz"])
+def test_health_probes_ignore_the_cap(path):
+    # A bodyless GET never reaches the cap, so declare an over-cap body: were the probe capped
+    # this would be the 422 body verdict; uncapped, the router answers 405 for the method.
+    status, body, _ = _asgi(
+        create_app(), [b"x"], path=path, headers=[(b"content-length", str(CAP + 1).encode())]
+    )
+    assert status == 405
+    assert "limit" not in json.dumps(body)
 
 
 def test_unauthenticated_oversized_request_is_a_401_not_a_body_verdict():
