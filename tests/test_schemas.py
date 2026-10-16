@@ -204,7 +204,7 @@ def test_job_zero_salary_allowed(field):
     assert getattr(JobPostingV1.model_validate_json(json.dumps(payload)), field) == 0
 
 
-@pytest.mark.parametrize("field", ["title", "company"])
+@pytest.mark.parametrize("field", ["title", "company", "location"])
 @pytest.mark.parametrize("value", ["", " \t\n"])
 def test_job_blank_identity_fails(field, value):
     payload = dict(VALID_JOB)

@@ -80,7 +80,7 @@ class JobPostingV1(BaseModel):
     visa_sponsorship: VisaSponsorship
     posted_date: date | None
 
-    @field_validator("title", "company")
+    @field_validator("title", "company", "location")
     @classmethod
     def _check_nonblank(cls, value: str | None) -> str | None:
         if value is not None and not value.strip():
