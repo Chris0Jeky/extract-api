@@ -282,7 +282,7 @@ class BodyCap:
             await self.app(scope, receive, send)
             return
         for name, value in scope["headers"]:
-            if name == b"content-length" and value.isdigit() and int(value) > self.limit:
+            if name == b"content-length" and value.isdigit() and self._over(value):
                 await self._refuse(scope, receive, send)
                 return
         received = 0
@@ -300,6 +300,15 @@ class BodyCap:
             await self.app(scope, counted, send)
         except _BodyTooLarge:
             await self._refuse(scope, receive, send)
+
+    def _over(self, digits: bytes) -> bool:
+        """True if a digits-only Content-Length exceeds the cap, without int() on a huge string.
+
+        int() raises ValueError past ~4300 digits (a 500 here), so compare by length first;
+        leading zeros are stripped so a zero-padded small length is still compared by value.
+        """
+        digits = digits.lstrip(b"0")
+        return len(digits) > len(str(self.limit)) or int(digits or b"0") > self.limit
 
     async def _refuse(self, scope: Scope, receive: Receive, send: Send) -> None:
         response = error_response(

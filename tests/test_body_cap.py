@@ -67,6 +67,18 @@ def test_content_length_over_the_cap_is_refused_without_reading_the_body():
     assert pulled == 0
 
 
+@pytest.mark.parametrize("digits", [b"9" * 5000, b"0" * 5000 + b"1"], ids=["huge", "padded-one"])
+def test_absurd_content_length_digits_are_handled_not_a_500(digits):
+    # int() raises on more than ~4300 digits; the declared length must fail closed, not 500.
+    # 5000 zeros then 1 is a legitimate length of 1 and is not over the cap.
+    headers = [*JSON, (b"content-length", digits)]
+    status, body, pulled = _asgi(create_app(), [_body("Invoice INV-1")], headers=headers)
+    if digits.startswith(b"9"):
+        assert (status, body["error"], pulled) == (422, "validation_failed", 0)
+    else:
+        assert status == 200
+
+
 def test_chunked_body_over_the_cap_is_refused_mid_stream():
     chunks = [b"x" * 1000] * 1000  # 1 MB offered, no Content-Length
     status, body, pulled = _asgi(create_app(), chunks)
