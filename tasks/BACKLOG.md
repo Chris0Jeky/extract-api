@@ -48,7 +48,8 @@ This file is also the human-action backlog (`human_todo` in
   owner-approved `internal_error` (500) member + RequestValidationError + catch-all handlers.
 - [x] **T06 `harness/normalize.py`.** (PR #26) date->ISO and money->minor-units with a
   currency minor-digit table; tests on GBP/USD/JPY (0 digits) and bad input
-  raising, not coercing.
+  raising, not coercing. Removed under #80: it had no runtime callers; scoring
+  compares strict schema values directly.
 - [x] **T07 Flip 10 invoice fixtures to REVIEWED + passing.** (PR #68, supersedes #36)
   All 10 flipped DRAFT -> REVIEWED; `fixtures-validate` + the corpus-wide placement check
   (#63) pass; the harness finds 10 REVIEWED. The `accuracy-run` scoring half is the paid
