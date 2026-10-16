@@ -25,12 +25,12 @@ from typing import Annotated, Any
 import anyio
 import anyio.to_thread
 from fastapi import FastAPI, Header, Response
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from api.auth import CallerAuth, is_open_path, key_hashes_from_env
 from api.budget import BudgetGuard, budget_from_env
 from api.content import resolve_content
-from api.errors import ErrorCode, ExtractError, install_error_handlers
+from api.errors import ErrorCode, ExtractError, error_response, install_error_handlers
 from api.idempotency import (
     EphemeralStoreError,
     IdempotencyStore,
@@ -233,11 +233,83 @@ def _run_extract_idempotent(
     return response
 
 
-def _max_concurrency_from_env() -> int:
-    raw = os.environ.get("EXTRACT_MAX_CONCURRENCY", "4")
+def _positive_int_env(name: str, default: str) -> int:
+    raw = os.environ.get(name, default)
     if not raw.isascii() or not raw.isdecimal() or int(raw) <= 0:
-        raise ValueError(f"EXTRACT_MAX_CONCURRENCY must be a positive integer; got {raw!r}")
+        raise ValueError(f"{name} must be a positive integer; got {raw!r}")
     return int(raw)
+
+
+def _max_concurrency_from_env() -> int:
+    return _positive_int_env("EXTRACT_MAX_CONCURRENCY", "4")
+
+
+# Default inbound body cap, derived from the content limits in api/content.py. The largest
+# legitimate body is the larger of: a 10 MiB PDF as base64 (4/3 expansion, plus 78/76 for
+# MIME line wrapping) = ~14.4 MiB, or 4 Mi text chars at up to 4 UTF-8 bytes each = 16 MiB.
+# 32 MiB is twice the larger, which leaves room for JSON escapes and the other fields.
+_DEFAULT_MAX_BODY_BYTES = 32 * 1024 * 1024
+
+
+def _max_body_bytes_from_env() -> int:
+    return _positive_int_env("EXTRACT_MAX_BODY_BYTES", str(_DEFAULT_MAX_BODY_BYTES))
+
+
+class _BodyTooLarge(BaseException):
+    """Raised from the wrapped `receive` once the streamed body passes the cap.
+
+    A BaseException on purpose: FastAPI turns any `Exception` raised while it reads the body
+    into a 400, which would hide the cap behind a generic parse error. `BodyCap` catches it.
+    """
+
+
+class BodyCap:
+    """Refuse a request body over `limit` bytes before FastAPI or Pydantic materialize it.
+
+    A declared Content-Length over the cap is refused without reading a byte. Without one
+    (chunked), or with one that understates the body, the chunks are counted as they arrive and
+    the request is refused once the total passes the cap, so at most `limit` bytes are ever
+    buffered. There is no payload-too-large code in the taxonomy (new members need owner
+    approval), so the refusal is `validation_failed`, like the other malformed-input caps.
+    """
+
+    def __init__(self, app: ASGIApp, *, limit: int) -> None:
+        self.app = app
+        self.limit = limit
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or is_open_path(scope):
+            await self.app(scope, receive, send)
+            return
+        for name, value in scope["headers"]:
+            if name == b"content-length" and value.isdigit() and int(value) > self.limit:
+                await self._refuse(scope, receive, send)
+                return
+        received = 0
+
+        async def counted() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.limit:
+                    raise _BodyTooLarge
+            return message
+
+        try:
+            await self.app(scope, counted, send)
+        except _BodyTooLarge:
+            await self._refuse(scope, receive, send)
+
+    async def _refuse(self, scope: Scope, receive: Receive, send: Send) -> None:
+        response = error_response(
+            ErrorCode.validation_failed,
+            {
+                "error": ErrorCode.validation_failed.value,
+                "detail": f"request body exceeds the {self.limit}-byte limit",
+            },
+        )
+        await response(scope, receive, send)
 
 
 class ExtractAdmission:
@@ -292,6 +364,9 @@ def create_app(
     # The last added is outermost: the request context wraps the admission gate, so a queued
     # extract carries its request id and its access line's duration_ms includes the wait.
     app.add_middleware(ExtractAdmission, limit=_max_concurrency_from_env())
+    # Inside auth (an unauthenticated caller gets 401, not a body verdict) and outside the
+    # gate (an oversized request is refused before it queues for a slot).
+    app.add_middleware(BodyCap, limit=_max_body_bytes_from_env())
     # Outside the admission gate: a rejected caller never takes an extraction slot, and is
     # refused before its body is read. Hashes are read once here, so a malformed
     # EXTRACT_API_KEY_SHA256S fails startup like the other env settings.
