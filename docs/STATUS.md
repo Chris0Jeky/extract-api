@@ -35,7 +35,7 @@ deterministic accuracy harness, and a verified Docker deployment.
 | Area | What is on main |
 | --- | --- |
 | M0 | config + pinned deps (ADR 0001), strict schemas + registry, FastAPI app, `llm/client.py` seam, CI + governance + `.claude` hooks/skills |
-| T01-T06 | invoice schema completeness; OpenAI Responses path (strict json_schema, env-priced cost); validation-retry (1 retry / 2 attempts); `POST /v1/extract`; FixtureClient + offline smoke; taxonomy handlers; `harness/normalize.py`; default provider = openai |
+| T01-T06 | invoice schema completeness; OpenAI Responses path (strict json_schema, env-priced cost); validation-retry (1 retry / 2 attempts); `POST /v1/extract`; FixtureClient + offline smoke; taxonomy handlers; default provider = openai |
 | T07 | **10 invoice fixtures flipped DRAFT -> REVIEWED** (PR #68, supersedes #36); harness finds 10 REVIEWED; `--live` scoring is the paid half (T17) |
 | T08-T14 | job-posting completeness; Anthropic structured-output path + `default` routing; `api/idempotency.py` + SQLite store (WAL, first-writer-wins, 24h TTL) wired into the endpoint; full taxonomy coverage; PDF text via PyMuPDF (page/size caps, no OCR) |
 | T16 / T18 | deterministic accuracy harness (`run_accuracy.py` + `scoring.py`, NO LLM judge, `--live`); per-run USD budget guard -> `budget_exceeded`; negative cap now fails loud (#66) |

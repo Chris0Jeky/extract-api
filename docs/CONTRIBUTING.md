@@ -25,8 +25,8 @@ make ci-quick                # ruff + mypy strict + pytest
   (mutation-verify); never write tautological assertions; write a characterisation
   test before changing existing behavior.
 - Coverage has a ratchet floor in `pyproject.toml` (`--cov-fail-under`): it may
-  rise, never fall. Raise stricter per-module targets for `schemas/`,
-  `harness/normalize.py`, and `llm/client.py` as they gain logic.
+  rise, never fall. Raise stricter per-module targets for `schemas/`
+  and `llm/client.py` as they gain logic.
 - A red build always means a real problem. Quarantine a flake (pytest marker)
   within 24h rather than letting it erode the signal.
 
