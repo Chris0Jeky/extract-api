@@ -189,6 +189,35 @@ def test_job_valid_from_json():
     assert job.salary_max == 7000000
 
 
+@pytest.mark.parametrize("field", ["salary_min", "salary_max"])
+def test_job_negative_salary_fails(field):
+    payload = dict(VALID_JOB, salary_min=None, salary_max=None)
+    payload[field] = -1
+    with pytest.raises(ValidationError, match=field):
+        JobPostingV1.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize("field", ["salary_min", "salary_max"])
+def test_job_zero_salary_allowed(field):
+    payload = dict(VALID_JOB, salary_min=None, salary_max=None)
+    payload[field] = 0
+    assert getattr(JobPostingV1.model_validate_json(json.dumps(payload)), field) == 0
+
+
+@pytest.mark.parametrize("field", ["title", "company", "location"])
+@pytest.mark.parametrize("value", ["", " \t\n"])
+def test_job_blank_identity_fails(field, value):
+    payload = dict(VALID_JOB)
+    payload[field] = value
+    with pytest.raises(ValidationError, match=field):
+        JobPostingV1.model_validate_json(json.dumps(payload))
+
+
+def test_job_title_null_stays_invalid():
+    with pytest.raises(ValidationError, match="title"):
+        JobPostingV1.model_validate_json(json.dumps(dict(VALID_JOB, title=None)))
+
+
 def test_job_salary_inverted_range_fails():
     payload = dict(VALID_JOB)
     payload["salary_min"] = 7000000

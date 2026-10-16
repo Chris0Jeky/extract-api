@@ -9,6 +9,7 @@ from llm.client import CompletionResult
 from llm.errors import ProviderRefusal, ProviderTimeout, ProviderTruncation
 from llm.pipeline import ExtractionFailed, run_extraction
 from schemas.invoice_v1 import InvoiceV1
+from schemas.job_posting_v1 import JobPostingV1
 
 _VALID = {
     "invoice_number": "INV-1",
@@ -69,6 +70,45 @@ def test_first_pass_success():
     assert attempts == 1
     assert result.stop_reason == "completed"
     assert client.prompts == ["doc"]  # no feedback appended
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [("salary_min", -1), ("salary_max", -1), ("title", ""), ("company", " \t\n")],
+)
+def test_job_invalid_value_retries_with_exact_errors(field, value):
+    valid = {
+        "title": "Engineer",
+        "company": None,
+        "location": None,
+        "remote_policy": "unspecified",
+        "salary_min": None,
+        "salary_max": None,
+        "salary_currency": "GBP",
+        "salary_period": "unspecified",
+        "employment_type": "unspecified",
+        "seniority": "unspecified",
+        "visa_sponsorship": "unspecified",
+        "posted_date": None,
+    }
+    invalid = json.dumps(dict(valid, **{field: value}))
+    client = _ScriptedClient([invalid, json.dumps(valid)])
+    model, _, attempts = run_extraction(client, JobPostingV1, system="sys", content="doc")
+    assert model.model_dump(mode="json") == valid
+    assert attempts == 2
+    assert invalid in client.prompts[1]
+    assert field in client.prompts[1]
+
+    client = _ScriptedClient([invalid, invalid])
+    with pytest.raises(ExtractionFailed) as excinfo:
+        run_extraction(client, JobPostingV1, system="sys", content="doc")
+    assert excinfo.value.attempts == 2
+    assert len(excinfo.value.trail) == 2
+    assert excinfo.value.trail[0] == excinfo.value.trail[1]
+    assert (
+        json.loads(client.prompts[1].split("corrected object:\n", 1)[1]) == excinfo.value.trail[0]
+    )
+    assert all(field in err["msg"] or field in err["loc"] for err in excinfo.value.trail[0])
 
 
 def test_fail_then_pass_includes_previous_response_and_errors(caplog):
