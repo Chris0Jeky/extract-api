@@ -180,22 +180,33 @@ def test_only_the_health_probes_are_open(path):
     assert auth.is_open_path(scope)
 
 
-@pytest.mark.parametrize(
-    ("path", "root_path", "expected"),
-    [
-        ("/v1/extract", "", "/v1/extract"),
-        ("/v1/extract", "/api", "/v1/extract"),
-        ("/api/v1/extract", "/api", "/v1/extract"),
-        ("/api/healthz", "/api", "/healthz"),
-        ("/api/readyz", "/api", "/readyz"),
-        ("/api", "/api", ""),
-        ("/api/", "/api", "/"),
-        ("/api/nested/healthz", "/api/nested", "/healthz"),
-        ("/apix/healthz", "/api", "/apix/healthz"),
-    ],
-)
+ROUTE_PATH_CASES = [
+    ("/v1/extract", "", "/v1/extract"),
+    ("/v1/extract", "/api", "/v1/extract"),
+    ("/api/v1/extract", "/api", "/v1/extract"),
+    ("/api/healthz", "/api", "/healthz"),
+    ("/api/readyz", "/api", "/readyz"),
+    ("/api", "/api", ""),
+    ("/api/", "/api", "/"),
+    ("/api/nested/healthz", "/api/nested", "/healthz"),
+    ("/apix/healthz", "/api", "/apix/healthz"),
+]
+
+
+@pytest.mark.parametrize(("path", "root_path", "expected"), ROUTE_PATH_CASES)
 def test_route_path_preserves_root_path_and_mount_behavior(path, root_path, expected):
     assert auth.get_route_path({"type": "http", "path": path, "root_path": root_path}) == expected
+
+
+@pytest.mark.parametrize(("path", "root_path", "expected"), ROUTE_PATH_CASES)
+def test_vendored_route_path_agrees_with_starlettes(path, root_path, expected):
+    # The vendored copy exists to avoid depending on a private module; this notices drift.
+    module = pytest.importorskip("starlette._utils")
+    upstream = getattr(module, "get_route_path", None)
+    if upstream is None:
+        pytest.skip("starlette._utils no longer has get_route_path")
+    scope = {"type": "http", "path": path, "root_path": root_path}
+    assert upstream(scope) == auth.get_route_path(scope) == expected
 
 
 @pytest.mark.parametrize(
