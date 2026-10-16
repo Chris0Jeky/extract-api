@@ -22,7 +22,6 @@ import logging
 import os
 import re
 
-from starlette._utils import get_route_path
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from api.errors import ErrorCode, error_response
@@ -35,6 +34,25 @@ EXTRACT_PATH = "/v1/extract"
 # The only unauthenticated routes (the platform's health probes). Everything else is guarded.
 _OPEN_PATHS = frozenset({"/healthz", "/readyz"})
 _SHA256_HEX = re.compile(r"[0-9a-f]{64}")
+
+
+# Vendored from Starlette 1.3.1 to avoid depending on its private _utils module.
+def get_route_path(scope: Scope) -> str:
+    path: str = scope["path"]
+    root_path = scope.get("root_path", "")
+    if not root_path:
+        return path
+
+    if not path.startswith(root_path):
+        return path
+
+    if path == root_path:
+        return ""
+
+    if path[len(root_path)] == "/":
+        return path[len(root_path) :]
+
+    return path
 
 
 def is_open_path(scope: Scope) -> bool:
@@ -69,22 +87,22 @@ def key_hashes_from_env() -> tuple[bytes, ...]:
     return tuple(digests)
 
 
-def _bearer_token(scope: Scope) -> str | None:
+def _bearer_token(scope: Scope) -> bytes | None:
     """The token of a well-formed `Authorization: Bearer <token>` header, else None."""
     for name, value in scope["headers"]:
         if name == b"authorization":
-            header: str = value.decode("latin-1")
-            scheme, _, token = header.partition(" ")
+            header: bytes = value
+            scheme, _, token = header.partition(b" ")
             # Scheme names are case-insensitive (RFC 9110). A token has no spaces, so
             # trailing words make the header malformed rather than a different token.
-            if scheme.lower() == "bearer" and token and " " not in token:
+            if scheme.lower() == b"bearer" and token and b" " not in token:
                 return token
             return None
     return None
 
 
-def _matches(token: str, hashes: tuple[bytes, ...]) -> bool:
-    presented = hashlib.sha256(token.encode("utf-8", "surrogatepass")).digest()
+def _matches(token: bytes, hashes: tuple[bytes, ...]) -> bool:
+    presented = hashlib.sha256(token).digest()
     # Every hash is compared, even after a match, so timing does not reveal which key matched
     # or how many are configured.
     matched = False
