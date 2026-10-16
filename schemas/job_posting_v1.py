@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import date
 from enum import StrEnum
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from schemas._common import STRICT_CONFIG, CurrencyCode
 
@@ -79,6 +79,20 @@ class JobPostingV1(BaseModel):
     seniority: Seniority
     visa_sponsorship: VisaSponsorship
     posted_date: date | None
+
+    @field_validator("title", "company")
+    @classmethod
+    def _check_nonblank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("must be non-blank or null where allowed")
+        return value
+
+    @field_validator("salary_min", "salary_max")
+    @classmethod
+    def _check_nonnegative(cls, value: int | None) -> int | None:
+        if value is not None and value < 0:
+            raise ValueError("must be >= 0")
+        return value
 
     @model_validator(mode="after")
     def _check_salary(self) -> JobPostingV1:
