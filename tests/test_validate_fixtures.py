@@ -4,6 +4,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 _SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "validate_fixtures.py"
 _spec = importlib.util.spec_from_file_location("validate_fixtures", _SCRIPT)
 assert _spec is not None and _spec.loader is not None
@@ -128,6 +130,19 @@ def test_list_schema_version_reports_error_not_type_error(tmp_path):
     path.write_text(json.dumps(_fixture(schema_version=["v1"])), encoding="utf-8")
     errs = validate_fixtures.validate_file(path)
     assert errs == [f"{path.name}: schema_version must be a non-empty string"]
+
+
+@pytest.mark.parametrize("field", ["doc_type", "schema_version"])
+@pytest.mark.parametrize("value", [["invoice"], {}])
+def test_unhashable_schema_metadata_scan_continues(tmp_path, monkeypatch, capsys, field, value):
+    _write(tmp_path, "a_bad.json", _fixture(**{field: value}))
+    _write(tmp_path, "z_good.json", _fixture())
+    monkeypatch.setattr(validate_fixtures, "FIXTURES", tmp_path)
+    assert validate_fixtures.main() == 1
+    captured = capsys.readouterr()
+    assert f"a_bad.json: {field} must be a non-empty string" in captured.err
+    assert "FAILED (1 problem(s))" in captured.err
+    assert "invoice: 0 REVIEWED, 1 DRAFT" in captured.out
 
 
 # --- corpus-wide placement invariant (issue #63) ---

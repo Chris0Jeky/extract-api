@@ -30,7 +30,7 @@ list and the human-action file (only Chris ticks its human-blocked items);
 | Hosting | `Dockerfile` + `docker-entrypoint.sh`, `render.yaml`, `railway.json`, `.github/workflows/image.yml` (build, scan, attest) and `deploy.yml` (dispatch-only digest deploy), `.hosting/manifest.json` (agent-hq manifest v2), `docs/ops/` (RUNBOOK, SIZING, OBSERVABILITY), ADRs 0004-0005 | `test_deploy_descriptors`, `test_workflows`; `scripts/docker_persistence_smoke.py` and `scripts/load_test.py` in CI |
 | `llm/` | The only provider seam. `client.py` (both SDKs, 467 lines), `pipeline.py:run_extraction` (validation-retry), `schema_utils`, `prompts`, `errors` | `test_llm_client`, `test_openai_client`, `test_anthropic_client`, `test_pipeline`, `test_schema_utils`, `test_prompts`, `test_import_boundary` |
 | `schemas/` | Strict `invoice.v1` + `job_posting.v1`, ISO-4217 set, `registry.py` | `test_schemas`, `test_iso4217`, `test_registry` |
-| `harness/` | Deterministic accuracy scoring (`run_accuracy.py`, `scoring.py`) and `normalize.py` | `test_run_accuracy`, `test_scoring`, `test_normalize` |
+| `harness/` | Deterministic accuracy scoring (`run_accuracy.py`, `scoring.py`) | `test_run_accuracy`, `test_scoring` |
 | `fixtures/` | 10 REVIEWED invoices and ZERO job postings (`job_postings/` holds only `.gitkeep`, so a job-posting accuracy run exits with no REVIEWED input until T15); DRAFT is excluded from scoring | `test_validate_fixtures` |
 | `.claude/hooks/dispatch.py` | Vendored canonical deny floor (v1.6.20). T4-class in any repo: do not edit | `.claude/hooks/smoke_test.py` |
 
