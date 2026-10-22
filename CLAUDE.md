@@ -4,12 +4,12 @@ Strict-schema LLM extraction service: document text (or PDF text) in, Pydantic v
 strict record out, per-field accuracy reported across OpenAI and Anthropic. It
 fails loudly instead of silently coercing. ~2.7k lines of source, 323 tests, 99%
 coverage; the served paths are complete through M3 and deployable. What is left
-is human fixture labels, TWO code changes, then paid `--live` runs
-(`tasks/BACKLOG.md` T15/T17/T20/T21). The code changes are merge blockers for
-T17 and must land BEFORE any paid run (`docs/STATUS.md`): the #46 null-handling
-/ hallucination-denominator metric, and #57 item 1 (`cost_usd` in the 422 body,
-contract pre-approved). Spend on `--live` before they land and the accuracy and
-cost table is wrong and has to be rerun.
+is human fixture labels, the #46 metric change, then paid `--live` runs
+(`tasks/BACKLOG.md` T15/T17/T20/T21). The #46 null-handling /
+hallucination-denominator metric must land BEFORE any paid run (`docs/STATUS.md`).
+The #57 failed-validation cost path is implemented: terminal 422 bodies expose
+`cost_usd`, and harness reports split successful/failed spend, labelling unknown
+failed spend from older servers (#74 item 4).
 
 Positioning line for every README / title / CV line: "I make LLM systems cheap,
 reliable, and provably valuable in production." Lead with measured numbers; until

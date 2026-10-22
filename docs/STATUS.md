@@ -2,6 +2,10 @@
 
 Living functional snapshot for starting a new session strong. Last updated 2026-07-03;
 the licence-only note below was added 2026-08-12 without refreshing the remaining snapshot.
+Cost-path update 2026-10-22: #57 item 1 and #74 item 4 are implemented in the worktree:
+terminal validation 422 exposes total billed `cost_usd`; harness reports split successful
+and failed spend and label unknown failed spend from older servers. Other snapshot
+claims below retain their original date.
 Authoritative detail lives in `AGENTS.md` (rules), `tasks/BACKLOG.md` (tasks),
 `docs/plan/PLAN.md` + `docs/adr/` (decisions). This file is the orientation.
 
@@ -16,9 +20,9 @@ write; the remaining gates are Chris's fixture labels and paid provider calls. P
 1. **#6 uv.lock + frozen CI** - now unblocked (`pip install uv` works; CI/Linux has `uv`). Clean,
    offline, no paid calls. The single best next autonomous slice.
 2. **T15** - more labeled fixtures (Chris's labels), then
-3. **T17** - two-provider accuracy table. This needs PAID `--live` runs AND two small code changes
-   first: the #46 null-handling/hallucination-denominator metric and #57 item 1 (`cost_usd` in the
-   422 body, contract pre-approved). Do the code, then the paid run, then
+3. **T17** - two-provider accuracy table. This needs PAID `--live` runs AND the #46
+   null-handling/hallucination-denominator metric first. #57 cost hardening is implemented.
+   Do the metric, then the paid run, then
 4. **T20** (README numbers, replaces the "Numbers pending" block) and **T21** (gateway trace).
 
 Tidy-up left for the next loop: prune the merged remote branches (`feat/t09..t18`, `fix/*`); the
@@ -51,13 +55,13 @@ silent default that would mis-bill); retry = 1 retry / 2 attempts.
 ## Next up (gated on Chris labels / paid runs)
 
 Most of the published-numbers path is merged; what remains is chiefly Chris's labels + paid runs,
-plus two small code changes that land WITH T17 (the #46 null-handling / hallucination-denominator
-metric and #57 item 1's `cost_usd` in the 422 body) - do not spend paid runs before those land:
+plus the #46 null-handling / hallucination-denominator metric that lands WITH T17.
+Do not spend paid runs before that metric lands; #57 cost hardening is implemented:
 
 - **T15** more labeled fixtures (30-50 each doc type) - blocks on Chris's labels.
 - **T17** two-provider accuracy table - needs T15 + paid `--live` runs; folds in the
-  null-handling / hallucination-denominator metric (#46) and the failed-422 cost fold (#57 item 1,
-  contract pre-approved: add `cost_usd` to the 422 body).
+  null-handling / hallucination-denominator metric (#46). The failed-422 cost fold
+  (#57 item 1) and successful/failed/unknown cost labels (#74 item 4) are implemented.
 - **T20** README with measured numbers - follows T17 (replaces the "Numbers pending" block).
 - **T21** gateway-readiness trace - needs a `--live` run around the `LLM_BASE_URL` flip.
 
@@ -91,8 +95,9 @@ Chris directed "take a stance yourself and call the shots". Recorded stances:
 - **#42** idempotency atomic reservation under concurrency (sequential contract is correct for v1).
 - **#46** hallucination-rate / null-handling denominator (folded into T17).
 - **#54** v1 invoice cannot represent total-level shipping/adjustment (invoice.v2).
-- **#57** `--live` accuracy-harness hardening; item 1 (fold a failed-validation 422's billed spend
-  into cost totals) stays open, contract pre-approved, lands with T17.
+- **#57 / #74 item 4** cost hardening implemented: billed terminal 422 cost is included,
+  successful/failed spend is split, and unavailable failed cost is labelled unknown.
+  #57 items 2-4 already have offline regression coverage.
 - **#59** Dependabot: anthropic `<0.113` bump (CI-green; awaiting merge).
 
 ## Operating notes

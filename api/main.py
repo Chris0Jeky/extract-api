@@ -140,7 +140,7 @@ def _run_extract(request: ExtractRequest, budget: BudgetGuard) -> ExtractRespons
         raise ExtractError(
             ErrorCode.validation_failed,
             detail=str(exc),
-            extra={"attempts": exc.attempts, "trail": exc.trail},
+            extra={"attempts": exc.attempts, "trail": exc.trail, "cost_usd": exc.cost_usd},
         ) from exc
 
     # Reconcile the request's actual spend (across all attempts) into the running budget.

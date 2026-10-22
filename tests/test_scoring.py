@@ -136,3 +136,27 @@ def test_render_markdown_empty_run_shows_na_not_zero_percent():
     md = render_markdown(aggregate("invoice", "openai", [], [], []))
     assert "overall exact-match: n/a (0/0)" in md
     assert "skipped (control-plane" not in md
+
+
+def test_report_splits_successful_and_failed_billed_costs():
+    report = aggregate(
+        "invoice", "openai", [], [0.01], [12.0], n_failures=1, failed_costs_usd=[0.03]
+    )
+    assert report.cost_usd_total == pytest.approx(0.04)
+    md = render_markdown(report)
+    assert "cost (all billed requests): $0.0400" in md
+    assert "successful: $0.0100; failed: $0.0300" in md
+    assert "unknown" not in md
+
+
+def test_report_labels_unknown_failed_spend_and_known_subtotal():
+    report = aggregate(
+        "invoice", "openai", [], [0.01], [12.0], n_failures=2, failed_costs_usd=[0.03]
+    )
+    assert report.cost_usd_total == pytest.approx(0.04)
+    assert report.n_failed_cost_unknown == 1
+    md = render_markdown(report)
+    assert "cost (known billed requests): $0.0400" in md
+    assert "successful: $0.0100; failed: $0.0300 known" in md
+    assert "unknown failed spend: 1 request(s)" in md
+    assert "all billed requests" not in md

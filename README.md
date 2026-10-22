@@ -42,6 +42,7 @@ Body: {
 { "error": "validation_failed",
   "detail": "extraction failed strict validation after 2 attempt(s)",
   "attempts": 2,
+  "cost_usd": 0.0024,   // total billed spend across both attempts, env-priced
   "trail": [
     [ { "loc", "type", "msg" } ],
     [ { "loc", "type", "msg" } ]
@@ -50,7 +51,9 @@ Body: {
 422 Unprocessable Entity (pre-request validation):
 { "error": "validation_failed", "detail": "request validation failed" }
 // Malformed requests and empty or oversized content fail before any provider call.
-// The terminal provider-validation response does not include cost_usd yet (#57).
+// Only the terminal provider-validation 422 includes cost_usd.
+// Harness reports split successful/failed request spend. If a failed response omits
+// cost_usd (older servers), the report labels known spend and unknown failed spend.
 
 409 Conflict:
 { "error": "idempotency_conflict" }   // same key, different payload hash

@@ -98,6 +98,9 @@ class AccuracyReport:
     n_fixtures: int
     per_field: dict[str, FieldStats] = field(default_factory=dict)
     cost_usd_total: float = 0.0
+    cost_usd_successful: float = 0.0
+    cost_usd_failed: float = 0.0
+    n_failed_cost_unknown: int = 0
     latency_p50_ms: float = 0.0
     latency_p95_ms: float = 0.0
     n_failures: int = 0  # fixtures whose extraction failed entirely (no record produced)
@@ -143,6 +146,7 @@ def aggregate(
     *,
     n_failures: int = 0,
     n_skipped: int = 0,
+    failed_costs_usd: list[float] | None = None,
 ) -> AccuracyReport:
     """Fold per-fixture field outcomes + cost/latency into one report."""
     report = AccuracyReport(
@@ -164,7 +168,11 @@ def aggregate(
                 stats.missed += 1
             else:
                 stats.hallucinated += 1
-    report.cost_usd_total = sum(costs_usd)
+    report.cost_usd_successful = sum(costs_usd)
+    report.cost_usd_failed = sum(failed_costs_usd or [])
+    report.n_failed_cost_unknown = n_failures - len(failed_costs_usd or [])
+    # The total is a known subtotal when any failed request's spend is unavailable.
+    report.cost_usd_total = report.cost_usd_successful + report.cost_usd_failed
     ordered = sorted(latencies_ms)
     report.latency_p50_ms = _percentile(ordered, 50)
     report.latency_p95_ms = _percentile(ordered, 95)
@@ -190,10 +198,16 @@ def render_markdown(report: AccuracyReport) -> str:
     # 0/0 is not 0%: show "n/a" so the headline never claims a measured rate it does not have.
     overall = f"{report.overall_exact_match_rate:.1%}" if report.total_fields else "n/a"
     halluc = f"{report.hallucinated_field_rate:.1%}" if report.total_fields else "n/a"
+    cost_scope = "known billed requests" if report.n_failed_cost_unknown else "all billed requests"
+    failed_cost = f"${report.cost_usd_failed:.4f}"
+    if report.n_failed_cost_unknown:
+        failed_cost += f" known; unknown failed spend: {report.n_failed_cost_unknown} request(s)"
     lines += [
         f"- overall exact-match: {overall} ({report.total_matches}/{report.total_fields})",
         f"- hallucinated-field rate: {halluc} ({report.total_hallucinated}/{report.total_fields})",
-        f"- cost: ${report.cost_usd_total:.4f} | latency p50/p95 (successful): "
+        f"- cost ({cost_scope}): ${report.cost_usd_total:.4f} "
+        f"(successful: ${report.cost_usd_successful:.4f}; failed: {failed_cost}) "
+        "| latency p50/p95 (successful): "
         f"{report.latency_p50_ms:.0f}/{report.latency_p95_ms:.0f} ms",
         "",
         "| field | exact-match | mismatch | missed | hallucinated |",

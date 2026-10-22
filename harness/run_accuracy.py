@@ -48,6 +48,10 @@ class PredictionFailed(Exception):
     fields all count as missed) and continues, rather than aborting the whole run.
     """
 
+    def __init__(self, message: str, *, cost_usd: float | None = None) -> None:
+        super().__init__(message)
+        self.cost_usd = cost_usd
+
 
 class ControlPlaneRejection(Exception):
     """The endpoint rejected a fixture BEFORE any model call, for a reason unrelated to the
@@ -171,6 +175,19 @@ def _response_error_code(resp: httpx.Response) -> str | None:
     return None
 
 
+def _response_validation_cost(resp: httpx.Response) -> float | None:
+    """Accept only a finite, non-negative JSON number for billed terminal validation spend."""
+    if resp.status_code != 422 or _response_error_code(resp) != "validation_failed":
+        return None
+    cost = resp.json().get("cost_usd")
+    if isinstance(cost, bool) or not isinstance(cost, (int, float)):
+        return None
+    try:
+        return float(cost) if math.isfinite(cost) and cost >= 0 else None
+    except OverflowError:
+        return None
+
+
 def load_reviewed_fixtures(doc_type: str, root: Path | None = None) -> list[dict[str, object]]:
     """Load only the REVIEWED fixtures for a doc type; DRAFT labels are never scored.
 
@@ -212,6 +229,7 @@ def run_accuracy(
     prepared = _preflight_fixtures(doc_type, items)
     scored = []
     costs: list[float] = []
+    failed_costs: list[float] = []
     latencies: list[float] = []
     failures = 0
     skipped = 0
@@ -236,6 +254,8 @@ def run_accuracy(
             print(f"accuracy: fixture {fixture_id}: prediction failed: {exc}", file=sys.stderr)
             scored.append(score_failed(model_cls, expected))
             failures += 1
+            if exc.cost_usd is not None:
+                failed_costs.append(exc.cost_usd)
             continue
         resolved_provider = prediction.provider  # the provider the server actually used
         try:
@@ -247,6 +267,7 @@ def run_accuracy(
             # here is the prediction's, not the fixture's (issue #57).
             scored.append(score_failed(model_cls, expected))
             failures += 1
+            failed_costs.append(prediction.cost_usd)
             continue
         scored.append(outcomes)
         costs.append(prediction.cost_usd)
@@ -259,6 +280,7 @@ def run_accuracy(
         latencies,
         n_failures=failures,
         n_skipped=skipped,
+        failed_costs_usd=failed_costs,
     )
 
 
@@ -304,7 +326,10 @@ def live_predictor(
                 raise ControlPlaneRejection(
                     f"{fixture_id}: HTTP {exc.response.status_code} (control-plane)"
                 ) from exc
-            raise PredictionFailed(f"{fixture_id}: HTTP {exc.response.status_code}") from exc
+            raise PredictionFailed(
+                f"{fixture_id}: HTTP {exc.response.status_code}",
+                cost_usd=_response_validation_cost(exc.response),
+            ) from exc
         except httpx.RequestError as exc:
             raise PredictionFailed(f"{fixture_id}: {type(exc).__name__}") from exc
         # A 2xx is not a guarantee of the right SHAPE (gateway login page, older server, proxy

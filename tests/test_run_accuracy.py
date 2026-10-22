@@ -299,6 +299,61 @@ def test_live_predictor_transport_error_raises_prediction_failed(monkeypatch):
         live_predictor("http://h", "openai")(_fixture("c"))
 
 
+@pytest.mark.parametrize("cost", [0.03, 0, 1])
+def test_live_validation_failure_cost_is_included_in_run(monkeypatch, cost):
+    responses = iter(
+        [_resp(422, {"error": "validation_failed", "cost_usd": cost}), _resp(200, _ok_body())]
+    )
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: next(responses))
+    report = run_accuracy(
+        "invoice",
+        "openai",
+        live_predictor("http://h", "openai"),
+        fixtures=[_fixture("failed"), _fixture("ok")],
+    )
+    assert report.n_failures == 1
+    assert report.cost_usd_total == pytest.approx(cost + 0.01)
+    assert report.cost_usd_successful == pytest.approx(0.01)
+    assert report.cost_usd_failed == pytest.approx(cost)
+    assert report.n_failed_cost_unknown == 0
+    assert report.latency_p50_ms == 12.0  # failed requests stay out of latency
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"error": "validation_failed"},
+        *(
+            {"error": "validation_failed", "cost_usd": cost}
+            for cost in [None, "0.03", True, -0.03, "nan", "inf", [], {}, 10**400]
+        ),
+        {"error": "unsupported_doc_type", "cost_usd": 5.0},
+    ],
+)
+def test_live_failure_without_valid_validation_cost_is_unknown(monkeypatch, body):
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: _resp(422, body))
+    report = run_accuracy(
+        "invoice", "openai", live_predictor("http://h", "openai"), fixtures=[_fixture()]
+    )
+    assert report.n_failures == 1
+    assert report.n_failed_cost_unknown == 1
+    assert report.cost_usd_total == 0.0  # known subtotal only, never estimated
+
+
+def test_schema_invalid_prediction_keeps_its_known_failed_spend():
+    report = run_accuracy(
+        "invoice",
+        "openai",
+        lambda fx: Prediction({}, 0.03, 500.0, "openai"),
+        fixtures=[_fixture()],
+    )
+    assert report.n_failures == 1
+    assert report.cost_usd_total == pytest.approx(0.03)
+    assert report.cost_usd_failed == pytest.approx(0.03)
+    assert report.n_failed_cost_unknown == 0
+    assert report.latency_p95_ms == 0.0
+
+
 @pytest.mark.parametrize(
     ("status", "code"),
     [(402, "budget_exceeded"), (409, "idempotency_conflict"), (401, "unauthorized")],
@@ -491,7 +546,8 @@ def test_main_live_write_failure_keeps_report_on_stdout(tmp_path, monkeypatch, c
         "- fixtures scored: 1 (0 failed extraction(s))",
         "- overall exact-match: 100.0% (11/11)",
         "- hallucinated-field rate: 0.0% (0/11)",
-        "- cost: $0.0100 | latency p50/p95 (successful): 12/12 ms",
+        "- cost (all billed requests): $0.0100 (successful: $0.0100; failed: $0.0000) "
+        "| latency p50/p95 (successful): 12/12 ms",
         "",
         "| field | exact-match | mismatch | missed | hallucinated |",
         "| --- | --- | --- | --- | --- |",
@@ -584,3 +640,16 @@ def test_main_live_without_a_caller_key_fails_before_any_request(
     assert main(["--doc-type", "invoice", "--live"]) == 1
     assert "EXTRACT_API_KEY" in capsys.readouterr().err
     assert calls["n"] == 0
+
+
+@pytest.mark.parametrize("token", ["NaN", "Infinity", "-Infinity"])
+def test_non_finite_validation_cost_stays_unknown(monkeypatch, token):
+    response = httpx.Response(
+        422,
+        request=httpx.Request("POST", "http://x/v1/extract"),
+        text='{"error":"validation_failed","cost_usd":' + token + "}",
+    )
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: response)
+    with pytest.raises(PredictionFailed) as exc:
+        live_predictor("http://h", "openai")(_fixture())
+    assert exc.value.cost_usd is None

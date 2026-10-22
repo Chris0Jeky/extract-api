@@ -87,11 +87,12 @@ This file is also the human-action backlog (`human_todo` in
   normalization), hallucinated-field rate; deterministic, no LLM judge; `--live` mode
   against the serving endpoint. Hardened since: control-plane skip (#52), malformed-2xx /
   `--timeout` / misplaced-fixture (#57 items 2-4), corpus-wide placement (#63).
-  Null-handling-correctness rate is deferred to T17 (#46).
+  Terminal 422 billed cost + successful/failed/unknown cost labels are implemented
+  (#57 item 1, #74 item 4). Null-handling-correctness rate is deferred to T17 (#46).
 - **T17 Two-provider accuracy table + cost/latency.** DoD: markdown table in
   `evals/reports/` with per-field accuracy + hallucinated-field rate + cost +
   p50/p95 latency, per doc type per provider; re-runnable via `make accuracy-run`.
-  (Blocks on paid `--live` runs; folds in #46 + #57 item 1.)
+  (Blocks on paid `--live` runs; folds in #46; #57 cost hardening is implemented.)
 - [x] **T18 Budget guard.** (PR #50) per-run USD cap; exceeding it raises `budget_exceeded`
   (402, control-plane); check-before-spend + reconcile-after (incl. failed-call cost);
   test forces the cap. Negative-cap now fails loud (#66). Reserve-reconcile is a documented
