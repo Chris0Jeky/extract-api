@@ -53,9 +53,10 @@ JSON mode and the same Pydantic validate-and-retry holds.
 `POST /v1/extract`, header `Idempotency-Key`. Body: `doc_type`, `schema_version`,
 `content` (text or base64 pdf), `provider` (`openai`|`anthropic`|`default`).
 200 returns `{data, meta{provider, model, schema_version, attempts, replayed,
-field_confidence, cost_usd, latency_ms}}`. 422 returns
-`{error:"validation_failed", attempts, failures:[{field, constraint,
-model_output}]}`. 409 returns `{error:"idempotency_conflict"}`. Every non-200
+field_confidence, cost_usd, latency_ms}}`. Terminal provider-validation 422 returns
+`{error:"validation_failed", detail, attempts, trail:[[{loc, type, msg}]], cost_usd}`,
+with total billed spend across attempts. Pre-request 422 bodies omit cost.
+409 returns `{error:"idempotency_conflict"}`. Every non-200
 carries one taxonomy error.
 
 `field_confidence` is a presence-only heuristic (1.0 for a present value, 0.0 for an

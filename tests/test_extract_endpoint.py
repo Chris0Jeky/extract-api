@@ -126,6 +126,7 @@ def test_validation_failure_on_both_attempts_returns_422_with_trail(monkeypatch)
     body = resp.json()
     assert body["error"] == "validation_failed"
     assert body["attempts"] == 2
+    assert body["cost_usd"] == pytest.approx(0.0024)  # both billed attempts
     assert len(body["trail"]) == 2  # one error summary per attempt
     assert fake.calls == 2  # the one feedback retry was used
 
@@ -281,7 +282,7 @@ def test_missing_required_field_renders_validation_failed():
     client = TestClient(create_app(), raise_server_exceptions=False, headers=AUTH)
     resp = client.post("/v1/extract", json={"doc_type": "invoice", "schema_version": "v1"})
     assert resp.status_code == 422
-    assert resp.json()["error"] == "validation_failed"
+    assert resp.json() == {"error": "validation_failed", "detail": "request validation failed"}
 
 
 def test_extra_forbidden_key_renders_validation_failed():
