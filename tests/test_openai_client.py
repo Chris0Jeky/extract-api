@@ -5,6 +5,7 @@ responses.create returns a canned response object (or raises an SDK error).
 """
 
 import types
+from contextlib import nullcontext
 
 import httpx
 import openai
@@ -48,7 +49,7 @@ def _install(monkeypatch, *, response=None, raises=None):
 
     def factory(**kwargs):
         captured.update(kwargs)
-        return types.SimpleNamespace(responses=types.SimpleNamespace(create=create))
+        return nullcontext(types.SimpleNamespace(responses=types.SimpleNamespace(create=create)))
 
     monkeypatch.setattr(openai, "OpenAI", factory)
     return captured

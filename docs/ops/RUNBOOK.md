@@ -87,8 +87,14 @@ previously deployed revision, which is the rollback target.
 
 A Render deploy stops the old instance before starting the new one (a disk rules out overlap), so
 expect a short gap. Render allows in-flight requests up to 60 s to finish (`maxShutdownDelaySeconds`);
-a request cut off before it completed was never stored, so a client's retry with the same
-`Idempotency-Key` runs, and bills, again. Deploy when traffic is quiet.
+work terminated before its successful response was committed is not stored, so a client's
+retry with the same `Idempotency-Key` runs, and bills, again. Deploy when traffic is quiet.
+
+A caller disconnect alone does not cancel the synchronous provider worker: it can finish and
+commit a successful response, which a later same-key retry replays. Provider SDK clients are
+scoped to one completion attempt and close their connection pools on success or failure;
+cleanup does not depend on cyclic garbage collection. Provider failures and terminal schema
+validation failures are not stored, so their keys remain retryable.
 
 ## 3. Verify by hand
 

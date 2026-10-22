@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import types
+from contextlib import nullcontext
 
 import anthropic
 import openai
@@ -51,8 +52,8 @@ def _mock_openai(monkeypatch, *, model="gpt-test"):
     monkeypatch.setattr(
         openai,
         "OpenAI",
-        lambda **kwargs: types.SimpleNamespace(
-            responses=types.SimpleNamespace(create=lambda **kwargs: response)
+        lambda **kwargs: nullcontext(
+            types.SimpleNamespace(responses=types.SimpleNamespace(create=lambda **kwargs: response))
         ),
     )
 
@@ -68,8 +69,8 @@ def _mock_anthropic(monkeypatch, *, model="claude-test"):
     monkeypatch.setattr(
         anthropic,
         "Anthropic",
-        lambda **kwargs: types.SimpleNamespace(
-            messages=types.SimpleNamespace(create=lambda **kwargs: message)
+        lambda **kwargs: nullcontext(
+            types.SimpleNamespace(messages=types.SimpleNamespace(create=lambda **kwargs: message))
         ),
     )
 
