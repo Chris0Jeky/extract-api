@@ -15,6 +15,17 @@ The moving parts:
 | Logs | Render's log stream | One JSON line per event; one `extract.access` line per request (`docs/ops/OBSERVABILITY.md`) |
 | Sizing | `docs/ops/SIZING.md` | Starter with `EXTRACT_MAX_CONCURRENCY=4`, measured |
 
+Pull requests build and smoke a local image, then run the same Grype fixed-critical gate as
+main without registry credentials. Both image jobs retain `image.sarif` as an
+`image-scan-<commit>-<job>` artifact even when that gate fails. Main still attests and moves
+its tag only after successful smoke and scan proof; a report artifact is not deployable proof.
+
+The certifi security floor is `2026.10.19` for
+[GHSA-6q48-6c7w-9gw2](https://github.com/certifi/python-certifi/security/advisories/GHSA-6q48-6c7w-9gw2).
+That release removes the affected emSign G3 trust root while retaining unaffected roots.
+Keep the declared floor and lock aligned, and resolve a scan failure rather than lowering
+the threshold or adding an ignore rule.
+
 ## 1. One-time setup (owner)
 
 Do these in order. `tasks/BACKLOG.md` (M5) tracks them.

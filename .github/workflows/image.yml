@@ -47,6 +47,23 @@ jobs:
         env:
           IMAGE_REF: ${{ env.IMAGE }}:sha-${{ github.sha }}
         run: python scripts/docker_persistence_smoke.py --image "$IMAGE_REF"
+      # Exercise the release threshold before merge without registry credentials.
+      - name: Scan the locally built image with Grype
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: ${{ env.IMAGE }}:sha-${{ github.sha }}
+          severity-cutoff: critical
+          only-fixed: true
+          fail-build: true
+          output-format: sarif
+          output-file: image.sarif
+      - name: Upload scan report even when the scan fails
+        if: always() && hashFiles('image.sarif') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-scan-${{ github.sha }}-${{ github.job }}
+          path: image.sarif
+          if-no-files-found: error
 
   published-image:
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -122,6 +139,13 @@ jobs:
           fail-build: true
           output-format: sarif
           output-file: image.sarif
+      - name: Upload scan report even when the scan fails
+        if: always() && hashFiles('image.sarif') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-scan-${{ github.sha }}-${{ github.job }}
+          path: image.sarif
+          if-no-files-found: error
       - name: Upload SARIF even when the scan fails
         if: always() && hashFiles('image.sarif') != ''
         uses: github/codeql-action/upload-sarif@d208ec71e39ae46397cbf6569bef8439b9aab974 # codeql-bundle-v2.27.2
