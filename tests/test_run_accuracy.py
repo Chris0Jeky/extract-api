@@ -414,6 +414,80 @@ def test_live_predictor_2xx_data_not_object_is_failure(monkeypatch):
         live_predictor("http://h", "openai")(_fixture("c"))
 
 
+@pytest.mark.parametrize("cost", [0.03, 0, 1])
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        {"data": None},
+        {"data": "not-an-object"},
+        {"data": []},
+        {"missing_data": True},
+        {"data": _BASE, "meta": {"latency_ms": None}},
+        {"data": _BASE, "meta": {"latency_ms": "inf"}},
+        {"data": _BASE, "meta": {"latency_ms": 1.0}},
+    ],
+)
+def test_live_predictor_malformed_2xx_keeps_known_failed_spend(monkeypatch, cost, malformed):
+    body = {"meta": _ok_body()["meta"], **malformed}
+    body["meta"] = {**body["meta"], "cost_usd": cost}
+    response = _resp(200, body)
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: response)
+    predict = live_predictor("http://h", "openai")
+    with pytest.raises(PredictionFailed) as exc:
+        predict(_fixture())
+    assert exc.value.cost_usd == cost
+
+    report = run_accuracy("invoice", "openai", predict, fixtures=[_fixture()])
+    assert report.n_failures == 1
+    assert report.cost_usd_total == pytest.approx(cost)
+    assert report.cost_usd_failed == pytest.approx(cost)
+    assert report.cost_usd_successful == 0.0
+    assert report.n_failed_cost_unknown == 0
+
+
+@pytest.mark.parametrize(
+    "cost", [None, "0.03", True, -0.03, float("nan"), float("inf"), [], {}, 10**400]
+)
+def test_live_predictor_malformed_2xx_invalid_cost_stays_unknown(monkeypatch, cost):
+    response = httpx.Response(
+        200,
+        request=httpx.Request("POST", "http://x/v1/extract"),
+        text=json.dumps({"data": None, "meta": {"cost_usd": cost}}),
+    )
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: response)
+    with pytest.raises(PredictionFailed) as exc:
+        live_predictor("http://h", "openai")(_fixture())
+    assert exc.value.cost_usd is None
+
+
+@pytest.mark.parametrize("status", [200, 402, 422, 502])
+@pytest.mark.parametrize(
+    "body",
+    ["[" * 10000 + "]" * 10000, "{", b"\xff"],
+    ids=["nested", "invalid-json", "invalid-encoding"],
+)
+def test_live_predictor_undecodable_json_is_failure_and_run_continues(monkeypatch, status, body):
+    response = httpx.Response(
+        status, request=httpx.Request("POST", "http://x/v1/extract"), content=body
+    )
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: response)
+    predict = live_predictor("http://h", "openai")
+    with pytest.raises(PredictionFailed) as exc:
+        predict(_fixture())
+    assert exc.value.cost_usd is None
+
+    responses = iter([response, _resp(200, _ok_body())])
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: next(responses))
+    report = run_accuracy("invoice", "openai", predict, fixtures=[_fixture(), _fixture()])
+    assert report.n_fixtures == 2
+    assert report.n_failures == 1
+    assert report.n_skipped == 0
+    assert report.n_failed_cost_unknown == 1
+    assert report.cost_usd_successful == pytest.approx(0.01)
+    assert report.cost_usd_total == pytest.approx(0.01)
+    assert 0.0 < report.overall_exact_match_rate < 1.0
+
+
 def test_live_predictor_2xx_overflowing_numeric_is_failure(monkeypatch):
     # float() of an out-of-range JSON integer raises OverflowError (an ArithmeticError, not a
     # ValueError); it must still degrade to a fixture failure, not crash the run (issue #57).
