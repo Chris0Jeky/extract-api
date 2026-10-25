@@ -6,6 +6,7 @@ ANTHROPIC_PRICE_* env is provided by the autouse fixture in conftest.
 """
 
 import types
+from contextlib import nullcontext
 
 import anthropic
 import httpx
@@ -49,7 +50,7 @@ def _install(monkeypatch, *, message=None, raises=None, factory_raises=None):
         captured.update(kwargs)
         if factory_raises is not None:
             raise factory_raises
-        return types.SimpleNamespace(messages=types.SimpleNamespace(create=create))
+        return nullcontext(types.SimpleNamespace(messages=types.SimpleNamespace(create=create)))
 
     monkeypatch.setattr(anthropic, "Anthropic", factory)
     return captured, captured_call
