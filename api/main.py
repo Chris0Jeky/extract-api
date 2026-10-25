@@ -69,16 +69,6 @@ def _field_confidence(data: dict[str, Any]) -> dict[str, float]:
     return {key: (0.0 if value is None else 1.0) for key, value in data.items()}
 
 
-def _bounded(detail: str) -> str:
-    """Provider error text for the log: one line, capped.
-
-    Logged on purpose (#21: clients get a sanitized message, operators the detail). It is
-    upstream text, so it is the one place a provider echo of the prompt could surface;
-    cap it so a pathological echo cannot dump a document.
-    """
-    return " ".join(detail.split())[:300]
-
-
 def _run_extract(request: ExtractRequest, budget: BudgetGuard) -> ExtractResponse:
     """Drive one extraction and map provider/validation failures to the taxonomy.
 
@@ -110,23 +100,22 @@ def _run_extract(request: ExtractRequest, budget: BudgetGuard) -> ExtractRespons
             client, model_cls, system=system, content=content, on_retry=note_retry
         )
     except ProviderTimeout as exc:
-        # Subclass of ProviderError, so it must be caught first to keep its 504 code. Log the
-        # full provider detail server-side but return a sanitized client message, so an
-        # upstream provider/gateway error string is never echoed to external callers (#21).
+        # Subclass of ProviderError, so catch it first to keep its 504 code. Log only the
+        # provider and exception class: upstream detail can echo documents or credentials.
         # Reconcile any spend incurred before the failure so the budget cannot be defeated.
         budget.add(exc.cost_usd)
         note(cost_usd=exc.cost_usd)
-        logger.warning("provider timeout (%s): %s", exc.provider, _bounded(exc.detail))
+        logger.warning("provider timeout (%s, %s)", exc.provider, type(exc).__name__)
         raise ExtractError(
             ErrorCode.provider_timeout, detail=f"the {exc.provider} provider timed out"
         ) from exc
     except ProviderError as exc:
         # Covers ProviderError + ProviderRefusal + ProviderTruncation (all 502 in v1; a
-        # dedicated refusal/truncation code is a future taxonomy decision). Same sanitization:
-        # the provider's raw message is logged, not returned in the body.
+        # dedicated refusal/truncation code is a future taxonomy decision). Keep upstream
+        # text out of both logs and client responses, including model-generated refusals.
         budget.add(exc.cost_usd)
         note(cost_usd=exc.cost_usd)
-        logger.warning("provider error (%s): %s", exc.provider, _bounded(exc.detail))
+        logger.warning("provider error (%s, %s)", exc.provider, type(exc).__name__)
         raise ExtractError(
             ErrorCode.provider_error, detail=f"the {exc.provider} provider call failed"
         ) from exc

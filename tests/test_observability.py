@@ -30,7 +30,7 @@ from api.observability import (
 )
 from caller_keys import AUTH, TEST_KEY_SHA256
 from llm.client import CompletionResult, FixtureClient
-from llm.errors import ProviderError
+from llm.errors import ProviderError, ProviderRefusal, ProviderTimeout, ProviderTruncation
 
 CANARY = "CANARY-7f3a9c1e-DO-NOT-LOG"
 _VALID = {
@@ -192,18 +192,46 @@ def test_canary_never_logged_on_422_validation_trail(monkeypatch, client_factory
     logs.assert_clean(CANARY)
 
 
-def test_canary_never_logged_on_502_provider_error(monkeypatch, client_factory, logs):
-    fake = _Scripted([ProviderError(provider="fake", detail="upstream said no")])
-    resp = client_factory(fake, monkeypatch).post(
-        "/v1/extract",
-        json=_body(content=f"Invoice {CANARY}"),
-        headers={"Idempotency-Key": CANARY, "Authorization": f"Bearer {CANARY}"},
-    )
-    assert resp.status_code == 502
-    assert fake.prompts == [f"Invoice {CANARY}"]  # precondition: canary reached the provider
-    logs.assert_clean(CANARY)
-    (line,) = logs.access()
-    assert line["status"] == 502 and line["result"] == "provider_error"
+@pytest.mark.parametrize("log_format", ["json", "text"])
+@pytest.mark.parametrize(
+    ("failure", "status", "code"),
+    [
+        (ProviderError(provider="fake", detail=CANARY, cost_usd=0.25), 502, "provider_error"),
+        (ProviderRefusal(provider="fake", reason=CANARY, cost_usd=0.25), 502, "provider_error"),
+        (ProviderTruncation(provider="fake", reason=CANARY, cost_usd=0.25), 502, "provider_error"),
+        (ProviderTimeout(provider="fake", detail=CANARY, cost_usd=0.25), 504, "provider_timeout"),
+    ],
+    ids=["error", "refusal", "truncation", "timeout"],
+)
+def test_provider_failure_echo_never_logged(
+    monkeypatch, client_factory, logs, caplog, log_format, failure, status, code
+):
+    fake = _Scripted([failure])
+    with monkeypatch.context() as patch:
+        patch.setenv("LOG_FORMAT", log_format)
+        configure_logging()
+        try:
+            resp = client_factory(fake, patch).post(
+                "/v1/extract",
+                json=_body(content=f"Invoice {CANARY}"),
+                headers={"Idempotency-Key": CANARY, "Authorization": f"Bearer {CANARY}"},
+            )
+            assert resp.status_code == status
+            assert resp.json()["error"] == code
+            assert CANARY not in resp.text
+            assert fake.prompts == [f"Invoice {CANARY}"]
+            assert CANARY in failure.detail  # upstream really echoed the document
+            logs.assert_clean(CANARY)
+            (warning,) = [r for r in caplog.records if r.name == "extract.api"]
+            assert warning.levelno == logging.WARNING
+            assert "fake" in warning.getMessage()
+            assert type(failure).__name__ in warning.getMessage()
+            (access,) = [r for r in caplog.records if r.name == "extract.access"]
+            assert access.status == status and access.result == code
+            assert access.cost_usd == pytest.approx(0.25)
+        finally:
+            patch.setenv("LOG_FORMAT", "json")
+            configure_logging()
 
 
 def test_canary_never_logged_on_500_even_when_exception_message_echoes_it(
