@@ -21,7 +21,8 @@ from schemas.iso4217 import ISO_4217_ALPHA
 
 # strict=True: type mismatches raise instead of coercing.
 # extra="forbid": unknown keys raise (pack-derived hardening, ADR 0002).
-STRICT_CONFIG = ConfigDict(strict=True, extra="forbid")
+# Reject non-finite floats before serialization can silently turn them into null.
+STRICT_CONFIG = ConfigDict(strict=True, extra="forbid", allow_inf_nan=False)
 
 
 def _validate_iso4217(value: str) -> str:
