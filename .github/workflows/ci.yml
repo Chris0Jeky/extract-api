@@ -28,7 +28,7 @@ jobs:
         with:
           # Pin the resolver to the version that generated uv.lock so CI reads the
           # lock identically to the box that wrote it (reproducibility, ADR 0001).
-          version: "0.13.1"
+          version: "0.13.5"
           enable-cache: true
       - name: Install (frozen from uv.lock)
         # --locked fails loud if uv.lock has drifted from pyproject; uv provisions
