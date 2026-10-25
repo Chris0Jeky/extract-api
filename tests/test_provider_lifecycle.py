@@ -87,8 +87,9 @@ class ProviderHandler(BaseHTTPRequestHandler):
         if self.path.endswith("/responses"):
             part = {"type": "output_text", "text": text, "annotations": []}
             status = "completed"
-            if step == "refusal":
-                part = {"type": "refusal", "refusal": "synthetic refusal"}
+            if step in {"refusal", "echo_refusal"}:
+                reason = request["input"] if step == "echo_refusal" else "synthetic refusal"
+                part = {"type": "refusal", "refusal": reason}
             if step == "cancelled":
                 status = "cancelled"
             response = {
@@ -166,6 +167,26 @@ def post(client, provider="openai", *, key="test-key", **overrides):
     body = {"doc_type": "invoice", "content": "Synthetic invoice", "provider": provider}
     body.update(overrides)
     return client.post("/v1/extract", json=body, headers={"Idempotency-Key": key})
+
+
+def test_wire_refusal_echo_is_not_logged(local_provider, tmp_path, caplog, capsys):
+    marker = "SYNTHETIC-DOCUMENT-ECHO-DO-NOT-LOG"
+    local_provider.steps.append("echo_refusal")
+    store = SqliteIdempotencyStore(str(tmp_path / "idem.sqlite"))
+    with TestClient(create_app(idempotency_store=store), headers=AUTH) as client:
+        response = post(client, content=marker)
+    assert response.status_code == 502
+    assert response.json()["error"] == "provider_error"
+    assert marker not in response.text
+    assert len(local_provider.requests) == 1
+    assert local_provider.requests[0]["input"] == marker
+    assert marker not in capsys.readouterr().out
+    (warning,) = [r for r in caplog.records if r.name == "extract.api"]
+    assert "openai" in warning.getMessage()
+    assert "ProviderRefusal" in warning.getMessage()
+    for record in caplog.records:
+        assert marker not in record.getMessage()
+        assert marker not in repr(record.args)
 
 
 @pytest.mark.parametrize("provider", ["openai", "anthropic"])

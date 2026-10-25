@@ -16,11 +16,10 @@ Documents, PDF bytes (or their base64), request payloads, model outputs, the
   the Dockerfile CMD and `make dev`. Add it to any other way of launching uvicorn.
 - The OpenAI/Anthropic/httpx loggers are held at WARNING (the OpenAI SDK logs the request,
   i.e. the prompt, at DEBUG).
-- The one stated exception to "never log upstream text": provider error text
-  (`provider error (...)`, `provider timeout (...)`), logged on one line and capped at 300
-  characters so operators can diagnose (#21; clients get a sanitized message). It is upstream
-  text, so a provider echo of the prompt could appear there; it cannot be proven content-free
-  by construction.
+- Provider failures log only the provider name and exception class (for example,
+  `provider error (openai, ProviderRefusal)`). Upstream error details and refusal text are
+  omitted because they can echo documents or credentials. The access line retains the
+  request id, error code and billed cost for diagnosis.
 - Never set `OPENAI_LOG` or `ANTHROPIC_LOG` in production: the SDKs then log request bodies
   and override the WARNING clamp above.
 - uvicorn and `uvicorn.error` are routed through the same redacting handler, and
