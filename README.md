@@ -78,6 +78,9 @@ For a successful response, same key + same hash replays the stored response with
 `meta.replayed: true`, preserves the original `meta.cost_usd`, and makes no provider
 call or new provider spend. Same key + different hash is a 409; TTL 24h.
 
+Invoice line-item quantities must be finite numbers. NaN, infinity and numeric
+overflow fail strict validation and enter the existing validation-retry loop.
+
 `field_confidence` is a presence-only **heuristic** (1.0 for a present value, 0.0 for an
 explicit null), not a calibrated probability. The README will say so wherever the
 numbers appear.

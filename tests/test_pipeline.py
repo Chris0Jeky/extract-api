@@ -72,6 +72,40 @@ def test_first_pass_success():
     assert client.prompts == ["doc"]  # no feedback appended
 
 
+@pytest.mark.parametrize("quantity", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_quantity_retries_and_preserves_error_trail(quantity):
+    item = {
+        "description": "Widget",
+        "quantity": quantity,
+        "unit_price_minor": 1,
+        "amount_minor": 10000,
+    }
+    invalid = _json(line_items=[item])
+    valid = _json(line_items=[dict(item, quantity=1.25)])
+    client = _ScriptedClient([invalid, valid])
+    model, _, attempts = run_extraction(client, InvoiceV1, system="sys", content="doc")
+    assert attempts == 2
+    assert model.model_dump(mode="json")["line_items"][0]["quantity"] == 1.25
+    assert invalid in client.prompts[1]
+    assert "finite_number" in client.prompts[1]
+
+    client = _ScriptedClient([invalid, invalid], cost_usd=0.5)
+    with pytest.raises(ExtractionFailed) as excinfo:
+        run_extraction(client, InvoiceV1, system="sys", content="doc")
+    failure = excinfo.value
+    assert failure.attempts == 2
+    assert failure.cost_usd == pytest.approx(1.0)
+    assert len(failure.trail) == 2
+    assert failure.trail[0] == failure.trail[1]
+    for errors in failure.trail:
+        assert any(
+            err["type"] == "finite_number" and err["loc"][:3] == ["line_items", 0, "quantity"]
+            for err in errors
+        )
+    assert json.loads(client.prompts[1].split("corrected object:\n", 1)[1]) == failure.trail[0]
+    json.dumps(failure.trail, allow_nan=False)
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [("salary_min", -1), ("salary_max", -1), ("title", ""), ("company", " \t\n")],

@@ -5,7 +5,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from schemas.invoice_v1 import InvoiceV1
+from schemas.invoice_v1 import InvoiceV1, LineItem
 from schemas.job_posting_v1 import JobPostingV1
 
 VALID_INVOICE = {
@@ -150,6 +150,38 @@ def test_invoice_line_item_wrong_type_fails():
     ]
     with pytest.raises(ValidationError):
         InvoiceV1.model_validate_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize("quantity", [float("nan"), float("inf"), float("-inf")])
+@pytest.mark.parametrize("from_json", [False, True])
+def test_line_item_rejects_non_finite_quantity(quantity, from_json):
+    payload = dict(VALID_INVOICE["line_items"][0], quantity=quantity)
+    with pytest.raises(ValidationError, match="finite number"):
+        if from_json:
+            LineItem.model_validate_json(json.dumps(payload))
+        else:
+            LineItem.model_validate(payload)
+
+
+@pytest.mark.parametrize("token", ["1e400", "-1e400"])
+def test_line_item_rejects_overflowing_json_quantity(token):
+    raw = (
+        '{"description":"Widget","quantity":'
+        + token
+        + ',"unit_price_minor":5000,"amount_minor":10000}'
+    )
+    with pytest.raises(ValidationError, match="finite number"):
+        LineItem.model_validate_json(raw)
+
+
+@pytest.mark.parametrize("quantity", [0, 2, 1.25, -1.25, 1e308, -1e308])
+def test_invoice_finite_quantity_roundtrips(quantity):
+    item = dict(VALID_INVOICE["line_items"][0], quantity=quantity)
+    payload = dict(VALID_INVOICE, line_items=[item])
+    invoice = InvoiceV1.model_validate_json(json.dumps(payload))
+    serialized = json.loads(invoice.model_dump_json())
+    assert serialized["line_items"][0]["quantity"] == quantity
+    assert type(serialized["line_items"][0]["quantity"]) is type(quantity)
 
 
 def test_invoice_omitting_nullable_key_fails():
