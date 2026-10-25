@@ -10,6 +10,8 @@ authors = [{ name = "Chris0Jeky" }]
 
 # Versions verified live against PyPI on 2026-06-13 (see docs/adr/0001-dependency-versions.md).
 dependencies = [
+    # GHSA-6q48-6c7w-9gw2: remove compromised emSign trust roots from HTTP clients.
+    "certifi>=2026.10.19",
     "fastapi[standard]>=0.141.1,<0.160",
     "pydantic>=2.13,<3",
     "openai>=2.53.0,<4",

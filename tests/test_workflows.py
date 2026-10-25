@@ -312,3 +312,33 @@ def test_fixture_smoke_needs_the_caller_key_before_any_deploy(mode: str, needs_k
     result = _bash(guard, variables)
     assert (result.returncode != 0) is needs_key
     assert ("not provisioned: EXTRACT_API_KEY missing" in result.stderr) is needs_key
+
+
+def test_pr_image_uses_the_same_blocking_security_gate_as_main() -> None:
+    image = _workflow("image.yml")
+    local = image["jobs"]["local-image"]
+    scan = _step(local, "Scan the locally built image with Grype")
+    published_scan = _step(image["jobs"]["published-image"], "Scan the pushed digest with Grype")
+    assert scan["uses"] == published_scan["uses"]
+    assert scan["with"]["image"] == "${{ env.IMAGE }}:sha-${{ github.sha }}"
+    for option in ("severity-cutoff", "only-fixed", "fail-build", "output-format", "output-file"):
+        assert scan["with"][option] == published_scan["with"][option]
+    assert "continue-on-error" not in scan
+    assert "if" not in scan
+    assert local["steps"].index(scan) > local["steps"].index(
+        _step(local, "Smoke the locally built image")
+    )
+
+
+def test_scan_diagnostics_survive_a_failed_gate_without_promoting() -> None:
+    for job in _workflow("image.yml")["jobs"].values():
+        report = _step(job, "Upload scan report even when the scan fails")
+        assert report["if"] == "always() && hashFiles('image.sarif') != ''"
+        assert report["with"]["path"] == "image.sarif"
+        assert report["with"]["if-no-files-found"] == "error"
+        assert report["with"]["name"] == "image-scan-${{ github.sha }}-${{ github.job }}"
+    published = _workflow("image.yml")["jobs"]["published-image"]
+    for name in ("Attest the proven image", "Move the main tag to the proven digest"):
+        step = _step(published, name)
+        assert "if" not in step
+        assert "continue-on-error" not in step
