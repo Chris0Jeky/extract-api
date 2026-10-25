@@ -204,19 +204,21 @@ class OpenAIClient:
         try:
             # Construction can also raise (e.g. a missing/invalid api_key -> OpenAIError),
             # so it is inside the try and mapped to the taxonomy like the call itself.
-            client = OpenAI(
+            # This per-call client owns a connection pool. Close it on success and failure;
+            # SDK resource cycles otherwise retain sockets until cyclic GC runs.
+            with OpenAI(
                 api_key=self.api_key,
                 base_url=self.base_url,
                 timeout=self.timeout_s,
                 max_retries=self.max_retries,
-            )
-            response = client.responses.create(
-                model=self.model,
-                instructions=system,
-                input=prompt,
-                text=cast("ResponseTextConfigParam", text_format),
-                max_output_tokens=max_tokens,
-            )
+            ) as client:
+                response = client.responses.create(
+                    model=self.model,
+                    instructions=system,
+                    input=prompt,
+                    text=cast("ResponseTextConfigParam", text_format),
+                    max_output_tokens=max_tokens,
+                )
         except openai.APITimeoutError as exc:
             raise ProviderTimeout(provider=self.provider, detail=str(exc)) from exc
         except openai.APIError as exc:
@@ -328,20 +330,21 @@ class AnthropicClient:
         start = time.perf_counter()
         try:
             # Construction is inside the try so any SDK error it raises is mapped to the
-            # taxonomy like the call itself.
-            client = Anthropic(
+            # taxonomy like the call itself. Close the per-call connection pool on every
+            # outcome, mirroring OpenAI rather than leaving sockets to cyclic GC.
+            with Anthropic(
                 api_key=self.api_key,
                 base_url=self.base_url,
                 timeout=self.timeout_s,
                 max_retries=self.max_retries,
-            )
-            response = client.messages.create(
-                model=self.model,
-                system=system,
-                messages=messages,
-                max_tokens=max_tokens,
-                output_config=output_config,
-            )
+            ) as client:
+                response = client.messages.create(
+                    model=self.model,
+                    system=system,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    output_config=output_config,
+                )
         except anthropic.APITimeoutError as exc:
             raise ProviderTimeout(provider=self.provider, detail=str(exc)) from exc
         except anthropic.APIError as exc:
