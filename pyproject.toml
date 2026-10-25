@@ -12,7 +12,7 @@ authors = [{ name = "Chris0Jeky" }]
 dependencies = [
     # GHSA-6q48-6c7w-9gw2: remove compromised emSign trust roots from HTTP clients.
     "certifi>=2026.10.19",
-    "fastapi[standard]>=0.141.1,<0.144",
+    "fastapi[standard]>=0.141.1,<0.160",
     "pydantic>=2.13,<3",
     "openai>=2.53.0,<4",
     # Floor is the verified 0.109.1 (ADR 0001): the T09 structured-output path needs the
@@ -25,9 +25,9 @@ dependencies = [
 dev = [
     "pytest==9.1.1",
     "pytest-cov>=6,<8",
-    "ruff==0.17.0",
+    "ruff==0.17.1",
     "mypy==2.4.0",
-    "httpx2==2.13.1",
+    "httpx2==2.16.0",
 ]
 
 [build-system]

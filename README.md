@@ -139,7 +139,7 @@ cp .env.example .env      # fill in provider keys + per-model prices (never comm
 docker compose up -d      # builds the image, serves on :8200, healthcheck hits /healthz
 ```
 
-The image is `python:3.13-slim` with runtime dependencies installed by uv 0.13.1 from the
+The image is `python:3.13-slim` with runtime dependencies installed by uv 0.13.5 from the
 committed `uv.lock` (`--locked`, without development dependencies). A stale lock fails the image
 build rather than resolving project ranges. No OCR system libraries are installed by design.
 Provider routing is env-only, so the future gateway migration is a change to `.env`
