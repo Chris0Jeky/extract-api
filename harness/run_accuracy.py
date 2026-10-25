@@ -166,7 +166,7 @@ def _response_error_code(resp: httpx.Response) -> str | None:
     """
     try:
         body = resp.json()
-    except (ValueError, TypeError):  # not JSON / undecodable body
+    except (ValueError, TypeError, RecursionError):  # not JSON / undecodable body
         return None
     if isinstance(body, dict):
         code = body.get("error")
@@ -179,7 +179,15 @@ def _response_validation_cost(resp: httpx.Response) -> float | None:
     """Accept only a finite, non-negative JSON number for billed terminal validation spend."""
     if resp.status_code != 422 or _response_error_code(resp) != "validation_failed":
         return None
-    cost = resp.json().get("cost_usd")
+    try:
+        cost = resp.json().get("cost_usd")
+    except (ValueError, TypeError, RecursionError):
+        return None
+    return _validated_cost(cost)
+
+
+def _validated_cost(cost: object) -> float | None:
+    """Keep known spend only when it is a finite, non-negative JSON number."""
     if isinstance(cost, bool) or not isinstance(cost, (int, float)):
         return None
     try:
@@ -335,24 +343,32 @@ def live_predictor(
         # A 2xx is not a guarantee of the right SHAPE (gateway login page, older server, proxy
         # error rendered 200). Parse defensively and turn any shape error into a fixture failure
         # so one odd response cannot crash the whole run (issue #57).
+        known_cost: float | None = None
         try:
             body = resp.json()
             meta = body["meta"]
+            if isinstance(meta, dict):
+                known_cost = _validated_cost(meta.get("cost_usd"))
             record = body["data"]
             cost_usd = float(meta["cost_usd"])
             latency_ms = float(meta["latency_ms"])
             server_provider = str(meta["provider"])  # the provider the server resolved
-        except (ValueError, TypeError, KeyError, ArithmeticError) as exc:
+        except (ValueError, TypeError, KeyError, ArithmeticError, RecursionError) as exc:
             # ArithmeticError covers OverflowError from float() of an out-of-range JSON integer.
             raise PredictionFailed(
-                f"{fixture_id}: malformed 2xx response ({type(exc).__name__})"
+                f"{fixture_id}: malformed 2xx response ({type(exc).__name__})",
+                cost_usd=known_cost,
             ) from exc
         if not isinstance(record, dict):
-            raise PredictionFailed(f"{fixture_id}: 2xx 'data' is not a JSON object")
+            raise PredictionFailed(
+                f"{fixture_id}: 2xx 'data' is not a JSON object", cost_usd=known_cost
+            )
         if not (math.isfinite(cost_usd) and math.isfinite(latency_ms)):
             # float("nan")/float("inf") parse without error, so a 2xx metric of "nan"/"inf"
             # would silently poison the cost total and latency percentiles; reject it (issue #57).
-            raise PredictionFailed(f"{fixture_id}: 2xx cost/latency is not a finite number")
+            raise PredictionFailed(
+                f"{fixture_id}: 2xx cost/latency is not a finite number", cost_usd=known_cost
+            )
         return Prediction(
             record=record, cost_usd=cost_usd, latency_ms=latency_ms, provider=server_provider
         )
