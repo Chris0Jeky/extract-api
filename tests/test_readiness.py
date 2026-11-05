@@ -4,6 +4,7 @@ can commit a write, and it reports revision, provider mode and caller-auth confi
 import os
 import sqlite3
 import stat
+from contextlib import closing
 
 import pytest
 from fastapi.testclient import TestClient
@@ -72,7 +73,7 @@ def test_unset_revision_and_live_mode_are_reported_not_guessed(store, monkeypatc
 def test_probe_commits_one_fixed_row(store, tmp_path):
     store.probe()
     store.probe()
-    with sqlite3.connect(tmp_path / "ready.sqlite") as conn:
+    with closing(sqlite3.connect(tmp_path / "ready.sqlite")) as conn:
         assert conn.execute("SELECT COUNT(*) FROM readiness_probe").fetchone() == (1,)
 
 
