@@ -109,3 +109,28 @@ def test_real_providers_ignore_fixture_latency(monkeypatch):
     monkeypatch.setenv("FIXTURE_LATENCY_MS", "invalid")
     assert isinstance(get_client("openai"), OpenAIClient)
     assert isinstance(get_client("anthropic"), AnthropicClient)
+
+
+@pytest.mark.parametrize("client_cls", [OpenAIClient, AnthropicClient])
+@pytest.mark.parametrize("raw", ["0", "-0.1", "nan", "inf", "-inf", "1e309"])
+def test_provider_timeout_must_be_positive_and_finite(monkeypatch, client_cls, raw):
+    monkeypatch.setenv("LLM_REQUEST_TIMEOUT_S", raw)
+    with pytest.raises(ValueError, match=r"LLM_REQUEST_TIMEOUT_S.*finite, positive"):
+        client_cls()
+
+
+@pytest.mark.parametrize("client_cls", [OpenAIClient, AnthropicClient])
+@pytest.mark.parametrize("raw", ["-1", "-20"])
+def test_provider_retry_limit_must_not_be_negative(monkeypatch, client_cls, raw):
+    monkeypatch.setenv("LLM_MAX_RETRIES", raw)
+    with pytest.raises(ValueError, match=r"LLM_MAX_RETRIES.*non-negative"):
+        client_cls()
+
+
+@pytest.mark.parametrize("client_cls", [OpenAIClient, AnthropicClient])
+def test_provider_bounds_accept_fractional_timeout_and_no_retries(monkeypatch, client_cls):
+    monkeypatch.setenv("LLM_REQUEST_TIMEOUT_S", "0.25")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "0")
+    client = client_cls()
+    assert client.timeout_s == 0.25
+    assert client.max_retries == 0

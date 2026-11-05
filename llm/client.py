@@ -85,9 +85,12 @@ def _resolve_credentials(direct_key_env: str) -> tuple[str | None, str | None]:
 def _float_env(name: str, default: str) -> float:
     raw = os.environ.get(name, default)
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError as exc:
         raise ValueError(f"env {name}={raw!r} is not a valid float") from exc
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError(f"env {name}={raw!r} must be a finite, positive number")
+    return value
 
 
 def _float_env_required(name: str) -> float:
@@ -110,9 +113,12 @@ def _float_env_required(name: str) -> float:
 def _int_env(name: str, default: str) -> int:
     raw = os.environ.get(name, default)
     try:
-        return int(raw)
+        value = int(raw)
     except ValueError as exc:
         raise ValueError(f"env {name}={raw!r} is not a valid int") from exc
+    if value < 0:
+        raise ValueError(f"env {name}={raw!r} must be a non-negative integer")
+    return value
 
 
 def _token_cost(
