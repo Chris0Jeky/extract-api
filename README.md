@@ -127,6 +127,12 @@ both use expected-null fields in usable, schema-valid predictions, with failed
 records reported separately as exclusions. Exact null matches earn exact-match
 credit; failed records do not. Rehearsal results do not measure provider accuracy.
 
+The harness rejects malformed cost, latency and provider metadata even when the
+extracted record is valid. It preserves independently known failed-request spend.
+Report-file targets are checked before live requests; completed reports replace
+the target atomically, and stdout remains available as a separate sink. See the
+[offline verification notes](docs/testing/MANUAL_VERIFICATION.md).
+
 The published accuracy table still needs human-reviewed fixtures and paid runs
 against both providers, so the "Numbers pending" block above stays. Hosting
 provisioning and gateway trace evidence also remain open. Tasks live in
@@ -147,6 +153,11 @@ uv run make test        # pytest with coverage
 uv run make typecheck   # mypy strict
 uv run make smoke       # deterministic offline smoke (no paid model calls)
 ```
+
+Maintenance tools include an [offline ISO-4217 membership audit](docs/ops/CURRENCY_AUDIT.md)
+and [packaged Python security probes](docs/ops/RUNTIME_SECURITY.md). The currency audit
+reports differences for review; it does not change the accepted v1 codes. Image CI
+records the runtime probes as evidence alongside the existing vulnerability scan.
 
 ## Deploy (Docker)
 
