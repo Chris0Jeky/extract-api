@@ -486,15 +486,97 @@ def test_live_predictor_malformed_2xx_keeps_known_failed_spend(monkeypatch, cost
     "cost", [None, "0.03", True, -0.03, float("nan"), float("inf"), [], {}, 10**400]
 )
 def test_live_predictor_malformed_2xx_invalid_cost_stays_unknown(monkeypatch, cost):
+    # Keep the record and other metadata valid so only the invalid cost can fail this response.
+    meta = {"cost_usd": cost, "latency_ms": 12.0, "provider": "openai"}
     response = httpx.Response(
         200,
         request=httpx.Request("POST", "http://x/v1/extract"),
-        text=json.dumps({"data": None, "meta": {"cost_usd": cost}}),
+        text=json.dumps({"data": _BASE, "meta": meta}),
     )
     monkeypatch.setattr(httpx, "post", lambda *a, **k: response)
+    predict = live_predictor("http://h", "openai")
     with pytest.raises(PredictionFailed) as exc:
-        live_predictor("http://h", "openai")(_fixture())
+        predict(_fixture())
     assert exc.value.cost_usd is None
+
+    report = run_accuracy("invoice", "openai", predict, fixtures=[_fixture()])
+    assert report.n_fixtures == 1
+    assert report.n_failures == 1
+    assert report.n_skipped == 0
+    assert report.overall_exact_match_rate == 0.0
+    assert report.cost_usd_total == 0.0
+    assert report.cost_usd_successful == 0.0
+    assert report.cost_usd_failed == 0.0
+    assert report.n_failed_cost_unknown == 1
+    assert report.latency_p95_ms == 0.0
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("latency_ms", None),
+        ("latency_ms", "12.0"),
+        ("latency_ms", True),
+        ("latency_ms", False),
+        ("latency_ms", -12.0),
+        ("latency_ms", float("nan")),
+        ("latency_ms", float("inf")),
+        ("latency_ms", []),
+        ("latency_ms", {}),
+        ("latency_ms", 10**400),
+        ("provider", None),
+        ("provider", True),
+        ("provider", 1),
+        ("provider", []),
+        ("provider", {}),
+        ("provider", ""),
+        ("provider", " \t"),
+    ],
+)
+def test_live_predictor_invalid_success_metadata_keeps_known_failed_spend(
+    monkeypatch, field, value
+):
+    meta = {"cost_usd": 0.03, "latency_ms": 12.0, "provider": "openai", field: value}
+    response = httpx.Response(
+        200,
+        request=httpx.Request("POST", "http://x/v1/extract"),
+        text=json.dumps({"data": _BASE, "meta": meta}),
+    )
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: response)
+    predict = live_predictor("http://h", "openai")
+    with pytest.raises(PredictionFailed) as exc:
+        predict(_fixture())
+    assert exc.value.cost_usd == pytest.approx(0.03)
+
+    report = run_accuracy("invoice", "openai", predict, fixtures=[_fixture()])
+    assert report.n_fixtures == 1
+    assert report.n_failures == 1
+    assert report.n_skipped == 0
+    assert report.overall_exact_match_rate == 0.0
+    assert report.cost_usd_total == pytest.approx(0.03)
+    assert report.cost_usd_failed == pytest.approx(0.03)
+    assert report.cost_usd_successful == 0.0
+    assert report.n_failed_cost_unknown == 0
+    assert report.latency_p95_ms == 0.0
+
+
+@pytest.mark.parametrize(
+    ("cost", "latency", "provider"),
+    [(0, 0, "fixture"), (1, 12, "anthropic"), (0.03, 12.5, "openai")],
+)
+def test_live_predictor_accepts_valid_success_metadata(monkeypatch, cost, latency, provider):
+    response = _resp(200, _ok_body(provider=provider, cost=cost, latency=latency))
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: response)
+    report = run_accuracy(
+        "invoice", "default", live_predictor("http://h", "default"), fixtures=[_fixture()]
+    )
+    assert report.n_failures == 0
+    assert report.overall_exact_match_rate == 1.0
+    assert report.cost_usd_total == pytest.approx(cost)
+    assert report.cost_usd_successful == pytest.approx(cost)
+    assert report.cost_usd_failed == 0.0
+    assert report.latency_p95_ms == pytest.approx(latency)
+    assert report.provider == provider
 
 
 @pytest.mark.parametrize("status", [200, 402, 422, 502])
