@@ -1,15 +1,16 @@
 # CLAUDE.md - extract-api
 
 Strict-schema LLM extraction service: document text (or PDF text) in, Pydantic v2
-strict record out, per-field accuracy reported across OpenAI and Anthropic. It
-fails loudly instead of silently coercing. ~2.7k lines of source, 323 tests, 99%
-coverage; the served paths are complete through M3 and deployable. What is left
-is human fixture labels, the #46 metric change, then paid `--live` runs
-(`tasks/BACKLOG.md` T15/T17/T20/T21). The #46 null-handling /
-hallucination-denominator metric must land BEFORE any paid run (`docs/STATUS.md`).
-The #57 failed-validation cost path is implemented: terminal 422 bodies expose
-`cost_usd`, and harness reports split successful/failed spend, labelling unknown
-failed spend from older servers (#74 item 4).
+strict record out, with deterministic accuracy scoring for OpenAI and Anthropic.
+It fails loudly instead of silently coercing. The served paths and scorer are
+implemented; human fixture review and paid provider measurements remain open
+(`tasks/BACKLOG.md` T15/T17/T20/T21). The #46 metrics are implemented: exact null
+matches earn exact-match credit; hallucination and null-handling correctness use
+expected-null opportunities in usable, schema-valid predictions, are complementary,
+and report `n/a` when there are none. Failed records earn no exact-match credit;
+their expected-null fields are counted separately as exclusions from these
+conditional null metrics. Terminal 422 bodies expose `cost_usd`, and reports split
+successful/failed spend, labelling unknown failed spend from older servers.
 
 Positioning line for every README / title / CV line: "I make LLM systems cheap,
 reliable, and provably valuable in production." Lead with measured numbers; until
@@ -28,47 +29,49 @@ list and the human-action file (only Chris ticks its human-blocked items);
 | --- | --- | --- |
 | `api/` | FastAPI app (`main.py` `create_app`, `/readyz`, the `ExtractAdmission` cap), caller keys (`auth.py`), taxonomy rendering (`errors.py`), SQLite idempotency with store identity, budget guard, PDF/text decode (`content.py`), JSON logs and request ids (`observability.py`) | `test_api`, `test_caller_auth`, `test_extract_endpoint`, `test_errors`, `test_idempotency`, `test_budget`, `test_content`, `test_readiness`, `test_replica_guard`, `test_concurrency`, `test_observability`, `test_uvicorn_logging` |
 | Hosting | `Dockerfile` + `docker-entrypoint.sh`, `render.yaml`, `railway.json`, `.github/workflows/image.yml` (build, scan, attest) and `deploy.yml` (dispatch-only digest deploy), `.hosting/manifest.json` (agent-hq manifest v2), `docs/ops/` (RUNBOOK, SIZING, OBSERVABILITY), ADRs 0004-0005 | `test_deploy_descriptors`, `test_workflows`; `scripts/docker_persistence_smoke.py` and `scripts/load_test.py` in CI |
-| `llm/` | The only provider seam. `client.py` (both SDKs, 467 lines), `pipeline.py:run_extraction` (validation-retry), `schema_utils`, `prompts`, `errors` | `test_llm_client`, `test_openai_client`, `test_anthropic_client`, `test_pipeline`, `test_schema_utils`, `test_prompts`, `test_import_boundary` |
+| `llm/` | The only provider seam. `client.py` (both SDKs), `pipeline.py:run_extraction` (validation-retry), `schema_utils`, `prompts`, `errors` | `test_llm_client`, `test_openai_client`, `test_anthropic_client`, `test_pipeline`, `test_schema_utils`, `test_prompts`, `test_import_boundary` |
 | `schemas/` | Strict `invoice.v1` + `job_posting.v1`, ISO-4217 set, `registry.py` | `test_schemas`, `test_iso4217`, `test_registry` |
 | `harness/` | Deterministic accuracy scoring (`run_accuracy.py`, `scoring.py`) | `test_run_accuracy`, `test_scoring` |
-| `fixtures/` | 10 REVIEWED invoices and ZERO job postings (`job_postings/` holds only `.gitkeep`, so a job-posting accuracy run exits with no REVIEWED input until T15); DRAFT is excluded from scoring | `test_validate_fixtures` |
-| `.claude/hooks/dispatch.py` | Vendored canonical deny floor (v1.6.20). T4-class in any repo: do not edit | `.claude/hooks/smoke_test.py` |
+| `fixtures/` | 10 REVIEWED invoices, 20 DRAFT invoices, and 20 DRAFT job postings; DRAFT is excluded from scoring and job-posting accuracy runs still have no REVIEWED input | `test_validate_fixtures` |
+| `.claude/hooks/dispatch.py` | Vendored canonical deny floor, not wired by committed settings. T4-class in any repo: do not edit | `.claude/hooks/smoke_test.py` |
 
 `llm/` never imports `api/`. Only `llm/client.py` may import a provider SDK, and
 `tests/test_import_boundary.py` enforces that repo-wide, `scripts/` included.
 
-## Proving checks (measured 2026-07-27 on Windows)
+## Proving checks
 
-Use the venv interpreter: `make PYTHON=.venv/Scripts/python <target>`, or call the
-module directly as below.
+Install the locked development environment with `uv sync --locked --extra dev`.
+Use `uv run` so commands use that environment.
 
-| Changed | Narrowest check | Measured |
-| --- | --- | --- |
-| anything | `python -m ruff check . && python -m ruff format --check .` | 0.5s, clean |
-| one seam | `python -m pytest --no-cov tests/test_<area>.py` | <1s |
-| any typed source | `python -m mypy` | 10s cold / 1s warm, 23 files clean |
-| endpoint, wiring, idempotency | `python scripts/smoke.py` | 0.8s: boots the app, 200 + forced 422 + replay + 409, offline |
-| fixtures or labels | `python scripts/validate_fixtures.py` | 0.3s, "10 REVIEWED, 0 DRAFT" |
-| `scripts/agent_hooks/pre_tool_use.py` | `make test-hooks` (`smoke_test.py`; it imports this hook only) | 0.2s, 23 denies + 13 allows |
-| `scripts/agent_hooks/pre_tool_use.py` or `post_tool_failure.py` | `python -m pytest --no-cov tests/test_agent_hooks.py` | 0.7s, 9 passed |
-| `scripts/agent_hooks/session_start.py` | nothing automated covers it: run `python scripts/agent_hooks/session_start.py` and read the line it prints | 0.1s, exit 0 |
-| pre-push gate | `make ci-quick` (lint + mypy + pytest) | 20s cold / 6s warm, 323 passed, coverage 99.39% |
+| Changed | Narrowest check |
+| --- | --- |
+| anything | `uv run make lint` |
+| one seam | `uv run python -m pytest --no-cov tests/test_<area>.py` |
+| any typed source | `uv run make typecheck` |
+| endpoint, wiring, idempotency | `uv run make smoke` (offline 200, forced 422, replay, and 409) |
+| fixtures or labels | `uv run make fixtures-validate` |
+| accuracy orchestration | `uv run make accuracy-rehearsal` (REVIEWED label echo through the API, zero provider cost) |
+| `scripts/agent_hooks/pre_tool_use.py` | `uv run make test-hooks` |
+| `scripts/agent_hooks/pre_tool_use.py` or `post_tool_failure.py` | `uv run python -m pytest --no-cov tests/test_agent_hooks.py` |
+| `scripts/agent_hooks/session_start.py` | `uv run python scripts/agent_hooks/session_start.py`; inspect its output |
+| pre-push gate | `uv run make ci-quick` (lint, mypy, and full pytest coverage) |
 
-CI (`.github/workflows/ci.yml`) runs exactly that plus `validate_fixtures.py` and
-gitleaks, on Python 3.13. There is no extra lint config to satisfy.
+CI (`.github/workflows/ci.yml`) also validates fixtures and runs gitleaks on
+Python 3.13. Use the current PR checks for test counts and coverage evidence;
+rehearsal results do not measure provider accuracy.
 
-## Pitfalls (measured here, not guessed)
+## Pitfalls
 
-- **A targeted pytest slice fails on coverage, not on your test.** `addopts` in
-  `pyproject.toml` carries `--cov-fail-under=70`, so `pytest tests/test_schemas.py`
-  reports 12% and exits 1 with all 27 tests passing. Add `--no-cov` to any slice;
-  drop it for the full run. The floor is a ratchet: it may rise, never fall.
-- `.claude/hooks/smoke_test.py` is the floor's own matrix: **2232 cases, 5m15s on
-  this box** (one subprocess per case). It is not in CI or `ci-quick`. Run it only
-  when the floor changes, which is T4-class work you should not be doing here.
+- **Targeted pytest slices need `--no-cov`.** The full-suite coverage floor in
+  `pyproject.toml` is `--cov-fail-under=95`; a passing slice can fail that global
+  threshold. Keep coverage enabled for the full run. The floor may rise, never fall.
+- `.claude/hooks/smoke_test.py` is the vendored floor's own matrix, outside CI
+  and `ci-quick`. Run it only for authorized floor changes. Vendored hook files
+  do not establish runtime activation; the committed settings do not wire them.
 - `scripts/agent_hooks/pre_tool_use.py` is a **deprecated** bespoke floor, no
   longer wired; its retirement is tracked as issue #83. Leave it alone.
-- Windows: bare `make test` picks the wrong interpreter. Pass `PYTHON=`.
+- Use `uv run make test` to select the locked environment; on Windows, an explicit
+  `PYTHON=.venv/Scripts/python` override is also available.
 - `ruff` skips `.claude/hooks` by design (vendored canonical bytes).
 - `ORCHESTRATOR.md` at the repo root is a local-only working log, git-excluded via
   `.git/info/exclude`. Never commit it.
@@ -88,9 +91,13 @@ gitleaks, on Python 3.13. There is no extra lint config to satisfy.
   allowlist of guarded paths: `/v1/extract%0A` once bypassed one). A middleware outside `ExtractAdmission`. The service stores SHA-256 hashes only, in
   `EXTRACT_API_KEY_SHA256S` (comma separated, several valid at once). No hash set means
   `/v1/extract` fails closed with 500 `internal_error`. Never log a token or a hash.
+  `/readyz` exposes startup-captured `caller_auth_configured`; deployment requires
+  literal `true` and a keyless `/v1/extract` probe returning 401. Its invalid `{}`
+  body prevents provider work if the auth check regresses.
 - Idempotency: `Idempotency-Key` + `sha256(payload)`; same key+hash replays
   (`replayed:true`, no model call); same key+different hash is 409; TTL 24h;
-  SQLite (ADR 0004).
+  SQLite (ADR 0004). This is a sequential replay contract; concurrent in-flight
+  deduplication remains deferred in #42.
 - Structured outputs guarantee SHAPE, not SEMANTICS (ADR 0002): cross-field and
   value constraints are Pydantic validators after parse, which is what the retry
   loop catches. The seam is text-based: `complete(json_schema)` returns raw JSON

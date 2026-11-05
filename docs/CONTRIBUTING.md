@@ -5,9 +5,8 @@ The rules of record are in `AGENTS.md`; this is the practical how-to.
 ## Setup
 
 ```
-uv venv --python 3.13        # or: python3 -m venv .venv
-uv pip install -e ".[dev]"   # or: .venv/Scripts/python -m pip install -e ".[dev]"
-make ci-quick                # ruff + mypy strict + pytest
+uv sync --locked --extra dev
+uv run make ci-quick         # ruff + mypy strict + pytest
 ```
 
 ## Branches and commits
@@ -33,7 +32,7 @@ make ci-quick                # ruff + mypy strict + pytest
 ## Pull requests
 
 - Fill in the PR template (Summary, Type, Checklist, Risk Notes, Test plan).
-- Run `make ci-quick` and the narrowest seam check from the CLAUDE.md
+- Run `uv run make ci-quick` and the narrowest seam check from the CLAUDE.md
   proving-checks table before opening; add a manual check when the change touches
   the serving path (`docs/testing/MANUAL_VERIFICATION.md`).
 - Review, gate, and merge-style policy lives once, in the global laws (AGENTS.md
@@ -43,6 +42,6 @@ make ci-quick                # ruff + mypy strict + pytest
 ## Running the service
 
 ```
-make dev          # uvicorn on http://127.0.0.1:8200 (/docs for the OpenAPI UI)
-make smoke        # deterministic offline smoke, no paid model calls
+uv run make dev          # uvicorn on http://127.0.0.1:8200 (/docs for the OpenAPI UI)
+uv run make smoke        # deterministic offline smoke, no paid model calls
 ```
