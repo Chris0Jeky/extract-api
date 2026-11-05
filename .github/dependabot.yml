@@ -19,6 +19,11 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    # pyproject's requires-python <3.14 ceiling (ADR 0001): a newer python tag cannot
+    # build, and offering it crowds out the 3.13 digest refreshes that carry CVE fixes.
+    ignore:
+      - dependency-name: python
+        versions: [">=3.14"]
     commit-message:
       prefix: deps(docker)
 
