@@ -82,7 +82,9 @@ def _pdf_text(raw: bytes) -> str:
             total = 0
             for page in doc:
                 chunk: str = page.get_text()
-                total += len(chunk)
+                # Count the separator inserted before every page after the first,
+                # including empty pages, so the final joined text stays within the cap.
+                total += len(chunk) + (1 if parts else 0)
                 if total > _MAX_TEXT_CHARS:
                     raise ExtractError(
                         ErrorCode.validation_failed,

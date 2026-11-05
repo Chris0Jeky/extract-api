@@ -110,6 +110,25 @@ def test_multipage_text_is_joined():
     assert "PAGE TWO beta" in out
 
 
+@pytest.mark.parametrize(
+    "texts, expected", [(("A", "B"), "A\n\nB\n"), (("", "A"), "\nA\n"), (("A", ""), "A\n\n")]
+)
+def test_pdf_page_separators_count_toward_text_limit(monkeypatch, texts, expected):
+    with pymupdf.open() as doc:
+        for text in texts:
+            page = doc.new_page()
+            if text:
+                page.insert_text((72, 72), text)
+        encoded = base64.b64encode(doc.tobytes()).decode()
+    monkeypatch.setattr("api.content._MAX_TEXT_CHARS", len(expected) - 1)
+    with pytest.raises(ExtractError) as exc:
+        extract_pdf_text(encoded)
+    assert exc.value.code.value == "validation_failed"
+    assert "char limit" in exc.value.detail
+    monkeypatch.setattr("api.content._MAX_TEXT_CHARS", len(expected))
+    assert extract_pdf_text(encoded) == expected
+
+
 def test_too_many_pages_fails_loud(monkeypatch):
     monkeypatch.setattr("api.content._MAX_PDF_PAGES", 1)
     doc = pymupdf.open()
