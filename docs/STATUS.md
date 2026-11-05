@@ -55,9 +55,12 @@ These tasks remain open. The README keeps its numbers-pending statement.
 
 Sequential idempotency replay is the current contract; concurrent in-flight
 reservation remains deferred in #42. Invoice schema changes in #35 and #54 need
-coordinated `invoice.v2` work. Hook follow-ups #13, #83, #88, and #167 remain open;
-the vendored floor is not wired by committed settings, and its presence does not
-prove runtime activation. The #167 source archive remains on the owner host and
+coordinated `invoice.v2` work. Hook follow-ups #13, #83, and #167 remain open.
+The #88 integrity gap is covered by a verified upstream commit and SHA-256 pin,
+a cheap check in ordinary CI and `ci-quick`, and a canonical matrix workflow
+conditional on floor or integrity/gate changes. The vendored floor is not wired
+by committed settings; these checks do not prove runtime activation.
+The #167 source archive remains on the owner host and
 is not included in the repository. #10 remains a deferred currency-table audit;
 #32 remains a tripwire for future HTTPException paths that need an owner taxonomy
 decision.

@@ -1,0 +1,14 @@
+{
+  "upstream_repository": "Chris0Jeky/agent-harness",
+  "upstream_commit": "4c85b6269c560d54aa0abc78ced5d0bc14c454b4",
+  "files": {
+    ".claude/hooks/dispatch.py": {
+      "upstream_path": "templates/hooks/dispatch.py",
+      "sha256": "167a61b15175ea35609ffffda8a4b9592c25ed3b7cf1b621182aba6e5e5deed4"
+    },
+    ".claude/hooks/smoke_test.py": {
+      "upstream_path": "templates/hooks/smoke_test.py",
+      "sha256": "33b7d6cdcba68856eceaae3bdf5bc0520faeb61343928f96d56f55d2c24d3a01"
+    }
+  }
+}

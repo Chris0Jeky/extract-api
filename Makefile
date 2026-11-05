@@ -30,7 +30,7 @@ format: ## Apply ruff format + import sort + safe fixes
 	$(PYTHON) -m ruff format .
 	$(PYTHON) -m ruff check --fix .
 
-ci-quick: lint typecheck test ## Pre-push gate: lint + types + tests
+ci-quick: check-floor lint typecheck test ## Pre-push gate: floor integrity + lint + types + tests
 
 smoke: ## Deterministic offline smoke (no paid model calls)
 	$(PYTHON) scripts/smoke.py
@@ -52,4 +52,10 @@ fixtures-validate: ## Validate fixtures against their schema + label rules
 test-hooks: ## Self-test the agent safety hooks
 	$(PYTHON) scripts/agent_hooks/smoke_test.py
 
-.PHONY: help dev test typecheck lint format ci-quick smoke accuracy-run accuracy-rehearsal lock fixtures-validate test-hooks
+check-floor: ## Verify the canonical floor pin without executing hook code
+	$(PYTHON) scripts/check_floor_integrity.py
+
+test-floor: check-floor ## Run the canonical matrix for authorized floor or integrity/gate changes
+	$(PYTHON) .claude/hooks/smoke_test.py
+
+.PHONY: help dev test typecheck lint format ci-quick smoke accuracy-run accuracy-rehearsal lock fixtures-validate test-hooks check-floor test-floor
