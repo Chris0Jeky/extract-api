@@ -47,6 +47,34 @@ jobs:
         env:
           IMAGE_REF: ${{ env.IMAGE }}:sha-${{ github.sha }}
         run: python scripts/docker_persistence_smoke.py --image "$IMAGE_REF"
+      - name: Probe packaged CPython security behavior
+        env:
+          IMAGE_REF: ${{ env.IMAGE }}:sha-${{ github.sha }}
+        run: |
+          IMAGE_ID="$(docker image inspect --format '{{.Id}}' "$IMAGE_REF")"
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges --user 10001:10001 --entrypoint python \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/scripts/probe_runtime_security.py,target=/runtime-probe.py,readonly" \
+            "$IMAGE_REF" /runtime-probe.py --image-ref "$IMAGE_REF" --image-id "$IMAGE_ID" \
+            > runtime-security.json
+          python - <<'PYTHON' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("runtime-security.json").read_text())
+          print("### Packaged CPython behavior probes\n")
+          print(f"Image: `{report['image']['reference']}`; ID: `{report['image']['id']}`\n")
+          print(f"Runtime: `{report['runtime']['version']}`\n")
+          for check in report["checks"]:
+              print(f"- {check['cve']}: **{check['status']}**; source SHA-256 `{check['source']['sha256']}`")
+          print("\nOffline applicability evidence; application exploitability is not established.")
+          PYTHON
+      - name: Upload runtime behavior evidence
+        if: always() && hashFiles('runtime-security.json') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: runtime-security-${{ github.sha }}-${{ github.job }}
+          path: runtime-security.json
+          if-no-files-found: error
       # Exercise the release threshold before merge without registry credentials.
       - name: Scan the locally built image with Grype
         uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
@@ -107,6 +135,34 @@ jobs:
         run: |
           docker pull "$IMAGE_REF"
           python scripts/docker_persistence_smoke.py --image "$IMAGE_REF"
+      - name: Probe packaged CPython security behavior
+        env:
+          IMAGE_REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+        run: |
+          IMAGE_ID="$(docker image inspect --format '{{.Id}}' "$IMAGE_REF")"
+          docker run --rm --network none --read-only --cap-drop ALL \
+            --security-opt no-new-privileges --user 10001:10001 --entrypoint python \
+            --mount "type=bind,source=$GITHUB_WORKSPACE/scripts/probe_runtime_security.py,target=/runtime-probe.py,readonly" \
+            "$IMAGE_REF" /runtime-probe.py --image-ref "$IMAGE_REF" --image-id "$IMAGE_ID" \
+            > runtime-security.json
+          python - <<'PYTHON' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json
+          from pathlib import Path
+          report = json.loads(Path("runtime-security.json").read_text())
+          print("### Packaged CPython behavior probes\n")
+          print(f"Image: `{report['image']['reference']}`; ID: `{report['image']['id']}`\n")
+          print(f"Runtime: `{report['runtime']['version']}`\n")
+          for check in report["checks"]:
+              print(f"- {check['cve']}: **{check['status']}**; source SHA-256 `{check['source']['sha256']}`")
+          print("\nOffline applicability evidence; application exploitability is not established.")
+          PYTHON
+      - name: Upload runtime behavior evidence
+        if: always() && hashFiles('runtime-security.json') != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: runtime-security-${{ github.sha }}-${{ github.job }}
+          path: runtime-security.json
+          if-no-files-found: error
       - name: Generate SPDX JSON for the pushed digest
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
