@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ValidationError
 
+from harness.report_output import prepared_report
 from harness.scoring import AccuracyReport, aggregate, render_markdown, score_failed, score_record
 from schemas.registry import UnknownSchema, resolve
 
@@ -444,31 +445,30 @@ def main(argv: list[str] | None = None) -> int:
         # a table of skipped rows.
         print(f"--live needs the caller's API key in the {_API_KEY_ENV} env var.", file=sys.stderr)
         return 1
-    if args.out:
-        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    report = run_accuracy(
-        args.doc_type,
-        args.provider,
-        live_predictor(args.base_url, args.provider, timeout=args.timeout, api_key=api_key),
-    )
-    markdown = render_markdown(report)
-    stdout_error: Exception | None = None
-    try:
-        print(markdown)
-    except Exception as exc:
-        # A closed or redirected stdout must not prevent the requested report file from
-        # being written.  Re-raise after the file sink is attempted so the CLI still fails
-        # loudly instead of hiding the output error.
-        stdout_error = exc
-    if args.out:
+    target = Path(args.out).resolve() if args.out else None
+    with prepared_report(target) as temporary:
+        report = run_accuracy(
+            args.doc_type,
+            args.provider,
+            live_predictor(args.base_url, args.provider, timeout=args.timeout, api_key=api_key),
+        )
+        markdown = render_markdown(report)
+        stdout_error: Exception | None = None
         try:
-            Path(args.out).write_text(markdown + "\n", encoding="utf-8")
+            print(markdown)
         except Exception as exc:
-            if stdout_error is not None:
-                raise exc from stdout_error
-            raise
-    if stdout_error is not None:
-        raise stdout_error
+            # A closed stdout must not prevent the requested file sink from being tried.
+            stdout_error = exc
+        if target is not None and temporary is not None:
+            try:
+                temporary.write_text(markdown + "\n", encoding="utf-8")
+                temporary.replace(target)
+            except Exception as exc:
+                if stdout_error is not None:
+                    raise exc from stdout_error
+                raise
+        if stdout_error is not None:
+            raise stdout_error
     return 0
 
 
