@@ -148,3 +148,36 @@ def test_symlink_target_is_replaced_completely_and_keeps_permissions(tmp_path, l
         "fixtures",
         "report.md",
     ]
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permission classes")
+@pytest.mark.parametrize("source_mode", [0o460, 0o406])
+def test_group_or_other_writable_source_keeps_reserved_sink_writable(
+    tmp_path, monkeypatch, live_run, source_mode
+):
+    target = tmp_path / "report.md"
+    target.write_text("previous complete report")
+    original_stat = Path.stat
+    original_post = httpx.post
+
+    def reported_source_mode(path, **kwargs):
+        actual = original_stat(path, **kwargs)
+        if path == target:
+            # Model a source writable through group/other without changing process
+            # ownership. The new temporary file is owned by the current caller.
+            return os.stat_result((stat.S_IFREG | source_mode, *tuple(actual)[1:]))
+        return actual
+
+    def post(*args, **kwargs):
+        (temporary,) = list(tmp_path.glob(".extract-report-*.tmp"))
+        assert stat.S_IMODE(temporary.stat().st_mode) & stat.S_IWUSR
+        assert target.read_text() == "previous complete report"
+        return original_post(*args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", reported_source_mode)
+    monkeypatch.setattr(httpx, "post", post)
+    assert runner.main(["--doc-type", "invoice", "--live", "--out", str(target)]) == 0
+    assert len(live_run) == 1
+    assert "overall exact-match: 100.0%" in target.read_text()
+    assert stat.S_IMODE(os.stat(target).st_mode) == source_mode
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["fixtures", "report.md"]

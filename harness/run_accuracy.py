@@ -446,7 +446,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"--live needs the caller's API key in the {_API_KEY_ENV} env var.", file=sys.stderr)
         return 1
     target = Path(args.out).resolve() if args.out else None
-    with prepared_report(target) as temporary:
+    with prepared_report(target) as output:
         report = run_accuracy(
             args.doc_type,
             args.provider,
@@ -459,10 +459,12 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as exc:
             # A closed stdout must not prevent the requested file sink from being tried.
             stdout_error = exc
-        if target is not None and temporary is not None:
+        if target is not None and output is not None:
             try:
-                temporary.write_text(markdown + "\n", encoding="utf-8")
-                temporary.replace(target)
+                output.path.write_text(markdown + "\n", encoding="utf-8")
+                if output.mode is not None:
+                    output.path.chmod(output.mode)
+                output.path.replace(target)
             except Exception as exc:
                 if stdout_error is not None:
                     raise exc from stdout_error

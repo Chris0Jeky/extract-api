@@ -8,11 +8,18 @@ import stat
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 
 
+@dataclass(frozen=True)
+class ReportFile:
+    path: Path
+    mode: int | None
+
+
 @contextmanager
-def prepared_report(target: Path | None) -> Iterator[Path | None]:
+def prepared_report(target: Path | None) -> Iterator[ReportFile | None]:
     """Yield a temporary sibling, leaving any previous report intact until replace().
 
     The caller resolves symlinks before entering, preserving file-target semantics.
@@ -38,8 +45,8 @@ def prepared_report(target: Path | None) -> Iterator[Path | None]:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             stream.write("\n")
             stream.flush()
-        if mode is not None:
-            temporary.chmod(stat.S_IMODE(mode))
-        yield temporary
+        # Keep the caller-owned temporary file writable until content is complete.
+        # A source writable through group/other can lack the owner's write bit.
+        yield ReportFile(temporary, stat.S_IMODE(mode) if mode is not None else None)
     finally:
         temporary.unlink(missing_ok=True)

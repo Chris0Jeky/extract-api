@@ -56,7 +56,9 @@ are updated and the links remain intact.
 After a run, the completed markdown is written to the temporary file and atomically
 replaces the target. A partial write or failed replacement leaves the previous
 report intact; temporary files are cleaned on ordinary success and exceptions.
-Existing file permissions are preserved. Newly created reports use the temporary
+Existing file modes are applied after writing, immediately before replacement,
+so a mode writable through group/other does not disable the temporary sink.
+Newly created reports use the temporary
 file's private permissions. A terminated process may leave its temporary file.
 
 The report is also printed to stdout. A failed stdout still allows the file sink
