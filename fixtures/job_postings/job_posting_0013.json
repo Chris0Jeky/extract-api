@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0013",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "A UK posting can explicitly denominate salary in EUR; no currency conversion.",
+  "content": "Title: Technical Writer\nCompany: Example Paper Systems\nWorking arrangement: remote\nWork from anywhere within the UK.\nSalary: EUR 50,000 to EUR 60,000 per year",
+  "expected": {
+    "title": "Technical Writer",
+    "company": "Example Paper Systems",
+    "location": "UK",
+    "remote_policy": "remote",
+    "salary_min": 5000000,
+    "salary_max": 6000000,
+    "salary_currency": "EUR",
+    "salary_period": "year",
+    "employment_type": "unspecified",
+    "seniority": "unspecified",
+    "visa_sponsorship": "unspecified",
+    "posted_date": null
+  }
+}

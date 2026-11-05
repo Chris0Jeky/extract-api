@@ -1,0 +1,29 @@
+{
+  "fixture_id": "invoice_0029",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "All nullable header fields explicitly present; synthetic tax identifier is literal.",
+  "content": "INVOICE\nVendor: Example Complete Invoice\nInvoice number: SYN-0029\nIssue date: 2026-10-01\nDue date: 2026-11-15\nBuyer: Example Buyer Cooperative\nVendor tax ID: SYNTHETIC-TAX-0029\nTraining places: quantity 2, unit price GBP 250.00, line amount GBP 500.00.\nSubtotal: GBP 500.00\nVAT: GBP 100.00\nTotal: GBP 600.00",
+  "expected": {
+    "invoice_number": "SYN-0029",
+    "issue_date": "2026-10-01",
+    "due_date": "2026-11-15",
+    "currency": "GBP",
+    "subtotal_minor": 50000,
+    "tax_minor": 10000,
+    "total_minor": 60000,
+    "vendor_name": "Example Complete Invoice",
+    "vendor_tax_id": "SYNTHETIC-TAX-0029",
+    "buyer_name": "Example Buyer Cooperative",
+    "line_items": [
+      {
+        "description": "Training places",
+        "quantity": 2,
+        "unit_price_minor": 25000,
+        "amount_minor": 50000
+      }
+    ]
+  }
+}

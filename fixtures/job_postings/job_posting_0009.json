@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0009",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "A fixed advertised salary uses equal lower and upper bounds; human review this convention.",
+  "content": "Title: Operations Coordinator\nSalary: GBP 30,000 per year (fixed)\nLocation: Sheffield\nEmployment: temporary",
+  "expected": {
+    "title": "Operations Coordinator",
+    "company": null,
+    "location": "Sheffield",
+    "remote_policy": "unspecified",
+    "salary_min": 3000000,
+    "salary_max": 3000000,
+    "salary_currency": "GBP",
+    "salary_period": "year",
+    "employment_type": "temporary",
+    "seniority": "unspecified",
+    "visa_sponsorship": "unspecified",
+    "posted_date": null
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0016",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Use the stated base salary range; do not estimate a discretionary bonus.",
+  "content": "Title: Engineering Manager\nLocation: Manchester\nSeniority: manager\nEmployment: full-time\nWorking arrangement: hybrid\nSalary: GBP 70,000 to GBP 90,000 per year plus discretionary bonus (amount not stated).",
+  "expected": {
+    "title": "Engineering Manager",
+    "company": null,
+    "location": "Manchester",
+    "remote_policy": "hybrid",
+    "salary_min": 7000000,
+    "salary_max": 9000000,
+    "salary_currency": "GBP",
+    "salary_period": "year",
+    "employment_type": "full_time",
+    "seniority": "manager",
+    "visa_sponsorship": "unspecified",
+    "posted_date": null
+  }
+}

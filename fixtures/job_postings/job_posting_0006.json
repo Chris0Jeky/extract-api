@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0006",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Hourly decimals become pence; preserve part-time status.",
+  "content": "Title: Library Assistant\nLocation: Bristol\nSalary: GBP 13.50 to GBP 15.25 per hour\nEmployment: part-time\nWorking arrangement: onsite",
+  "expected": {
+    "title": "Library Assistant",
+    "company": null,
+    "location": "Bristol",
+    "remote_policy": "onsite",
+    "salary_min": 1350,
+    "salary_max": 1525,
+    "salary_currency": "GBP",
+    "salary_period": "hour",
+    "employment_type": "part_time",
+    "seniority": "unspecified",
+    "visa_sponsorship": "unspecified",
+    "posted_date": null
+  }
+}

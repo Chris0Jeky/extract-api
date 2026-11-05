@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0005",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Daily contract range and explicit no-sponsorship statement.",
+  "content": "Title: Contract Data Engineer\nSalary: GBP 450 to GBP 550 per day\nEmployment: contract\nWorking arrangement: remote\nVisa sponsorship: not offered",
+  "expected": {
+    "title": "Contract Data Engineer",
+    "company": null,
+    "location": null,
+    "remote_policy": "remote",
+    "salary_min": 45000,
+    "salary_max": 55000,
+    "salary_currency": "GBP",
+    "salary_period": "day",
+    "employment_type": "contract",
+    "seniority": "unspecified",
+    "visa_sponsorship": "not_offered",
+    "posted_date": null
+  }
+}

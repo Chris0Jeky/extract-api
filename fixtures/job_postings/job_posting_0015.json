@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0015",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Conditional sponsorship is not a guaranteed offer; numeric salary remains absent.",
+  "content": "Title: Principal Architect\nCompany: Example Beacon Architecture\nSeniority: principal\nSalary: negotiable\nVisa sponsorship: considered case by case; no commitment is made in this advert.",
+  "expected": {
+    "title": "Principal Architect",
+    "company": "Example Beacon Architecture",
+    "location": null,
+    "remote_policy": "unspecified",
+    "salary_min": null,
+    "salary_max": null,
+    "salary_currency": null,
+    "salary_period": "unspecified",
+    "employment_type": "unspecified",
+    "seniority": "principal",
+    "visa_sponsorship": "unspecified",
+    "posted_date": null
+  }
+}

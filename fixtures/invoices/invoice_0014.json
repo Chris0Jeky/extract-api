@@ -1,0 +1,29 @@
+{
+  "fixture_id": "invoice_0014",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "KWD has three decimal places; unstated tax remains null.",
+  "content": "INVOICE\nVendor: Example Dinar Services\nInvoice number: SYN-0014\nIssue date: 2026-10-01\nInspection service: 2 units at KWD 6.250; line amount KWD 12.500.\nSubtotal: KWD 12.500\nTotal: KWD 12.500",
+  "expected": {
+    "invoice_number": "SYN-0014",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "KWD",
+    "subtotal_minor": 12500,
+    "tax_minor": null,
+    "total_minor": 12500,
+    "vendor_name": "Example Dinar Services",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": [
+      {
+        "description": "Inspection service",
+        "quantity": 2,
+        "unit_price_minor": 6250,
+        "amount_minor": 12500
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0007",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Only the lower salary bound is stated.",
+  "content": "Title: Graduate Developer\nSalary: from GBP 32,000 per year\nSeniority: junior\nEmployment: full-time",
+  "expected": {
+    "title": "Graduate Developer",
+    "company": null,
+    "location": null,
+    "remote_policy": "unspecified",
+    "salary_min": 3200000,
+    "salary_max": null,
+    "salary_currency": "GBP",
+    "salary_period": "year",
+    "employment_type": "full_time",
+    "seniority": "junior",
+    "visa_sponsorship": "unspecified",
+    "posted_date": null
+  }
+}

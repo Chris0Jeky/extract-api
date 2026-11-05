@@ -1,0 +1,22 @@
+{
+  "fixture_id": "invoice_0015",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Total-only v1 convention: subtotal equals total, with no inferred tax or line items.",
+  "content": "INVOICE\nVendor: Example Total Only\nInvoice number: SYN-0015\nIssue date: 2026-10-01\nTotal due: GBP 84.50",
+  "expected": {
+    "invoice_number": "SYN-0015",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "GBP",
+    "subtotal_minor": 8450,
+    "tax_minor": null,
+    "total_minor": 8450,
+    "vendor_name": "Example Total Only",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": null
+  }
+}

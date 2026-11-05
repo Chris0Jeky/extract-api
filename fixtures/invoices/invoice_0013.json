@@ -1,0 +1,29 @@
+{
+  "fixture_id": "invoice_0013",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "JPY has zero decimal places; do not multiply yen by 100.",
+  "content": "INVOICE\nVendor: Example Yen Workshop\nInvoice number: SYN-0013\nIssue date: 2026-10-01\nReplacement brackets: quantity 5, unit price JPY 2500, line amount JPY 12500.\nSubtotal: JPY 12500\nTax: JPY 1250\nTotal: JPY 13750",
+  "expected": {
+    "invoice_number": "SYN-0013",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "JPY",
+    "subtotal_minor": 12500,
+    "tax_minor": 1250,
+    "total_minor": 13750,
+    "vendor_name": "Example Yen Workshop",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": [
+      {
+        "description": "Replacement brackets",
+        "quantity": 5,
+        "unit_price_minor": 2500,
+        "amount_minor": 12500
+      }
+    ]
+  }
+}

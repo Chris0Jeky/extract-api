@@ -1,0 +1,29 @@
+{
+  "fixture_id": "invoice_0018",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Negative credit amounts are stated literally; preserve signs.",
+  "content": "INVOICE\nVendor: Example Credit Workshop\nInvoice number: SYN-0018\nIssue date: 2026-10-01\nCREDIT NOTE\nReturned brackets: quantity 2, unit price GBP -30.00, line amount GBP -60.00.\nSubtotal: GBP -60.00\nVAT: GBP -12.00\nTotal: GBP -72.00",
+  "expected": {
+    "invoice_number": "SYN-0018",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "GBP",
+    "subtotal_minor": -6000,
+    "tax_minor": -1200,
+    "total_minor": -7200,
+    "vendor_name": "Example Credit Workshop",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": [
+      {
+        "description": "Returned brackets",
+        "quantity": 2,
+        "unit_price_minor": -3000,
+        "amount_minor": -6000
+      }
+    ]
+  }
+}

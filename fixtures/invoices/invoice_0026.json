@@ -1,0 +1,22 @@
+{
+  "fixture_id": "invoice_0026",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Explicit European number formatting normalizes to integer cents.",
+  "content": "INVOICE\nVendor: Example Euro Desk\nInvoice number: SYN-0026\nIssue date: 2026-10-01\nLocale: decimal comma, period thousands separator.\nSubtotal: EUR 1.234,56\nTotal payable: EUR 1.234,56",
+  "expected": {
+    "invoice_number": "SYN-0026",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "EUR",
+    "subtotal_minor": 123456,
+    "tax_minor": null,
+    "total_minor": 123456,
+    "vendor_name": "Example Euro Desk",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": null
+  }
+}
