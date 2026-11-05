@@ -1,9 +1,9 @@
 """Deterministic accuracy harness (NO LLM judges anywhere).
 
 Scores a provider over the REVIEWED fixtures for a doc type: per-field exact-match (after
-canonical normalization) and the hallucinated-field rate, plus cost and success-only
-p50/p95 latency (a null-handling-correctness rate over expected-null fields is pending
-issue #46). Scoring itself is pure (harness/scoring.py) and unit-tested offline;
+canonical normalization), hallucination and null-handling rates over expected-null fields
+in usable records, plus cost and success-only p50/p95 latency. Scoring itself is pure
+(harness/scoring.py) and unit-tested offline;
 producing real numbers needs `--live`, which POSTs each fixture to the serving endpoint.
 A control-plane rejection (budget_exceeded 402 / idempotency_conflict 409) never reached the
 model, so it is skipped, not scored as a missed extraction (issue #52). DRAFT-labelled
@@ -45,7 +45,7 @@ class PredictionFailed(Exception):
     """The endpoint did not return a usable record for a fixture (a non-2xx or transport error).
 
     A failed extraction is itself the accuracy signal, so the harness records it (the fixture's
-    fields all count as missed) and continues, rather than aborting the whole run.
+    fields receive no exact-match credit) and continues, rather than aborting the whole run.
     """
 
     def __init__(self, message: str, *, cost_usd: float | None = None) -> None:
@@ -64,6 +64,14 @@ class ControlPlaneRejection(Exception):
     """
 
 
+class RequestNotSent(Exception):
+    """ConnectError or ConnectTimeout prevented sending the extraction request.
+
+    No model call or spend occurred, so skip the fixture without an accuracy penalty.
+    Other transport failures remain PredictionFailed because delivery can be uncertain.
+    """
+
+
 class MisplacedFixture(Exception):
     """A REVIEWED fixture sits under the wrong doc-type directory (its doc_type disagrees with
     the folder it was loaded from).
@@ -76,8 +84,8 @@ class MisplacedFixture(Exception):
 
 
 # A predictor maps a fixture to a Prediction, or raises PredictionFailed (a quality failure,
-# scored) / ControlPlaneRejection (skipped, not scored). Injecting it keeps run_accuracy
-# testable offline; --live supplies the real endpoint-backed implementation.
+# scored) / ControlPlaneRejection or RequestNotSent (skipped, not scored). Injection keeps
+# run_accuracy testable offline; --live supplies the real endpoint-backed implementation.
 Predictor = Callable[[dict[str, object]], Prediction]
 
 # The canonical doc_type -> fixtures subdirectory map (single source of truth for the corpus
@@ -245,18 +253,18 @@ def run_accuracy(
     for fx, model_cls, expected in prepared:
         try:
             prediction = predict(fx)
-        except ControlPlaneRejection as exc:
-            # The fixture never reached the model (a budget/idempotency guard rejected it). It
-            # is not an accuracy signal, so keep it OUT of the per-field denominator (issue #52).
+        except (ControlPlaneRejection, RequestNotSent) as exc:
+            # The fixture never reached the model, so it is not an accuracy signal.
             fixture_id = fx.get("fixture_id", "?")
+            reason = "request not sent" if isinstance(exc, RequestNotSent) else "control-plane"
             print(
-                f"accuracy: fixture {fixture_id}: skipped (control-plane): {exc}",
+                f"accuracy: fixture {fixture_id}: skipped ({reason}): {exc}",
                 file=sys.stderr,
             )
             skipped += 1
             continue
         except PredictionFailed as exc:
-            # A failed extraction is the accuracy signal: count every field as missed and
+            # A failed extraction is the accuracy signal: give no exact-match credit and
             # keep going, so one hard (or transiently-failing) fixture cannot erase the run.
             fixture_id = fx.get("fixture_id", "?")
             print(f"accuracy: fixture {fixture_id}: prediction failed: {exc}", file=sys.stderr)
@@ -268,11 +276,17 @@ def run_accuracy(
         resolved_provider = prediction.provider  # the provider the server actually used
         try:
             outcomes = score_record(model_cls, prediction.record, expected)
-        except ValidationError:
+        except ValidationError as exc:
             # A schema-invalid predicted record (an older/broken endpoint returning a 200 with
             # object-but-invalid `data`, e.g. {}) is a failed extraction, not a crash. `expected`
             # is validated upstream (fixtures-validate + the REVIEWED gate), so a ValidationError
             # here is the prediction's, not the fixture's (issue #57).
+            fixture_id = fx.get("fixture_id", "?")
+            print(
+                f"accuracy: fixture {fixture_id}: prediction failed: schema-invalid record "
+                f"({exc.error_count()} validation error(s))",
+                file=sys.stderr,
+            )
             scored.append(score_failed(model_cls, expected))
             failures += 1
             failed_costs.append(prediction.cost_usd)
@@ -298,7 +312,7 @@ def live_predictor(
     """A predictor that POSTs each fixture to a serving /v1/extract and reads the result.
 
     An extraction-quality non-2xx (a terminal validation_failed 422, provider_error 502, ...)
-    or a transport error becomes PredictionFailed, so the run records that fixture as a failed
+    or an uncertain transport error becomes PredictionFailed, so the run records a failed
     extraction and continues instead of crashing on the documents the harness exists to
     measure. A control-plane non-2xx (budget_exceeded 402 / idempotency_conflict 409) becomes
     ControlPlaneRejection, so the run SKIPS it (the model never ran) rather than scoring it as
@@ -308,6 +322,9 @@ def live_predictor(
     is the per-request HTTP timeout in seconds, configurable so a legitimately slow extraction
     is not spuriously failed. `api_key`, when given, is sent as the bearer key the service
     requires; a keyless or wrong-key run comes back `unauthorized` and is skipped, not scored.
+    A ConnectError or ConnectTimeout becomes RequestNotSent and is skipped with zero cost,
+    since the request could not reach the endpoint. Read/write failures remain scored with
+    unknown spend.
     """
     import httpx  # local import: only --live needs an HTTP client
 
@@ -338,6 +355,8 @@ def live_predictor(
                 f"{fixture_id}: HTTP {exc.response.status_code}",
                 cost_usd=_response_validation_cost(exc.response),
             ) from exc
+        except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+            raise RequestNotSent(f"{fixture_id}: {type(exc).__name__}") from exc
         except httpx.RequestError as exc:
             raise PredictionFailed(f"{fixture_id}: {type(exc).__name__}") from exc
         # A 2xx is not a guarantee of the right SHAPE (gateway login page, older server, proxy
