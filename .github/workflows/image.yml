@@ -57,6 +57,9 @@ jobs:
             --mount "type=bind,source=$GITHUB_WORKSPACE/scripts/probe_runtime_security.py,target=/runtime-probe.py,readonly" \
             "$IMAGE_REF" /runtime-probe.py --image-ref "$IMAGE_REF" --image-id "$IMAGE_ID" \
             > runtime-security.json
+      - name: Summarize runtime behavior evidence
+        if: always() && hashFiles('runtime-security.json') != ''
+        run: |
           python - <<'PYTHON' | tee -a "$GITHUB_STEP_SUMMARY"
           import json
           from pathlib import Path
@@ -145,6 +148,9 @@ jobs:
             --mount "type=bind,source=$GITHUB_WORKSPACE/scripts/probe_runtime_security.py,target=/runtime-probe.py,readonly" \
             "$IMAGE_REF" /runtime-probe.py --image-ref "$IMAGE_REF" --image-id "$IMAGE_ID" \
             > runtime-security.json
+      - name: Summarize runtime behavior evidence
+        if: always() && hashFiles('runtime-security.json') != ''
+        run: |
           python - <<'PYTHON' | tee -a "$GITHUB_STEP_SUMMARY"
           import json
           from pathlib import Path

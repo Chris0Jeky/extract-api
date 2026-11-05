@@ -2,7 +2,11 @@
 
 import hashlib
 import json
+import os
+import shlex
+import shutil
 import socket
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -133,3 +137,68 @@ def test_image_probes_the_smoked_reference_offline_without_changing_scan_policy(
         )
         assert "always()" in upload["if"]
         assert upload["with"]["path"] == "runtime-security.json"
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="GitHub Actions uses Bash")
+@pytest.mark.parametrize("job", ["local-image", "published-image"])
+def test_inconclusive_probe_still_has_job_summary(tmp_path, job):
+    path = Path(__file__).resolve().parent.parent / ".github/workflows/image.yml"
+    workflow = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
+    steps = workflow["jobs"][job]["steps"]
+    probe_step = next(
+        step for step in steps if step.get("name") == "Probe packaged CPython security behavior"
+    )
+    report = {
+        "image": {"reference": "synthetic-image", "id": "sha256:synthetic"},
+        "runtime": {"version": "synthetic-version"},
+        "checks": [
+            {
+                "cve": "CVE-2025-15367",
+                "status": "inconclusive",
+                "source": {"sha256": "synthetic-source-hash"},
+            }
+        ],
+    }
+    docker = f"""docker() {{
+        if [[ "$1" == image ]]; then
+            printf '%s\\n' 'sha256:synthetic'
+        else
+            printf '%s\\n' {shlex.quote(json.dumps(report))}
+            return 2
+        fi
+    }}
+    """
+    summary = tmp_path / "summary.md"
+    env = {
+        **os.environ,
+        "IMAGE_REF": "synthetic-image",
+        "GITHUB_WORKSPACE": str(tmp_path),
+        "GITHUB_STEP_SUMMARY": str(summary),
+    }
+    result = subprocess.run(
+        ["bash", "-e", "-o", "pipefail", "-c", docker + probe_step["run"]],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 2
+    assert json.loads((tmp_path / "runtime-security.json").read_text()) == report
+    summary_steps = [
+        step for step in steps if step.get("name") == "Summarize runtime behavior evidence"
+    ]
+    if summary_steps:
+        (summary_step,) = summary_steps
+        assert "always()" in summary_step["if"]
+        result = subprocess.run(
+            ["bash", "-e", "-o", "pipefail", "-c", summary_step["run"]],
+            cwd=tmp_path,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 0, result.stderr
+    assert summary.exists()
+    assert "inconclusive" in summary.read_text()
