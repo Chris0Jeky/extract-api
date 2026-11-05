@@ -9,6 +9,7 @@ _SITES = {
     "Dockerfile": r"ghcr\.io/astral-sh/uv:(\d+\.\d+\.\d+)",
     ".github/workflows/ci.yml": r'version: "(\d+\.\d+\.\d+)"',
     ".github/workflows/loadtest.yml": r'version: "(\d+\.\d+\.\d+)"',
+    ".github/workflows/floor.yml": r'version: "(\d+\.\d+\.\d+)"',
     "README.md": r"installed by uv (\d+\.\d+\.\d+)",
     "docs/adr/0001-dependency-versions.md": r"Docker runtime uses uv (\d+\.\d+\.\d+)",
 }

@@ -51,10 +51,11 @@ Use `uv run` so commands use that environment.
 | endpoint, wiring, idempotency | `uv run make smoke` (offline 200, forced 422, replay, and 409) |
 | fixtures or labels | `uv run make fixtures-validate` |
 | accuracy orchestration | `uv run make accuracy-rehearsal` (REVIEWED label echo through the API, zero provider cost) |
+| floor bytes or their pin/checker/gate | `uv run make test-floor` (integrity check, then the canonical matrix) |
 | `scripts/agent_hooks/pre_tool_use.py` | `uv run make test-hooks` |
 | `scripts/agent_hooks/pre_tool_use.py` or `post_tool_failure.py` | `uv run python -m pytest --no-cov tests/test_agent_hooks.py` |
 | `scripts/agent_hooks/session_start.py` | `uv run python scripts/agent_hooks/session_start.py`; inspect its output |
-| pre-push gate | `uv run make ci-quick` (lint, mypy, and full pytest coverage) |
+| pre-push gate | `uv run make ci-quick` (floor integrity, lint, mypy, and full pytest coverage) |
 
 CI (`.github/workflows/ci.yml`) also validates fixtures and runs gitleaks on
 Python 3.13. Use the current PR checks for test counts and coverage evidence;
@@ -65,9 +66,14 @@ rehearsal results do not measure provider accuracy.
 - **Targeted pytest slices need `--no-cov`.** The full-suite coverage floor in
   `pyproject.toml` is `--cov-fail-under=95`; a passing slice can fail that global
   threshold. Keep coverage enabled for the full run. The floor may rise, never fall.
-- `.claude/hooks/smoke_test.py` is the vendored floor's own matrix, outside CI
-  and `ci-quick`. Run it only for authorized floor changes. Vendored hook files
-  do not establish runtime activation; the committed settings do not wire them.
+- `.agent-harness/floor-integrity.json` pins the verified upstream commit and both
+  vendored SHA-256 digests. `check-floor` and ordinary CI verify raw bytes without
+  executing hooks; existing `.gitattributes` keeps Python checkouts LF on Windows.
+- The large `.claude/hooks/smoke_test.py` matrix stays outside `ci-quick`. Run it
+  only for authorized floor or integrity/gate changes; `.github/workflows/floor.yml`
+  applies those path filters and runs on Linux and Windows with 15-minute budgets.
+  When syncing the floor, verify upstream bytes before updating the pin. These
+  checks do not establish runtime activation; committed settings remain unwired.
 - `scripts/agent_hooks/pre_tool_use.py` is a **deprecated** bespoke floor, no
   longer wired; its retirement is tracked as issue #83. Leave it alone.
 - Use `uv run make test` to select the locked environment; on Windows, an explicit

@@ -1,0 +1,56 @@
+# The canonical matrix is intentionally separate from ordinary CI and ci-quick.
+# Run it only when the vendored bytes or their integrity/gate inputs change.
+name: floor
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .claude/hooks/dispatch.py
+      - .claude/hooks/smoke_test.py
+      - .agent-harness/floor-integrity.json
+      - scripts/check_floor_integrity.py
+      - tests/test_floor_integrity.py
+      - tests/test_uv_version_alignment.py
+      - .github/workflows/floor.yml
+      - .github/workflows/ci.yml
+      - .gitattributes
+      - Makefile
+  pull_request:
+    paths:
+      - .claude/hooks/dispatch.py
+      - .claude/hooks/smoke_test.py
+      - .agent-harness/floor-integrity.json
+      - scripts/check_floor_integrity.py
+      - tests/test_floor_integrity.py
+      - tests/test_uv_version_alignment.py
+      - .github/workflows/floor.yml
+      - .github/workflows/ci.yml
+      - .gitattributes
+      - Makefile
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  floor:
+    name: canonical floor (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7"
+      - name: Verify the pinned bytes
+        run: uv run --no-project --python 3.13 python scripts/check_floor_integrity.py
+      - name: Run the canonical matrix
+        run: uv run --no-project --python 3.13 python .claude/hooks/smoke_test.py
