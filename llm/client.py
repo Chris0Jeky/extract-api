@@ -121,14 +121,36 @@ def _int_env(name: str, default: str) -> int:
     return value
 
 
+def _token_count(usage: object, field: str, *, provider: str) -> int:
+    """Keep the missing-usage fallback, but never coerce malformed billing metadata."""
+    value = getattr(usage, field, None)
+    if value is None:
+        return 0
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        # Do not echo an arbitrary upstream value into diagnostics.
+        raise ProviderError(provider=provider, detail=f"invalid usage {field}")
+    return value
+
+
 def _token_cost(
-    tokens_in: int, tokens_out: int, *, price_in_per_m: float, price_out_per_m: float
+    tokens_in: int,
+    tokens_out: int,
+    *,
+    provider: str,
+    price_in_per_m: float,
+    price_out_per_m: float,
 ) -> float:
     """USD cost from token counts and per-million-token prices. 0 tokens -> 0.0.
 
     Shared by both real providers so the cost formula has one definition.
     """
-    return (tokens_in * price_in_per_m + tokens_out * price_out_per_m) / 1_000_000.0
+    try:
+        cost = (tokens_in * price_in_per_m + tokens_out * price_out_per_m) / 1_000_000.0
+    except OverflowError as exc:
+        raise ProviderError(provider=provider, detail="usage cost is not finite") from exc
+    if not math.isfinite(cost):
+        raise ProviderError(provider=provider, detail="usage cost is not finite")
+    return cost
 
 
 def _first_refusal(response: object) -> str | None:
@@ -238,8 +260,8 @@ class OpenAIClient:
         # truncation is a completed, BILLED response, so its cost must be attached to the
         # raised error or the budget guard would under-count the most expensive failures.
         usage = getattr(response, "usage", None)
-        tokens_in = int(getattr(usage, "input_tokens", 0) or 0)
-        tokens_out = int(getattr(usage, "output_tokens", 0) or 0)
+        tokens_in = _token_count(usage, "input_tokens", provider=self.provider)
+        tokens_out = _token_count(usage, "output_tokens", provider=self.provider)
         cost_usd = self._cost_usd(tokens_in, tokens_out)
 
         status = getattr(response, "status", None)
@@ -285,6 +307,7 @@ class OpenAIClient:
         return _token_cost(
             tokens_in,
             tokens_out,
+            provider=self.provider,
             price_in_per_m=self.price_in_per_m,
             price_out_per_m=self.price_out_per_m,
         )
@@ -364,11 +387,12 @@ class AnthropicClient:
         # path: a refusal or a truncation is a completed, BILLED response, so its cost is
         # attached to the raised error and the budget guard does not under-count it.
         usage = getattr(response, "usage", None)
-        tokens_in = int(getattr(usage, "input_tokens", 0) or 0)
-        tokens_out = int(getattr(usage, "output_tokens", 0) or 0)
+        tokens_in = _token_count(usage, "input_tokens", provider=self.provider)
+        tokens_out = _token_count(usage, "output_tokens", provider=self.provider)
         cost_usd = _token_cost(
             tokens_in,
             tokens_out,
+            provider=self.provider,
             price_in_per_m=self.price_in_per_m,
             price_out_per_m=self.price_out_per_m,
         )
