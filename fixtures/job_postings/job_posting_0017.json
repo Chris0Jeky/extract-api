@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0017",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "The salary period is omitted; do not assume per day from contract status.",
+  "content": "Title: Delivery Lead\nSeniority: lead\nSalary: GBP 400 to GBP 500\nEmployment: contract",
+  "expected": {
+    "title": "Delivery Lead",
+    "company": null,
+    "location": null,
+    "remote_policy": "unspecified",
+    "salary_min": 40000,
+    "salary_max": 50000,
+    "salary_currency": "GBP",
+    "salary_period": "unspecified",
+    "employment_type": "contract",
+    "seniority": "lead",
+    "visa_sponsorship": "unspecified",
+    "posted_date": null
+  }
+}

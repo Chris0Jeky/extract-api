@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0012",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Right-to-work wording alone does not explicitly settle sponsorship; leave unspecified.",
+  "content": "Title: QA Engineer\nApplicants must have the right to work in the UK.\nLocation: Nottingham",
+  "expected": {
+    "title": "QA Engineer",
+    "company": null,
+    "location": "Nottingham",
+    "remote_policy": "unspecified",
+    "salary_min": null,
+    "salary_max": null,
+    "salary_currency": null,
+    "salary_period": "unspecified",
+    "employment_type": "unspecified",
+    "seniority": "unspecified",
+    "visa_sponsorship": "unspecified",
+    "posted_date": null
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "fixture_id": "invoice_0016",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Do not back-calculate tax from the difference between stated subtotal and total.",
+  "content": "INVOICE\nVendor: Example Unknown Tax\nInvoice number: SYN-0016\nIssue date: 2026-10-01\nSubtotal: EUR 200.00\nTotal payable: EUR 238.00\nNo separate tax breakdown supplied.",
+  "expected": {
+    "invoice_number": "SYN-0016",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "EUR",
+    "subtotal_minor": 20000,
+    "tax_minor": null,
+    "total_minor": 23800,
+    "vendor_name": "Example Unknown Tax",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": null
+  }
+}

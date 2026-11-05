@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0002",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Competitive is not a numeric salary; absent salary currency and period stay null/unspecified.",
+  "content": "Title: Platform Engineer\nSalary: competitive\nWorking arrangement: remote\nLocation: UK",
+  "expected": {
+    "title": "Platform Engineer",
+    "company": null,
+    "location": "UK",
+    "remote_policy": "remote",
+    "salary_min": null,
+    "salary_max": null,
+    "salary_currency": null,
+    "salary_period": "unspecified",
+    "employment_type": "unspecified",
+    "seniority": "unspecified",
+    "visa_sponsorship": "unspecified",
+    "posted_date": null
+  }
+}

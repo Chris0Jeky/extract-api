@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0018",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Senior role without salary values; missing compensation remains absent.",
+  "content": "Title: Technology Director\nCompany: Example Orchard Technology\nSeniority: director\nWorking arrangement: onsite\nLocation: Cambridge\nVisa sponsorship: offered\nPosted: 2026-10-02",
+  "expected": {
+    "title": "Technology Director",
+    "company": "Example Orchard Technology",
+    "location": "Cambridge",
+    "remote_policy": "onsite",
+    "salary_min": null,
+    "salary_max": null,
+    "salary_currency": null,
+    "salary_period": "unspecified",
+    "employment_type": "unspecified",
+    "seniority": "director",
+    "visa_sponsorship": "offered",
+    "posted_date": "2026-10-02"
+  }
+}

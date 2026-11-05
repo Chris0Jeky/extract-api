@@ -1,0 +1,22 @@
+{
+  "fixture_id": "invoice_0023",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Use the invoice payable currency, not the informational conversion.",
+  "content": "INVOICE\nVendor: Example Export Desk\nInvoice number: SYN-0023\nIssue date: 2026-10-01\nBuyer: Example Overseas Buyer\nInvoice currency: USD\nSubtotal: USD 120.00\nTax: USD 0.00\nTotal payable: USD 120.00\nReference only, not payable: approximately EUR 111.00.",
+  "expected": {
+    "invoice_number": "SYN-0023",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "USD",
+    "subtotal_minor": 12000,
+    "tax_minor": 0,
+    "total_minor": 12000,
+    "vendor_name": "Example Export Desk",
+    "vendor_tax_id": null,
+    "buyer_name": "Example Overseas Buyer",
+    "line_items": null
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "fixture_id": "invoice_0020",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Do not invent quantity 1 or a unit price for an unitemized described charge.",
+  "content": "INVOICE\nVendor: Example Unitemized Consulting\nInvoice number: SYN-0020\nIssue date: 2026-10-01\nConsulting services\nAmount: USD 1,250.00\nSubtotal: USD 1,250.00\nTotal: USD 1,250.00",
+  "expected": {
+    "invoice_number": "SYN-0020",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "USD",
+    "subtotal_minor": 125000,
+    "tax_minor": null,
+    "total_minor": 125000,
+    "vendor_name": "Example Unitemized Consulting",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": null
+  }
+}

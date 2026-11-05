@@ -1,0 +1,35 @@
+{
+  "fixture_id": "invoice_0019",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Shipping is explicitly itemized inside subtotal, which v1 can represent.",
+  "content": "INVOICE\nVendor: Example Freight Included\nInvoice number: SYN-0019\nIssue date: 2026-10-01\nPrinted manuals: quantity 2, unit price GBP 50.00, line amount GBP 100.00.\nShipping: quantity 1, unit price GBP 15.00, line amount GBP 15.00.\nSubtotal including shipping: GBP 115.00\nVAT: GBP 23.00\nTotal: GBP 138.00",
+  "expected": {
+    "invoice_number": "SYN-0019",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "GBP",
+    "subtotal_minor": 11500,
+    "tax_minor": 2300,
+    "total_minor": 13800,
+    "vendor_name": "Example Freight Included",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": [
+      {
+        "description": "Printed manuals",
+        "quantity": 2,
+        "unit_price_minor": 5000,
+        "amount_minor": 10000
+      },
+      {
+        "description": "Shipping",
+        "quantity": 1,
+        "unit_price_minor": 1500,
+        "amount_minor": 1500
+      }
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "fixture_id": "invoice_0024",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Two-decimal currency with missing buyer, tax, due date, and itemization.",
+  "content": "INVOICE\nVendor: Example Swiss Repairs\nInvoice number: SYN-0024\nIssue date: 2026-10-01\nSubtotal: CHF 450.50\nTotal: CHF 450.50",
+  "expected": {
+    "invoice_number": "SYN-0024",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "CHF",
+    "subtotal_minor": 45050,
+    "tax_minor": null,
+    "total_minor": 45050,
+    "vendor_name": "Example Swiss Repairs",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": null
+  }
+}

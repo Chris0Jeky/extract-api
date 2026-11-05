@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0020",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Part-time annual pay is explicitly actual pay; do not pro-rate again.",
+  "content": "Title: Data Analyst\nCompany: Example River Analytics\nLocation: York\nSalary: GBP 36,000 to GBP 42,000 per year\nEmployment: part-time\nAdvertised figures are the actual annual pay, not full-time equivalent.\nWorking arrangement: hybrid\nSeniority: mid\nPosted: 2026-10-03",
+  "expected": {
+    "title": "Data Analyst",
+    "company": "Example River Analytics",
+    "location": "York",
+    "remote_policy": "hybrid",
+    "salary_min": 3600000,
+    "salary_max": 4200000,
+    "salary_currency": "GBP",
+    "salary_period": "year",
+    "employment_type": "part_time",
+    "seniority": "mid",
+    "visa_sponsorship": "unspecified",
+    "posted_date": "2026-10-03"
+  }
+}

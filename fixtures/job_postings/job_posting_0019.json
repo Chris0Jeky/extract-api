@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0019",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Explicit zero salary is not null; avoid silently treating unpaid as undisclosed.",
+  "content": "Title: Test Technician\nLocation: Coventry\nSalary: GBP 0.00 per hour (unpaid)\nEmployment: internship\nSeniority: intern",
+  "expected": {
+    "title": "Test Technician",
+    "company": null,
+    "location": "Coventry",
+    "remote_policy": "unspecified",
+    "salary_min": 0,
+    "salary_max": 0,
+    "salary_currency": "GBP",
+    "salary_period": "hour",
+    "employment_type": "internship",
+    "seniority": "intern",
+    "visa_sponsorship": "unspecified",
+    "posted_date": null
+  }
+}

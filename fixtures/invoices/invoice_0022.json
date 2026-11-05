@@ -1,0 +1,29 @@
+{
+  "fixture_id": "invoice_0022",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Rounding means the stated line amount need not equal quantity times unit price exactly.",
+  "content": "INVOICE\nVendor: Example Roundoff Lab\nInvoice number: SYN-0022\nIssue date: 2026-10-01\nMeasured material: quantity 0.333, unit price GBP 3.00, rounded line amount GBP 1.00.\nSubtotal: GBP 1.00\nTotal: GBP 1.00",
+  "expected": {
+    "invoice_number": "SYN-0022",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "GBP",
+    "subtotal_minor": 100,
+    "tax_minor": null,
+    "total_minor": 100,
+    "vendor_name": "Example Roundoff Lab",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": [
+      {
+        "description": "Measured material",
+        "quantity": 0.333,
+        "unit_price_minor": 300,
+        "amount_minor": 100
+      }
+    ]
+  }
+}

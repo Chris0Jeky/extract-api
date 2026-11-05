@@ -1,0 +1,29 @@
+{
+  "fixture_id": "invoice_0025",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Three-decimal currency and separately stated tax.",
+  "content": "INVOICE\nVendor: Example Bahraini Fabrication\nInvoice number: SYN-0025\nIssue date: 2026-10-01\nComponent sets: quantity 3, unit price BHD 2.500, line amount BHD 7.500.\nSubtotal: BHD 7.500\nTax: BHD 0.750\nTotal: BHD 8.250",
+  "expected": {
+    "invoice_number": "SYN-0025",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "BHD",
+    "subtotal_minor": 7500,
+    "tax_minor": 750,
+    "total_minor": 8250,
+    "vendor_name": "Example Bahraini Fabrication",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": [
+      {
+        "description": "Component sets",
+        "quantity": 3,
+        "unit_price_minor": 2500,
+        "amount_minor": 7500
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0004",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Monthly salary stays monthly; do not annualize.",
+  "content": "Title: Support Analyst\nCompany: Example Meadow Support\nLocation: Leeds\nSalary: GBP 2,500 to GBP 3,000 per month\nEmployment: full-time\nWorking arrangement: onsite",
+  "expected": {
+    "title": "Support Analyst",
+    "company": "Example Meadow Support",
+    "location": "Leeds",
+    "remote_policy": "onsite",
+    "salary_min": 250000,
+    "salary_max": 300000,
+    "salary_currency": "GBP",
+    "salary_period": "month",
+    "employment_type": "full_time",
+    "seniority": "unspecified",
+    "visa_sponsorship": "unspecified",
+    "posted_date": null
+  }
+}

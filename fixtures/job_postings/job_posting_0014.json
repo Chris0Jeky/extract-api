@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0014",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Staff seniority and explicit date; do not infer employer or location.",
+  "content": "Title: Staff Engineer\nSalary: GBP 90,000 to GBP 110,000 per year\nSeniority: staff\nWorking arrangement: remote\nPosted: 2026-09-30",
+  "expected": {
+    "title": "Staff Engineer",
+    "company": null,
+    "location": null,
+    "remote_policy": "remote",
+    "salary_min": 9000000,
+    "salary_max": 11000000,
+    "salary_currency": "GBP",
+    "salary_period": "year",
+    "employment_type": "unspecified",
+    "seniority": "staff",
+    "visa_sponsorship": "unspecified",
+    "posted_date": "2026-09-30"
+  }
+}
