@@ -1,0 +1,22 @@
+{
+  "fixture_id": "invoice_0017",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Explicit zero tax differs from absent tax. No quantity or unit price means line_items null.",
+  "content": "INVOICE\nVendor: Example Zero Tax Works\nInvoice number: SYN-0017\nIssue date: 2026-10-01\nMaintenance charge: GBP 80.00\nSubtotal: GBP 80.00\nTax: GBP 0.00\nTotal: GBP 80.00",
+  "expected": {
+    "invoice_number": "SYN-0017",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "GBP",
+    "subtotal_minor": 8000,
+    "tax_minor": 0,
+    "total_minor": 8000,
+    "vendor_name": "Example Zero Tax Works",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": null
+  }
+}

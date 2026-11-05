@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0010",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Internship and explicit sponsorship offer; fixed annual amount in pence.",
+  "content": "Title: Engineering Intern\nSalary: GBP 24,000 per year (fixed)\nEmployment: internship\nSeniority: intern\nVisa sponsorship is available for this position.",
+  "expected": {
+    "title": "Engineering Intern",
+    "company": null,
+    "location": null,
+    "remote_policy": "unspecified",
+    "salary_min": 2400000,
+    "salary_max": 2400000,
+    "salary_currency": "GBP",
+    "salary_period": "year",
+    "employment_type": "internship",
+    "seniority": "intern",
+    "visa_sponsorship": "offered",
+    "posted_date": null
+  }
+}

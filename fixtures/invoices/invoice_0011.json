@@ -1,0 +1,29 @@
+{
+  "fixture_id": "invoice_0011",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Fractional quantity and explicit hourly unit price.",
+  "content": "INVOICE\nVendor: Example Fractional Studio\nInvoice number: SYN-0011\nIssue date: 2026-10-01\nDue date: 2026-10-31\nDesign consultation: 2.5 hours at GBP 75.00 per hour; line amount GBP 187.50.\nSubtotal: GBP 187.50\nVAT: GBP 37.50\nTotal: GBP 225.00",
+  "expected": {
+    "invoice_number": "SYN-0011",
+    "issue_date": "2026-10-01",
+    "due_date": "2026-10-31",
+    "currency": "GBP",
+    "subtotal_minor": 18750,
+    "tax_minor": 3750,
+    "total_minor": 22500,
+    "vendor_name": "Example Fractional Studio",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": [
+      {
+        "description": "Design consultation",
+        "quantity": 2.5,
+        "unit_price_minor": 7500,
+        "amount_minor": 18750
+      }
+    ]
+  }
+}

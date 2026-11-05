@@ -1,0 +1,29 @@
+{
+  "fixture_id": "invoice_0021",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Explicit zero-valued items and totals are values, not null.",
+  "content": "INVOICE\nVendor: Example Zero Balance\nInvoice number: SYN-0021\nIssue date: 2026-10-01\nReplacement labels: quantity 4, unit price GBP 0.00, line amount GBP 0.00.\nSubtotal: GBP 0.00\nVAT: GBP 0.00\nTotal: GBP 0.00",
+  "expected": {
+    "invoice_number": "SYN-0021",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "GBP",
+    "subtotal_minor": 0,
+    "tax_minor": 0,
+    "total_minor": 0,
+    "vendor_name": "Example Zero Balance",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": [
+      {
+        "description": "Replacement labels",
+        "quantity": 4,
+        "unit_price_minor": 0,
+        "amount_minor": 0
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0001",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Explicit annual salary range and every schema field.",
+  "content": "Title: Software Engineer\nCompany: Example Harbour Systems\nLocation: London\nWorking arrangement: hybrid\nSalary: GBP 45,000 to GBP 60,000 per year\nEmployment: full-time\nSeniority: mid\nVisa sponsorship: offered\nPosted: 2026-10-01",
+  "expected": {
+    "title": "Software Engineer",
+    "company": "Example Harbour Systems",
+    "location": "London",
+    "remote_policy": "hybrid",
+    "salary_min": 4500000,
+    "salary_max": 6000000,
+    "salary_currency": "GBP",
+    "salary_period": "year",
+    "employment_type": "full_time",
+    "seniority": "mid",
+    "visa_sponsorship": "offered",
+    "posted_date": "2026-10-01"
+  }
+}

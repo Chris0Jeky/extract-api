@@ -1,0 +1,35 @@
+{
+  "fixture_id": "invoice_0028",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Retain repeated descriptions as two distinct line items with their stated quantities.",
+  "content": "INVOICE\nVendor: Example Label Workshop\nInvoice number: SYN-0028\nIssue date: 2026-10-01\nLabel packs: quantity 1, unit price GBP 4.00, line amount GBP 4.00.\nLabel packs: quantity 2, unit price GBP 3.00, line amount GBP 6.00.\nSubtotal: GBP 10.00\nVAT: GBP 2.00\nTotal: GBP 12.00",
+  "expected": {
+    "invoice_number": "SYN-0028",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "GBP",
+    "subtotal_minor": 1000,
+    "tax_minor": 200,
+    "total_minor": 1200,
+    "vendor_name": "Example Label Workshop",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": [
+      {
+        "description": "Label packs",
+        "quantity": 1,
+        "unit_price_minor": 400,
+        "amount_minor": 400
+      },
+      {
+        "description": "Label packs",
+        "quantity": 2,
+        "unit_price_minor": 300,
+        "amount_minor": 600
+      }
+    ]
+  }
+}

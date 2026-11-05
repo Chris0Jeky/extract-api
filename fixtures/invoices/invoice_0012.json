@@ -1,0 +1,29 @@
+{
+  "fixture_id": "invoice_0012",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Line amount is authoritative after a stated discount; do not force quantity times unit price.",
+  "content": "INVOICE\nVendor: Example Discount Supplies\nInvoice number: SYN-0012\nIssue date: 2026-10-01\nDesk lamps: quantity 3, unit price GBP 100.00, line discount GBP 30.00, net line amount GBP 270.00.\nSubtotal: GBP 270.00\nVAT: GBP 54.00\nTotal: GBP 324.00",
+  "expected": {
+    "invoice_number": "SYN-0012",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "GBP",
+    "subtotal_minor": 27000,
+    "tax_minor": 5400,
+    "total_minor": 32400,
+    "vendor_name": "Example Discount Supplies",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": [
+      {
+        "description": "Desk lamps",
+        "quantity": 3,
+        "unit_price_minor": 10000,
+        "amount_minor": 27000
+      }
+    ]
+  }
+}

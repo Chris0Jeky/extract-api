@@ -1,0 +1,29 @@
+{
+  "fixture_id": "invoice_0027",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Small monetary values and repeated decimal arithmetic.",
+  "content": "INVOICE\nVendor: Example Small Parts\nInvoice number: SYN-0027\nIssue date: 2026-10-01\nWashers: quantity 3, unit price GBP 0.33, line amount GBP 0.99.\nSubtotal: GBP 0.99\nTotal: GBP 0.99",
+  "expected": {
+    "invoice_number": "SYN-0027",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "GBP",
+    "subtotal_minor": 99,
+    "tax_minor": null,
+    "total_minor": 99,
+    "vendor_name": "Example Small Parts",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": [
+      {
+        "description": "Washers",
+        "quantity": 3,
+        "unit_price_minor": 33,
+        "amount_minor": 99
+      }
+    ]
+  }
+}

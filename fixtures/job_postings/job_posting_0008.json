@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0008",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Only the upper salary bound is stated; do not copy it into the lower bound.",
+  "content": "Title: Senior Developer\nSalary: up to GBP 85,000 per year\nSeniority: senior\nWorking arrangement: hybrid",
+  "expected": {
+    "title": "Senior Developer",
+    "company": null,
+    "location": null,
+    "remote_policy": "hybrid",
+    "salary_min": null,
+    "salary_max": 8500000,
+    "salary_currency": "GBP",
+    "salary_period": "year",
+    "employment_type": "unspecified",
+    "seniority": "senior",
+    "visa_sponsorship": "unspecified",
+    "posted_date": null
+  }
+}

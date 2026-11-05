@@ -1,0 +1,22 @@
+{
+  "fixture_id": "invoice_0030",
+  "doc_type": "invoice",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Explicit CAD declaration disambiguates dollar symbols; do not assume USD.",
+  "content": "INVOICE\nVendor: Example Canadian Accounts\nInvoice number: SYN-0030\nIssue date: 2026-10-01\nInvoice currency: CAD\nSubtotal: $100.00\nTax: $13.00\nTotal: $113.00",
+  "expected": {
+    "invoice_number": "SYN-0030",
+    "issue_date": "2026-10-01",
+    "due_date": null,
+    "currency": "CAD",
+    "subtotal_minor": 10000,
+    "tax_minor": 1300,
+    "total_minor": 11300,
+    "vendor_name": "Example Canadian Accounts",
+    "vendor_tax_id": null,
+    "buyer_name": null,
+    "line_items": null
+  }
+}

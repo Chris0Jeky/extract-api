@@ -1,0 +1,23 @@
+{
+  "fixture_id": "job_posting_0011",
+  "doc_type": "uk_job_posting",
+  "schema_version": "v1",
+  "source": "synthetic",
+  "label_status": "DRAFT",
+  "review_focus": "Explicit inability to sponsor maps to not_offered.",
+  "content": "Title: UX Researcher\nSalary: GBP 40,000 to GBP 50,000 per year\nApplicants must already have the right to work in the UK. We cannot sponsor a visa for this role.",
+  "expected": {
+    "title": "UX Researcher",
+    "company": null,
+    "location": null,
+    "remote_policy": "unspecified",
+    "salary_min": 4000000,
+    "salary_max": 5000000,
+    "salary_currency": "GBP",
+    "salary_period": "year",
+    "employment_type": "unspecified",
+    "seniority": "unspecified",
+    "visa_sponsorship": "not_offered",
+    "posted_date": null
+  }
+}

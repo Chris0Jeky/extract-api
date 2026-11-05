@@ -40,6 +40,9 @@ accuracy-run: ## Score REVIEWED invoice fixtures against a live endpoint + emit 
 		|| { echo "accuracy-run: no serving endpoint at $(BASE_URL) - start it first (make dev / docker compose up)"; exit 1; }
 	$(PYTHON) -m harness.run_accuracy --doc-type invoice --live --base-url $(BASE_URL) $(ARGS)
 
+accuracy-rehearsal: ## Exercise the REVIEWED corpus through the API offline; echoes labels, not provider accuracy. ARGS='--doc-type uk_job_posting' selects that corpus.
+	$(PYTHON) scripts/rehearse_accuracy.py $(ARGS)
+
 lock: ## Regenerate uv.lock from pyproject (run + commit after any dependency change)
 	uv lock
 
@@ -49,4 +52,4 @@ fixtures-validate: ## Validate fixtures against their schema + label rules
 test-hooks: ## Self-test the agent safety hooks
 	$(PYTHON) scripts/agent_hooks/smoke_test.py
 
-.PHONY: help dev test typecheck lint format ci-quick smoke accuracy-run lock fixtures-validate test-hooks
+.PHONY: help dev test typecheck lint format ci-quick smoke accuracy-run accuracy-rehearsal lock fixtures-validate test-hooks
