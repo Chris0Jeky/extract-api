@@ -12,21 +12,21 @@ authors = [{ name = "Chris0Jeky" }]
 dependencies = [
     # GHSA-6q48-6c7w-9gw2: remove compromised emSign trust roots from HTTP clients.
     "certifi>=2026.10.19",
-    "fastapi[standard]>=0.141.1,<0.160",
+    "fastapi[standard]>=0.141.1,<0.163",
     "pydantic>=2.13,<3",
     "openai>=2.53.0,<4",
     # Floor is the verified 0.109.1 (ADR 0001): the T09 structured-output path needs the
     # Messages `output_config` parameter, which the 0.109.0 floor did not guarantee.
-    "anthropic>=0.121.0,<1.15",
+    "anthropic>=0.121.0,<2.4",
     "PyMuPDF==1.27.2.3",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest==9.1.1",
+    "pytest==9.2.0",
     "pytest-cov>=6,<8",
-    "ruff==0.17.1",
-    "mypy==2.4.0",
+    "ruff==0.17.3",
+    "mypy==2.4.1",
     "httpx2==2.16.0",
 ]
 
