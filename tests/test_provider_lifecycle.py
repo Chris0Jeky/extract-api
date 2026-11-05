@@ -24,6 +24,7 @@ import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 
+from api.budget import BudgetGuard
 from api.idempotency import SqliteIdempotencyStore
 from api.main import create_app
 from caller_keys import AUTH
@@ -111,6 +112,10 @@ class ProviderHandler(BaseHTTPRequestHandler):
                 "stop_reason": "refusal" if step == "refusal" else "end_turn",
                 "usage": {"input_tokens": 100, "output_tokens": 50},
             }
+        if step == "negative_usage":
+            response["usage"]["input_tokens"] = -1000
+        if step == "invalid_usage":
+            response["usage"]["output_tokens"] = "private-usage-data"
         self._reply(200, response)
 
     def _reply(self, status, response):
@@ -276,6 +281,31 @@ def test_wire_cancelled_openai_response_is_retryable(local_provider, tmp_path):
         assert post(client).status_code == 200
         assert post(client).json()["meta"]["replayed"] is True
         assert len(local_provider.requests) == 2
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+@pytest.mark.parametrize("step", ["negative_usage", "invalid_usage"])
+def test_wire_bad_usage_preserves_prior_spend_and_failed_key_recovery(
+    local_provider, tmp_path, provider, step
+):
+    store = SqliteIdempotencyStore(str(tmp_path / "idem.sqlite"))
+    budget = BudgetGuard(1.0)
+    local_provider.steps.extend(["invalid", step])
+    with TestClient(create_app(idempotency_store=store, budget=budget), headers=AUTH) as client:
+        failed = post(client, provider)
+        assert failed.status_code == 502
+        assert failed.json()["error"] == "provider_error"
+        assert "private-usage-data" not in failed.text
+        single_cost = 0.000045 if provider == "openai" else 0.00105
+        assert budget.spent_usd == pytest.approx(single_cost)
+        assert store.get("test-key") is None
+        assert len(local_provider.requests) == 2
+        recovered = post(client, provider)
+        assert recovered.status_code == 200
+        assert budget.spent_usd == pytest.approx(2 * single_cost)
+        assert post(client, provider).json()["meta"]["replayed"] is True
+        assert budget.spent_usd == pytest.approx(2 * single_cost)
+        assert len(local_provider.requests) == 3
 
 
 @pytest.mark.parametrize("provider", ["openai", "anthropic"])

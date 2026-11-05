@@ -56,6 +56,13 @@ Summary line, logger `extract.access`, one per request, level INFO (ERROR for 5x
 
 Pipeline retry lines (`extract.pipeline`, WARNING) carry `attempt` and `retry_kinds`.
 
+Provider usage must contain non-negative integer token counts when supplied. Invalid
+counts or an unrepresentable computed cost produce `provider_error` (502), without
+echoing the offending metadata. The failed call's cost is unknown and contributes
+`0.0`; any known spend from an earlier validation attempt is still reconciled. The
+existing degraded-gateway fallback for absent usage remains zero tokens and zero cost.
+These values are estimates from configured prices, not a replacement for provider billing.
+
 ## The five signals
 
 1. Availability and readiness: `/healthz` is liveness. `/readyz` readiness is added by the
