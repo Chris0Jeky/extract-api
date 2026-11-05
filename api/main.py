@@ -368,7 +368,8 @@ def create_app(
     # Outside the admission gate: a rejected caller never takes an extraction slot, and is
     # refused before its body is read. Hashes are read once here, so a malformed
     # EXTRACT_API_KEY_SHA256S fails startup like the other env settings.
-    app.add_middleware(CallerAuth, key_hashes=key_hashes_from_env())
+    caller_key_hashes = key_hashes_from_env()
+    app.add_middleware(CallerAuth, key_hashes=caller_key_hashes)
     app.add_middleware(RequestContextMiddleware)
 
     @app.get("/healthz")
@@ -381,7 +382,7 @@ def create_app(
     probe_limiter = anyio.CapacityLimiter(1)
 
     @app.get("/readyz")
-    async def readyz() -> dict[str, str]:
+    async def readyz() -> dict[str, str | bool]:
         def probe() -> str:
             store = _store()
             store.probe()
@@ -411,6 +412,7 @@ def create_app(
             "provider_mode": (
                 "fixture" if os.environ.get("LLM_PROVIDER_MODE") == "fixture" else "live"
             ),
+            "caller_auth_configured": bool(caller_key_hashes),
         }
 
     # A plain `def` (not async): the provider call is blocking I/O, so Starlette runs

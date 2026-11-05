@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -198,7 +199,7 @@ def test_deploy_waits_for_http_200_and_revision_and_gates_fixture_smoke() -> Non
     ready = _step(job, "Verify the deployed revision")["run"]
     assert "SECONDS + 600" in ready
     assert '[[ "$status" == 200 ]]' in ready
-    assert "'.revision == $revision'" in ready
+    assert ".revision == $revision and .caller_auth_configured == true" in ready
     assert "gh workflow run deploy.yml -f revision=%s -f target=%s" in ready
     assert "exit 1" in ready
     smoke = _step(job, "Verify one deterministic fixture extraction")
@@ -208,6 +209,11 @@ def test_deploy_waits_for_http_200_and_revision_and_gates_fixture_smoke() -> Non
     # The endpoint requires a caller key, so the smoke sends one, from a secret, never inline.
     assert smoke["env"]["EXTRACT_API_KEY"] == "${{ secrets.EXTRACT_API_KEY }}"
     assert '-H "Authorization: Bearer $EXTRACT_API_KEY"' in smoke["run"]
+    keyless = _step(job, "Verify keyless extraction is rejected")
+    assert "if" not in keyless
+    assert "EXTRACT_API_KEY" not in keyless.get("env", {})
+    assert "Authorization:" not in keyless["run"]
+    assert "--data-binary '{}'" in keyless["run"]
 
 
 def _bash(script: str, variables: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -226,6 +232,82 @@ def _bash(script: str, variables: dict[str, str]) -> subprocess.CompletedProcess
         text=True,
         check=False,
     )
+
+
+def _probe_script_result(
+    step_name: str, tmp_path: Path, status: int, body: dict[str, Any]
+) -> subprocess.CompletedProcess[str]:
+    if shutil.which("jq") is None:
+        pytest.skip("jq is required to execute deployment probe steps")
+    script = _step(_workflow("deploy.yml")["jobs"]["deploy"], step_name)["run"]
+    # Stub only the network boundary. The workflow's real jq predicate and shell control
+    # flow run locally, including the deadline path, without a deployment or provider call.
+    stubs = """
+curl() {
+  while (( $# )); do
+    if [[ "$1" == -o ]]; then
+      printf '%s' "$TEST_RESPONSE_JSON" > "$2"
+      shift 2
+    else
+      shift
+    fi
+  done
+  printf '%s' "$TEST_HTTP_STATUS"
+}
+sleep() { SECONDS=601; }
+"""
+    return _bash(
+        stubs + script,
+        {
+            "BASE_URL": "https://unused.invalid",
+            "REVISION": "a" * 40,
+            "PREVIOUS_REVISION": "b" * 40,
+            "TARGET": "render",
+            "RUNNER_TEMP": str(tmp_path),
+            "GITHUB_STEP_SUMMARY": str(tmp_path / "summary.md"),
+            "TEST_HTTP_STATUS": str(status),
+            "TEST_RESPONSE_JSON": json.dumps(body),
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "accepted"),
+    [
+        (200, {"revision": "a" * 40, "caller_auth_configured": True}, True),
+        (200, {"revision": "a" * 40, "caller_auth_configured": False}, False),
+        (200, {"revision": "a" * 40}, False),
+        (200, {"revision": "a" * 40, "caller_auth_configured": "true"}, False),
+        (200, {"revision": "a" * 40, "caller_auth_configured": 1}, False),
+        (200, {"revision": "a" * 40, "caller_auth_configured": None}, False),
+        (200, {"revision": "b" * 40, "caller_auth_configured": True}, False),
+        (500, {"revision": "a" * 40, "caller_auth_configured": True}, False),
+    ],
+)
+def test_deploy_requires_the_requested_revision_with_auth_configured(
+    tmp_path: Path, status: int, body: dict[str, Any], accepted: bool
+) -> None:
+    result = _probe_script_result("Verify the deployed revision", tmp_path, status, body)
+    assert (result.returncode == 0) is accepted, result.stderr
+    if not accepted:
+        assert "Rollback:" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "accepted"),
+    [
+        (401, {"error": "unauthorized"}, True),
+        (200, {"error": "unauthorized"}, False),
+        (500, {"error": "internal_error"}, False),
+        (401, {"error": "internal_error"}, False),
+        (401, {}, False),
+    ],
+)
+def test_deploy_requires_a_keyless_unauthorized_response(
+    tmp_path: Path, status: int, body: dict[str, Any], accepted: bool
+) -> None:
+    result = _probe_script_result("Verify keyless extraction is rejected", tmp_path, status, body)
+    assert (result.returncode == 0) is accepted, result.stderr
 
 
 @pytest.mark.parametrize("revision", ["", "main", "a" * 39, "a" * 41, "A" * 40, "$(exit 0)"])

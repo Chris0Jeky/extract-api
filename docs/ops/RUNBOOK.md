@@ -11,7 +11,7 @@ The moving parts:
 | --- | --- | --- |
 | Image | `ghcr.io/chris0jeky/extract-api` | Built once per main commit by `.github/workflows/image.yml`: smoked, scanned, SBOM'd, attested, tagged `sha-<commit>`; `main` moves only to a proven digest |
 | Service | Render, from `render.yaml` | One Starter instance, 1 GB disk at `/data`, health check `/readyz`, fixture mode until go-live |
-| Deploy | `.github/workflows/deploy.yml` | Verifies provenance, deploys one digest, waits for `/readyz` to report it, checks one store and one fixture extraction |
+| Deploy | `.github/workflows/deploy.yml` | Verifies provenance, deploys one digest, waits for `/readyz` to report it with caller auth configured, checks keyless rejection, one store and one fixture extraction |
 | Logs | Render's log stream | One JSON line per event; one `extract.access` line per request (`docs/ops/OBSERVABILITY.md`) |
 | Sizing | `docs/ops/SIZING.md` | Starter with `EXTRACT_MAX_CONCURRENCY=4`, measured |
 
@@ -49,7 +49,7 @@ under deployment branches choose "Selected branches" with only `main`.
 provider keys, models and prices, and `EXTRACT_API_KEY_SHA256S`. Leave the provider values blank, or
 enter `unset` if Render insists on a value: fixture mode reads none of them, and going live
 (section 4) replaces them. Do 1.5 first and enter its hash for `EXTRACT_API_KEY_SHA256S`: without
-a hash the service refuses every extraction, and the deploy's fixture smoke fails.
+a hash the service refuses every extraction, and deployment verification fails in either mode.
 This creates the Starter service ($7 a month) and its 1 GB disk ($0.25 a month) in Frankfurt, and
 deploys the current `main` image.
 
@@ -91,9 +91,10 @@ gh workflow run deploy.yml -R Chris0Jeky/extract-api -f revision=<that sha> -f t
 
 Approve the run when GitHub asks (the environment's required reviewer). The workflow refuses an image
 that `image.yml` did not build and attest on main for that exact commit, deploys it by digest,
-then fails unless all of these hold within ten minutes: `/readyz` answers 200 with that revision;
-ten samples of `/readyz` all name the same `idempotency_store_id`; and, in fixture mode, one
-extraction returns exactly the labelled `invoice_0001` record. Its job summary records the
+then waits up to ten minutes for `/readyz` to answer 200 with that revision and
+`"caller_auth_configured":true`. It also requires a keyless extraction to return 401
+`unauthorized`, ten samples of `/readyz` to name the same `idempotency_store_id`, and, in fixture
+mode, one extraction to return exactly the labelled `invoice_0001` record. Its job summary records the
 previously deployed revision, which is the rollback target.
 
 A Render deploy stops the old instance before starting the new one (a disk rules out overlap), so
@@ -113,7 +114,10 @@ validation failures are not stored, so their keys remain retryable.
 curl -s https://<service>.onrender.com/readyz
 ```
 
-Ready looks like `{"status":"ready","revision":"<sha>","idempotency_store_id":"<id>","provider_mode":"fixture"}`.
+Ready looks like `{"status":"ready","revision":"<sha>","idempotency_store_id":"<id>","provider_mode":"fixture","caller_auth_configured":true}`.
+`caller_auth_configured` reports whether the service loaded at least one caller-key hash at
+startup; it exposes no key or hash material. An empty configuration reports `false` while
+the store probe can still return 200, so deployment verification requires `true` explicitly.
 `/healthz` and `/readyz` need no key. Prove the key check from outside:
 
 ```bash
@@ -140,7 +144,9 @@ spend on your provider account. When it does:
 
 1. First, set the GitHub variable `EXTRACT_API_SMOKE_MODE` to `live`, before any further deploy:
    with `fixture` still set, a deploy's smoke extraction would reach the live provider. With
-   `live`, CI never calls a paid provider; the deploy checks readiness and the store only.
+   `live`, CI never calls a paid provider; the deploy checks readiness, caller auth and the
+   store. Its keyless request uses an invalid payload, which cannot reach a provider even
+   if the authentication gate regresses.
 2. In Render's environment for the service: delete `LLM_PROVIDER_MODE` and `FIXTURE_CANNED_TEXT`;
    set `OPENAI_API_KEY` (and/or `ANTHROPIC_API_KEY`), the model ids and the four per-million-token
    prices for the models you chose, from the provider's own pricing page; keep
@@ -150,7 +156,8 @@ spend on your provider account. When it does:
    redeploy keeps the digest the deploy hook set or re-pulls the service's `:main` tag. So
    re-run the deploy workflow (section 2) with the revision you mean to run: it pins the digest
    and verifies it.
-4. Check `/readyz` reports `"provider_mode":"live"`, then make one real extraction yourself and
+4. Check `/readyz` reports `"provider_mode":"live"` and `"caller_auth_configured":true`,
+   then make one real extraction yourself and
    read its `extract.access` log line for `result`, `cost_usd` and `duration_ms`.
 
 ## 5. Roll back
