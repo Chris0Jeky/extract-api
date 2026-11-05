@@ -33,4 +33,16 @@ the offline smoke (`make smoke`).
 5. **Gateway trace (M4):** capture a before/after trace of one golden extraction
    around the `LLM_BASE_URL` flip; this is the gateway-migration evidence.
 
+## Accuracy response metadata (offline)
+
+Run `uv run pytest --no-cov tests/test_run_accuracy.py` to check the harness HTTP
+boundary with mocked responses and no provider calls. Successful responses need
+finite, non-negative JSON numbers for `cost_usd` and `latency_ms` (zero is valid;
+booleans and numeric strings are not), plus a non-blank provider string.
+
+Malformed metadata counts as a failed extraction even when the extracted record
+is correct. Any independently valid cost remains in failed-extraction spend;
+invalid cost is marked unknown. These responses contribute neither successful
+field matches nor latency samples.
+
 A red result is a real problem: file it, do not wave it through.

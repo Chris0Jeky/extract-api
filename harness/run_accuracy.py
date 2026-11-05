@@ -324,7 +324,9 @@ def live_predictor(
     requires; a keyless or wrong-key run comes back `unauthorized` and is skipped, not scored.
     A ConnectError or ConnectTimeout becomes RequestNotSent and is skipped with zero cost,
     since the request could not reach the endpoint. Read/write failures remain scored with
-    unknown spend.
+    unknown spend. Successful cost and latency must be finite, non-negative JSON numbers
+    (not booleans), and the resolved provider must be a non-empty string. Malformed metadata
+    fails the extraction while preserving any independently valid reported cost.
     """
     import httpx  # local import: only --live needs an HTTP client
 
@@ -369,11 +371,23 @@ def live_predictor(
             if isinstance(meta, dict):
                 known_cost = _validated_cost(meta.get("cost_usd"))
             record = body["data"]
-            cost_usd = float(meta["cost_usd"])
-            latency_ms = float(meta["latency_ms"])
-            server_provider = str(meta["provider"])  # the provider the server resolved
+            cost_usd = known_cost
+            if cost_usd is None:
+                raise ValueError("cost_usd must be a finite, non-negative JSON number")
+            latency_ms = meta["latency_ms"]
+            if (
+                isinstance(latency_ms, bool)
+                or not isinstance(latency_ms, (int, float))
+                or not math.isfinite(latency_ms)
+                or latency_ms < 0
+            ):
+                raise ValueError("latency_ms must be a finite, non-negative JSON number")
+            latency_ms = float(latency_ms)
+            server_provider = meta["provider"]  # the provider the server resolved
+            if not isinstance(server_provider, str) or not server_provider.strip():
+                raise ValueError("provider must be a non-empty string")
         except (ValueError, TypeError, KeyError, ArithmeticError, RecursionError) as exc:
-            # ArithmeticError covers OverflowError from float() of an out-of-range JSON integer.
+            # ArithmeticError covers OverflowError for an out-of-range JSON latency integer.
             raise PredictionFailed(
                 f"{fixture_id}: malformed 2xx response ({type(exc).__name__})",
                 cost_usd=known_cost,
@@ -381,12 +395,6 @@ def live_predictor(
         if not isinstance(record, dict):
             raise PredictionFailed(
                 f"{fixture_id}: 2xx 'data' is not a JSON object", cost_usd=known_cost
-            )
-        if not (math.isfinite(cost_usd) and math.isfinite(latency_ms)):
-            # float("nan")/float("inf") parse without error, so a 2xx metric of "nan"/"inf"
-            # would silently poison the cost total and latency percentiles; reject it (issue #57).
-            raise PredictionFailed(
-                f"{fixture_id}: 2xx cost/latency is not a finite number", cost_usd=known_cost
             )
         return Prediction(
             record=record, cost_usd=cost_usd, latency_ms=latency_ms, provider=server_provider
