@@ -29,7 +29,11 @@ def _rec(**over: object) -> dict[str, object]:
 
 
 def test_identical_records_all_match():
-    assert set(score_record(_MODEL, _rec(), _rec()).values()) == {FieldOutcome.match}
+    outcomes = score_record(_MODEL, _rec(), _rec())
+    for key, expected in _BASE.items():
+        assert outcomes[key] is (
+            FieldOutcome.null_match if expected is None else FieldOutcome.match
+        )
 
 
 def test_mismatch_on_a_changed_value():
@@ -71,11 +75,61 @@ def test_aggregate_rolls_up_per_field_rates_cost_and_latency():
     assert 0.0 < report.overall_exact_match_rate < 1.0
 
 
-def test_score_failed_marks_every_field_missed():
-    # A failed extraction (no record) counts every expected field as missed.
+def test_score_failed_distinguishes_absent_fields_from_missed_values():
     outcomes = score_failed(_MODEL, _rec())
-    assert set(outcomes.values()) == {FieldOutcome.missed}
     assert set(outcomes) == set(_BASE)  # every field accounted for
+    for key, expected in _BASE.items():
+        assert outcomes[key] is (
+            FieldOutcome.failed_null if expected is None else FieldOutcome.missed
+        )
+
+
+def test_null_rates_use_observed_absent_fields_instead_of_all_fields():
+    report = aggregate(
+        "invoice", "openai", [score_record(_MODEL, _rec(buyer_name="ghost"), _rec())], [], []
+    )
+    assert report.total_fields == 11
+    assert report.total_null_opportunities == 4
+    assert report.total_null_matches == 3
+    assert report.hallucinated_field_rate == pytest.approx(0.25)
+    assert report.null_handling_correctness_rate == pytest.approx(0.75)
+    assert report.overall_exact_match_rate == pytest.approx(10 / 11)
+    md = render_markdown(report)
+    assert "hallucinated-field rate: 25.0% (1/4)" in md
+    assert "null-handling correctness: 75.0% (3/4)" in md
+
+
+def test_failed_nulls_do_not_reward_or_dilute_observed_null_rates():
+    report = aggregate(
+        "invoice",
+        "openai",
+        [score_record(_MODEL, _rec(buyer_name="ghost"), _rec()), score_failed(_MODEL, _rec())],
+        [],
+        [],
+        n_failures=1,
+    )
+    assert report.total_fields == 22
+    assert report.total_null_opportunities == 4
+    assert report.total_failed_null == 4
+    assert report.hallucinated_field_rate == pytest.approx(0.25)
+    assert report.null_handling_correctness_rate == pytest.approx(0.75)
+    assert report.overall_exact_match_rate == pytest.approx(10 / 22)
+    assert sum(s.missed for s in report.per_field.values()) == 7
+    assert report.per_field["buyer_name"].failed_null == 1
+    assert "4 failed expected-null field(s) excluded" in render_markdown(report)
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_no_observable_null_fields_reports_na(failed):
+    outcomes = score_failed(_MODEL, _rec()) if failed else {"value": FieldOutcome.match}
+    report = aggregate("invoice", "openai", [outcomes], [], [], n_failures=int(failed))
+    assert report.total_null_opportunities == 0
+    md = render_markdown(report)
+    assert "hallucinated-field rate: n/a (0/0)" in md
+    assert "null-handling correctness: n/a (0/0)" in md
+    if failed:
+        assert "overall exact-match: 0.0% (0/11)" in md
+        assert "4 failed expected-null field(s) excluded" in md
 
 
 def test_aggregate_carries_failure_count():
@@ -100,7 +154,7 @@ def test_render_markdown_has_summary_and_per_field_table():
     assert "latency p50/p95 (successful):" in md  # honest: success-only latency
     assert "| field | exact-match | mismatch | missed | hallucinated |" in md
     assert "`invoice_number`" in md
-    assert "skipped (control-plane" not in md  # no skip line when nothing was skipped
+    assert "skipped (before model call" not in md  # no skip line when nothing was skipped
 
 
 def test_aggregate_carries_skipped_count():
@@ -116,7 +170,7 @@ def test_render_markdown_surfaces_skipped_control_plane_fixtures():
         "invoice", "openai", [score_record(_MODEL, _rec(), _rec())], [0.01], [12.0], n_skipped=3
     )
     md = render_markdown(report)
-    assert "skipped (control-plane, not scored): 3" in md
+    assert "skipped (before model call, not scored): 3" in md
     assert "scored subset only" in md
 
 
@@ -125,7 +179,7 @@ def test_render_markdown_all_skipped_is_honest_not_zero_percent():
     # read n/a (not a misleading 0.0%) while the skip banner explains why (issue #52).
     report = aggregate("invoice", "openai", [], [], [], n_skipped=4)
     md = render_markdown(report)
-    assert "skipped (control-plane, not scored): 4" in md
+    assert "skipped (before model call, not scored): 4" in md
     assert "overall exact-match: n/a (0/0)" in md
     assert "hallucinated-field rate: n/a (0/0)" in md
     assert "0.0%" not in md  # nothing was scored, so no percentage is claimed
@@ -135,7 +189,7 @@ def test_render_markdown_empty_run_shows_na_not_zero_percent():
     # An empty corpus (no skips either) is likewise n/a, not a measured 0%.
     md = render_markdown(aggregate("invoice", "openai", [], [], []))
     assert "overall exact-match: n/a (0/0)" in md
-    assert "skipped (control-plane" not in md
+    assert "skipped (before model call" not in md
 
 
 def test_report_splits_successful_and_failed_billed_costs():

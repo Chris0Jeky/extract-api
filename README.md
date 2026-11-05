@@ -76,7 +76,8 @@ The `--live` accuracy harness, the load test and the Docker smoke read the calle
 Idempotency: `Idempotency-Key` + `sha256(payload)` is stored with the response.
 For a successful response, same key + same hash replays the stored response with
 `meta.replayed: true`, preserves the original `meta.cost_usd`, and makes no provider
-call or new provider spend. Same key + different hash is a 409; TTL 24h.
+call or new provider spend. Same key + different hash is a 409; TTL 24h. This is
+a sequential replay contract; concurrent in-flight reservation is deferred in #42.
 
 Invoice line-item quantities must be finite numbers. NaN, infinity and numeric
 overflow fail strict validation and enter the existing validation-retry loop.
@@ -114,25 +115,37 @@ and multi-tenancy (one shared key set gates access; the gateway owns budgets).
 
 ## Status
 
-Engineering-complete through M3 and deployable. The invoice and job-posting paths are live
-end-to-end for both providers (OpenAI + Anthropic) behind the `llm/client.py` seam, with the
-validation-retry loop, idempotency (SQLite), PDF text extraction (PyMuPDF, no OCR), full error
-taxonomy, a per-run USD budget guard, and the deterministic accuracy harness. The container
-builds and `docker compose up` serves `/v1/extract` with a green healthcheck (verified offline).
+The invoice and job-posting API paths, both provider adapters, strict validation
+and retry trail, SQLite replay, PDF text extraction, budget accounting, caller
+auth, and deterministic accuracy scoring are implemented. The fixture pool has
+10 REVIEWED invoices plus 20 DRAFT invoices and 20 DRAFT job postings. DRAFT
+fixtures are excluded from scoring. `uv run make accuracy-rehearsal` echoes
+reviewed labels through the API with zero provider cost to verify orchestration.
 
-What is still **pending**: the published accuracy table needs human-reviewed fixtures and paid
-`--live` runs against both providers, so the "Numbers pending" block above stays until then.
-Build sequence and tasks live in `tasks/BACKLOG.md`; the plan and decisions live in `docs/`; the
-living status snapshot is `docs/STATUS.md`.
+The scorer includes conditional hallucination and null-handling correctness rates:
+both use expected-null fields in usable, schema-valid predictions, with failed
+records reported separately as exclusions. Exact null matches earn exact-match
+credit; failed records do not. Rehearsal results do not measure provider accuracy.
+
+The published accuracy table still needs human-reviewed fixtures and paid runs
+against both providers, so the "Numbers pending" block above stays. Hosting
+provisioning and gateway trace evidence also remain open. Tasks live in
+`tasks/BACKLOG.md`; the current handoff is `docs/STATUS.md`.
+
+Deployment verification requires `/readyz` to report startup-captured
+`caller_auth_configured: true`, followed by a keyless extraction probe returning
+401. The probe uses an invalid `{}` body to prevent provider work on an auth
+regression. See `docs/ops/RUNBOOK.md` for the operational steps.
 
 ## Development
 
 ```
-make help        # list targets
-make dev         # run the API locally (uvicorn)
-make test        # pytest with coverage
-make typecheck   # mypy strict
-make smoke       # deterministic offline smoke (no paid model calls)
+uv sync --locked --extra dev
+uv run make help        # list targets
+uv run make dev         # run the API locally (uvicorn)
+uv run make test        # pytest with coverage
+uv run make typecheck   # mypy strict
+uv run make smoke       # deterministic offline smoke (no paid model calls)
 ```
 
 ## Deploy (Docker)

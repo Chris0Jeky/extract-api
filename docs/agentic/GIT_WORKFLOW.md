@@ -26,16 +26,20 @@ Rules:
   surface what you find instead of proceeding.
 - Push and merge authority is declared in `.agent-harness/tier.json`, not here.
 
-## Agent operating notes (learned the hard way)
+## Agent operating notes
 
-- **The safety hook inspects the whole Bash command string, not intent.** A commit
-  message, PR body, issue body, or review reply that merely *describes* `rm -rf /`,
-  `curl ... | sh`, `sudo`, a force-push, or a secret will be blocked. Write that text
-  to a file and pass it via `git commit -F file`, `gh ... -F body=@file`, or
-  `--body-file`. The editor/Write tool bypasses the hook.
-- **Run the full `make ci-quick` as its own step before every push.** A compound
-  `ruff format && ... && git push` that gets blocked mid-way skips the format step,
-  and CI then fails on an unformatted file. Verify the gate, then push.
+Hook-related notes below describe behavior only when a safety hook is actively
+configured. The committed settings in this repo do not wire the vendored floor;
+these notes do not establish runtime interception.
+
+- An active safety hook may inspect the whole Bash command string, including
+  quoted prose. For multiline commit messages, PR bodies, issue bodies, and review
+  replies, write the exact text to a file and use `git commit -F file` or
+  `gh ... --body-file file`. This also preserves newlines and avoids shell quoting
+  errors. Body files do not exempt an operation from review or authorization.
+- **Run the full `uv run make ci-quick` as its own step before every push.**
+  Verify the gate, then push. If an active hook rejects a compound command, do not
+  assume any earlier formatting or verification step in that command ran.
 - **Stacked merges under strict branch protection:** merge oldest-first; after each
   merge, `gh pr edit N --base main` to retarget the next PR (it is not auto-retargeted
   while the old base branch still exists), then `gh pr update-branch N` so CI re-runs,

@@ -240,18 +240,22 @@ def test_run_accuracy_all_fixtures_skipped_scores_nothing():
     assert report.overall_exact_match_rate == 0.0  # the 0/0 property guard holds
 
 
-def test_run_accuracy_schema_invalid_prediction_is_a_failure():
+def test_run_accuracy_schema_invalid_prediction_is_a_failure(capsys):
     # A 200 with object-but-schema-invalid data ({}) must be a failed extraction, not a crash
     # in score_record's strict canonicalization (issue #57, codex review).
     report = run_accuracy(
         "invoice",
         "openai",
         lambda fx: Prediction({}, 0.01, 5.0, "openai"),  # {} is not a valid invoice record
-        fixtures=[_fixture()],
+        fixtures=[{**_fixture(), "fixture_id": "schema-invalid"}],
     )
     assert report.n_failures == 1
     assert report.n_fixtures == 1
     assert report.overall_exact_match_rate == 0.0  # scored as all-missed, run did not crash
+    assert capsys.readouterr().err == (
+        "accuracy: fixture schema-invalid: prediction failed: schema-invalid record "
+        "(11 validation error(s))\n"
+    )
 
 
 def test_run_accuracy_labels_report_with_server_resolved_provider():
@@ -292,11 +296,44 @@ def test_live_predictor_non_2xx_raises_prediction_failed(monkeypatch):
 
 def test_live_predictor_transport_error_raises_prediction_failed(monkeypatch):
     def boom(*a, **k):
-        raise httpx.ConnectError("refused")
+        raise httpx.ReadTimeout("response timed out")
 
     monkeypatch.setattr(httpx, "post", boom)
     with pytest.raises(PredictionFailed):
         live_predictor("http://h", "openai")(_fixture("c"))
+
+
+@pytest.mark.parametrize("connection_error", [httpx.ConnectError, httpx.ConnectTimeout])
+def test_connection_error_is_skipped_without_cost_or_accuracy_penalty(
+    monkeypatch, capsys, connection_error
+):
+    calls = 0
+
+    def fake_post(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise connection_error("could not connect")
+        return _resp(200, _ok_body())
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    report = run_accuracy(
+        "invoice",
+        "openai",
+        live_predictor("http://h", "openai"),
+        fixtures=[{**_fixture("a"), "fixture_id": "unsent"}, _fixture("b")],
+    )
+    assert calls == 2
+    assert report.n_skipped == 1
+    assert report.n_failures == 0
+    assert report.n_fixtures == 1
+    assert report.overall_exact_match_rate == 1.0
+    assert report.cost_usd_total == pytest.approx(0.01)
+    assert report.n_failed_cost_unknown == 0
+    assert capsys.readouterr().err == (
+        "accuracy: fixture unsent: skipped (request not sent): "
+        f"unsent: {connection_error.__name__}\n"
+    )
 
 
 @pytest.mark.parametrize("cost", [0.03, 0, 1])
@@ -619,23 +656,29 @@ def test_main_live_write_failure_keeps_report_on_stdout(tmp_path, monkeypatch, c
         "",
         "- fixtures scored: 1 (0 failed extraction(s))",
         "- overall exact-match: 100.0% (11/11)",
-        "- hallucinated-field rate: 0.0% (0/11)",
+        "- hallucinated-field rate: 0.0% (0/4)",
+        "- null-handling correctness: 100.0% (4/4)",
+        "- null-metric denominator: expected-null fields in usable records; "
+        "0 failed expected-null field(s) excluded "
+        "(failed fields remain in overall exact-match without credit)",
         "- cost (all billed requests): $0.0100 (successful: $0.0100; failed: $0.0000) "
         "| latency p50/p95 (successful): 12/12 ms",
         "",
-        "| field | exact-match | mismatch | missed | hallucinated |",
-        "| --- | --- | --- | --- | --- |",
-        "| `buyer_name` | 100% (1/1) | 0 | 0 | 0 |",
-        "| `currency` | 100% (1/1) | 0 | 0 | 0 |",
-        "| `due_date` | 100% (1/1) | 0 | 0 | 0 |",
-        "| `invoice_number` | 100% (1/1) | 0 | 0 | 0 |",
-        "| `issue_date` | 100% (1/1) | 0 | 0 | 0 |",
-        "| `line_items` | 100% (1/1) | 0 | 0 | 0 |",
-        "| `subtotal_minor` | 100% (1/1) | 0 | 0 | 0 |",
-        "| `tax_minor` | 100% (1/1) | 0 | 0 | 0 |",
-        "| `total_minor` | 100% (1/1) | 0 | 0 | 0 |",
-        "| `vendor_name` | 100% (1/1) | 0 | 0 | 0 |",
-        "| `vendor_tax_id` | 100% (1/1) | 0 | 0 | 0 |",
+        "Correct nulls are included in exact-match; failed nulls receive no exact-match credit.",
+        "",
+        "| field | exact-match | mismatch | missed | hallucinated | correct null | failed null |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| `buyer_name` | 100% (1/1) | 0 | 0 | 0 | 1 | 0 |",
+        "| `currency` | 100% (1/1) | 0 | 0 | 0 | 0 | 0 |",
+        "| `due_date` | 100% (1/1) | 0 | 0 | 0 | 1 | 0 |",
+        "| `invoice_number` | 100% (1/1) | 0 | 0 | 0 | 0 | 0 |",
+        "| `issue_date` | 100% (1/1) | 0 | 0 | 0 | 0 | 0 |",
+        "| `line_items` | 100% (1/1) | 0 | 0 | 0 | 1 | 0 |",
+        "| `subtotal_minor` | 100% (1/1) | 0 | 0 | 0 | 0 | 0 |",
+        "| `tax_minor` | 100% (1/1) | 0 | 0 | 0 | 0 | 0 |",
+        "| `total_minor` | 100% (1/1) | 0 | 0 | 0 | 0 | 0 |",
+        "| `vendor_name` | 100% (1/1) | 0 | 0 | 0 | 0 | 0 |",
+        "| `vendor_tax_id` | 100% (1/1) | 0 | 0 | 0 | 1 | 0 |",
     ]
     assert capsys.readouterr().out == "\n".join(expected_lines) + "\n"
 

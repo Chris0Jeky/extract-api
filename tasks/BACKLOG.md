@@ -1,7 +1,7 @@
 # Backlog
 
-Half-day tasks with definitions of done (DoD), sequenced M1-M4. A task is done
-when its DoD is true and `make ci-quick` is green. Every task ships as its own PR
+Half-day tasks with definitions of done (DoD), sequenced M1-M5. A task is done
+when its DoD is true and `uv run make ci-quick` is green. Every task ships as its own PR
 under this repo's declared gate (AGENTS.md names where that policy lives). Small
 conventional commits.
 
@@ -20,8 +20,7 @@ This file is also the human-action backlog (`human_todo` in
 - [x] **Schemas (real).** Strict `invoice.v1`, `job_posting.v1`, registry;
   null-union optionals; ISO-4217 + salary cross-field validators.
 - [x] **Docs.** PLAN + ADRs 0001-0004; README v0; product CLAUDE.md.
-- [x] **10 DRAFT invoice fixtures** + `fixtures-validate`. (Awaiting Chris to
-  review and flip to REVIEWED.)
+- [x] **10 starter invoice fixtures** + `fixtures-validate`. Reviewed under T07.
 
 ## M1 - invoice path end-to-end (10 fixtures passing)
 
@@ -78,21 +77,30 @@ This file is also the human-action backlog (`human_todo` in
 - [x] **T14 PDF text extraction (PyMuPDF).** (PR #44) base64 pdf -> `get_text()`; no OCR;
   oversized/garbled input handled loudly (page/size caps); test on a small text-based PDF.
 
-## M3 - accuracy harness, both providers, table committed
+## M3 - accuracy harness and two-provider measurements
 
 - **T15 30-50 invoice + 30-50 job fixtures (50/50 real/synthetic, labeled).**
   DoD: ADR 0003 labeling; `fixtures-validate` passes; DRAFT excluded from scoring.
-  (Blocks on Chris.)
+  Current pool: 10 REVIEWED invoices, 20 DRAFT invoices, and 20 DRAFT job postings.
+  The 40 new drafts are synthetic; human review, corpus size, and the real/synthetic
+  mix remain incomplete. (Blocks on Chris.)
 - [x] **T16 `harness/run_accuracy.py` scoring.** (PR #45) per-field exact-match (after
   normalization), hallucinated-field rate; deterministic, no LLM judge; `--live` mode
   against the serving endpoint. Hardened since: control-plane skip (#52), malformed-2xx /
   `--timeout` / misplaced-fixture (#57 items 2-4), corpus-wide placement (#63).
   Terminal 422 billed cost + successful/failed/unknown cost labels are implemented
-  (#57 item 1, #74 item 4). Null-handling-correctness rate is deferred to T17 (#46).
+  (#57 item 1, #74 item 4). The #46 metrics are implemented: exact null matches
+  receive exact-match credit; hallucination and null-handling correctness use
+  expected-null opportunities in usable, schema-valid predictions. Failed records
+  earn no exact-match credit, and their expected-null exclusions are reported.
+  Connection errors/timeouts before send are zero-cost skips; invalid predictions
+  are diagnosed (#74). `uv run make accuracy-rehearsal` verifies orchestration
+  through the API using reviewed-label echoes, without measuring provider accuracy.
 - **T17 Two-provider accuracy table + cost/latency.** DoD: markdown table in
-  `evals/reports/` with per-field accuracy + hallucinated-field rate + cost +
-  p50/p95 latency, per doc type per provider; re-runnable via `make accuracy-run`.
-  (Blocks on paid `--live` runs; folds in #46; #57 cost hardening is implemented.)
+  `evals/reports/` with per-field accuracy + hallucinated-field rate + null-handling correctness + cost +
+  p50/p95 latency, per doc type per provider; re-runnable via `uv run make accuracy-run`.
+  (Blocks on reviewed fixtures and paid `--live` runs; #46 metrics and #57 cost
+  hardening are implemented.)
 - [x] **T18 Budget guard.** (PR #50) per-run USD cap; exceeding it raises `budget_exceeded`
   (402, control-plane); check-before-spend + reconcile-after (incl. failed-call cost);
   test forces the cap. Negative-cap now fails loud (#66). Reserve-reconcile is a documented
@@ -113,15 +121,16 @@ This file is also the human-action backlog (`human_todo` in
 
 ## M5 - hosting (owner provisioning; 2026-10-08 hosting wave)
 
-Everything up to provisioning is built and proven in CI (ADR 0005, `docs/ops/RUNBOOK.md`,
-`docs/ops/SIZING.md`). Each step below is the owner's: it creates an account, a service, a
+Hosting descriptors, deployment verification, and operational guidance are implemented
+and tested (ADR 0005, `docs/ops/RUNBOOK.md`, `docs/ops/SIZING.md`). Each step below is the owner's: it creates an account, a service, a
 secret, a public effect or spend. Nothing is provisioned until then.
 
-- [x] **extract-api-caller-auth (answered (a) 2026-10-10, agent-hq PR 356; built on branch feat/caller-api-keys, not yet deployed): How should extract-api authenticate callers before it goes live on Render with a paid model behind it?**
+- [x] **extract-api-caller-auth (answered (a) 2026-10-10, agent-hq PR 356; implemented; owner deployment remains open): How should extract-api authenticate callers before it goes live on Render with a paid model behind it?**
   - (a) API keys checked by the app, new 401 code (recommended): agents add an `unauthorized` (401) error code and require `Authorization: Bearer <key>` on /v1/extract, storing only SHA-256 hashes in a secret named EXTRACT_API_KEY_SHA256S; two keys valid at once for rotation; fails closed without keys; /healthz and /readyz stay open.
   - (b) An edge gateway in front (Cloudflare Access): needs the domain and a Cloudflare setup, and every direct address of the service must also be closed.
   - (c) No public live service for now: fixture-mode demonstration only.
-  - Why (a): it closes the paid endpoint on every platform and every address, at no cost; the new code is the part that needs your approval.
+  - Why (a): app-level caller checks cover every service address. The decision and
+    implementation are complete; hosting and live-provider setup remain owner tasks.
   - Source: agent-hq `decisions/extract-api-caller-auth.json` (answer in the cockpit). Blocks H6 only.
 - [ ] **H1 Make the GHCR image public** after the first main build of the image pipeline
   (RUNBOOK 1.1). Verify: an anonymous `docker pull ghcr.io/chris0jeky/extract-api:main` works.

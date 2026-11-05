@@ -4,20 +4,23 @@ Compares a predicted record against the labeled `expected` record field by field
 canonical normalization (both are run through the strict model so dates/money are compared
 in their canonical form, not as raw strings). Each field gets one outcome:
 
-- match:        predicted == expected (including both null)
+- match:        predicted == expected, both non-null
+- null_match:   predicted == expected == null
 - mismatch:     both non-null but different
 - missed:       expected has a value, predicted is null (the model dropped a real value)
 - hallucinated: expected is null, predicted is non-null (the model invented a value for a
                 genuinely-absent field)
+- failed_null:  expected is null, but extraction failed so null handling was not observed
 
 Aggregation reports per-field exact-match rate, the hallucinated-field rate, plus total
 cost and success-only p50/p95 latency (failed extractions are counted as n_failures but do
-not contribute a latency sample). Control-plane rejections (a budget_exceeded 402 or
-idempotency_conflict 409 that never reached the model) are counted as n_skipped and kept
+not contribute a latency sample). Requests that never reached the model, including
+control-plane rejections and connection failures, are counted as n_skipped and kept
 out of the per-field denominator entirely, so they cannot deflate the headline numbers
-(issue #52). A dedicated null-handling-correctness rate over expected-null fields is pending
-issue #46. Pure and dependency-light, so it is trivially testable and never touches the
-network.
+(issue #52). Hallucination and null-handling correctness share the expected-null denominator
+from usable records. Failed null fields are reported separately and excluded from those
+conditional rates; they remain in overall exact-match with no credit (issue #46).
+Pure and dependency-light, so it is trivially testable and never touches the network.
 """
 
 from __future__ import annotations
@@ -32,9 +35,11 @@ from pydantic import BaseModel
 
 class FieldOutcome(StrEnum):
     match = "match"
+    null_match = "null_match"
     mismatch = "mismatch"
     missed = "missed"
     hallucinated = "hallucinated"
+    failed_null = "failed_null"
 
 
 def _canonical(model_cls: type[BaseModel], record: dict[str, object]) -> dict[str, object]:
@@ -56,7 +61,7 @@ def score_record(
     for key, want in exp.items():
         got = pred.get(key)
         if got == want:
-            outcomes[key] = FieldOutcome.match
+            outcomes[key] = FieldOutcome.null_match if want is None else FieldOutcome.match
         elif want is None:
             outcomes[key] = FieldOutcome.hallucinated
         elif got is None:
@@ -71,20 +76,25 @@ def score_failed(
 ) -> dict[str, FieldOutcome]:
     """Outcomes for a fixture whose extraction failed entirely (no record produced).
 
-    The model returned nothing usable, so every expected field counts as missed; this
-    keeps a failed extraction in the per-field denominator (it is the accuracy signal),
-    rather than dropping the fixture or crashing the run. Pair with AccuracyReport.n_failures.
+    Present values count as missed; expected-null fields get a separate failed-null outcome
+    because neither correct null handling nor hallucination was observed. Every field stays
+    in the exact-match denominator with no credit. Pair with AccuracyReport.n_failures.
     """
-    return dict.fromkeys(_canonical(model_cls, expected), FieldOutcome.missed)
+    return {
+        key: FieldOutcome.failed_null if value is None else FieldOutcome.missed
+        for key, value in _canonical(model_cls, expected).items()
+    }
 
 
 @dataclass
 class FieldStats:
     total: int = 0
     matches: int = 0
+    null_matches: int = 0  # subset of matches, retained in exact-match totals
     mismatches: int = 0
     missed: int = 0
     hallucinated: int = 0
+    failed_null: int = 0
 
     @property
     def exact_match_rate(self) -> float:
@@ -104,8 +114,8 @@ class AccuracyReport:
     latency_p50_ms: float = 0.0
     latency_p95_ms: float = 0.0
     n_failures: int = 0  # fixtures whose extraction failed entirely (no record produced)
-    # fixtures a control-plane guard rejected before any model call (budget_exceeded 402 /
-    # idempotency_conflict 409); never scored, so excluded from the per-field denominator (#52).
+    # Fixtures rejected before a model call or not sent because connecting failed; never
+    # scored, so excluded from the per-field denominator (#52, #74).
     n_skipped: int = 0
 
     @property
@@ -121,12 +131,31 @@ class AccuracyReport:
         return sum(s.hallucinated for s in self.per_field.values())
 
     @property
+    def total_null_matches(self) -> int:
+        return sum(s.null_matches for s in self.per_field.values())
+
+    @property
+    def total_failed_null(self) -> int:
+        return sum(s.failed_null for s in self.per_field.values())
+
+    @property
+    def total_null_opportunities(self) -> int:
+        """Expected-null fields in usable records; failed extractions are unobservable."""
+        return self.total_null_matches + self.total_hallucinated
+
+    @property
     def overall_exact_match_rate(self) -> float:
         return self.total_matches / self.total_fields if self.total_fields else 0.0
 
     @property
     def hallucinated_field_rate(self) -> float:
-        return self.total_hallucinated / self.total_fields if self.total_fields else 0.0
+        denominator = self.total_null_opportunities
+        return self.total_hallucinated / denominator if denominator else 0.0
+
+    @property
+    def null_handling_correctness_rate(self) -> float:
+        denominator = self.total_null_opportunities
+        return self.total_null_matches / denominator if denominator else 0.0
 
 
 def _percentile(sorted_values: list[float], pct: float) -> float:
@@ -162,12 +191,17 @@ def aggregate(
             stats.total += 1
             if outcome is FieldOutcome.match:
                 stats.matches += 1
+            elif outcome is FieldOutcome.null_match:
+                stats.matches += 1
+                stats.null_matches += 1
             elif outcome is FieldOutcome.mismatch:
                 stats.mismatches += 1
             elif outcome is FieldOutcome.missed:
                 stats.missed += 1
-            else:
+            elif outcome is FieldOutcome.hallucinated:
                 stats.hallucinated += 1
+            elif outcome is FieldOutcome.failed_null:
+                stats.failed_null += 1
     report.cost_usd_successful = sum(costs_usd)
     report.cost_usd_failed = sum(failed_costs_usd or [])
     report.n_failed_cost_unknown = n_failures - len(failed_costs_usd or [])
@@ -187,36 +221,44 @@ def render_markdown(report: AccuracyReport) -> str:
         f"- fixtures scored: {report.n_fixtures} ({report.n_failures} failed extraction(s))",
     ]
     if report.n_skipped:
-        # A control-plane rejection (budget_exceeded/idempotency_conflict) never reached the
-        # model, so it is excluded from the accuracy denominator; surface it loudly so the
-        # numbers below are not misread as covering the whole corpus (issue #52).
+        # Skipped requests never reached the model; make the scored subset explicit.
         lines.append(
-            f"- skipped (control-plane, not scored): {report.n_skipped} "
+            f"- skipped (before model call, not scored): {report.n_skipped} "
             "(accuracy below covers the scored subset only)"
         )
     # When nothing was scored (an empty corpus, or every fixture skipped as control-plane),
     # 0/0 is not 0%: show "n/a" so the headline never claims a measured rate it does not have.
     overall = f"{report.overall_exact_match_rate:.1%}" if report.total_fields else "n/a"
-    halluc = f"{report.hallucinated_field_rate:.1%}" if report.total_fields else "n/a"
+    null_opportunities = report.total_null_opportunities
+    halluc = f"{report.hallucinated_field_rate:.1%}" if null_opportunities else "n/a"
+    null_correct = f"{report.null_handling_correctness_rate:.1%}" if null_opportunities else "n/a"
     cost_scope = "known billed requests" if report.n_failed_cost_unknown else "all billed requests"
     failed_cost = f"${report.cost_usd_failed:.4f}"
     if report.n_failed_cost_unknown:
         failed_cost += f" known; unknown failed spend: {report.n_failed_cost_unknown} request(s)"
     lines += [
         f"- overall exact-match: {overall} ({report.total_matches}/{report.total_fields})",
-        f"- hallucinated-field rate: {halluc} ({report.total_hallucinated}/{report.total_fields})",
+        f"- hallucinated-field rate: {halluc} ({report.total_hallucinated}/{null_opportunities})",
+        f"- null-handling correctness: {null_correct} "
+        f"({report.total_null_matches}/{null_opportunities})",
+        "- null-metric denominator: expected-null fields in usable records; "
+        f"{report.total_failed_null} failed expected-null field(s) excluded "
+        "(failed fields remain in overall exact-match without credit)",
         f"- cost ({cost_scope}): ${report.cost_usd_total:.4f} "
         f"(successful: ${report.cost_usd_successful:.4f}; failed: {failed_cost}) "
         "| latency p50/p95 (successful): "
         f"{report.latency_p50_ms:.0f}/{report.latency_p95_ms:.0f} ms",
         "",
-        "| field | exact-match | mismatch | missed | hallucinated |",
-        "| --- | --- | --- | --- | --- |",
+        "Correct nulls are included in exact-match; failed nulls receive no exact-match credit.",
+        "",
+        "| field | exact-match | mismatch | missed | hallucinated | correct null | failed null |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for key in sorted(report.per_field):
         s = report.per_field[key]
         lines.append(
             f"| `{key}` | {s.exact_match_rate:.0%} ({s.matches}/{s.total}) "
-            f"| {s.mismatches} | {s.missed} | {s.hallucinated} |"
+            f"| {s.mismatches} | {s.missed} | {s.hallucinated} "
+            f"| {s.null_matches} | {s.failed_null} |"
         )
     return "\n".join(lines)
