@@ -45,4 +45,29 @@ is correct. Any independently valid cost remains in failed-extraction spend;
 invalid cost is marked unknown. These responses contribute neither successful
 field matches nor latency samples.
 
+## Accuracy report files (offline)
+
+`--out` requires a regular file destination. Before constructing a live predictor,
+the CLI creates missing parent directories, checks any existing file without
+truncating it, and reserves a writable temporary sibling. Directory or unwritable
+targets fail before provider requests. File symlinks are resolved so their targets
+are updated and the links remain intact.
+
+After a run, the completed markdown is written to the temporary file and atomically
+replaces the target. A partial write or failed replacement leaves the previous
+report intact; temporary files are cleaned on ordinary success and exceptions.
+Existing file modes are applied after writing, immediately before replacement,
+so a mode writable through group/other does not disable the temporary sink.
+Newly created reports use the temporary
+file's private permissions. A terminated process may leave its temporary file.
+
+The report is also printed to stdout. A failed stdout still allows the file sink
+to be attempted, and a failed file write leaves the stdout report available. Both
+errors fail loudly. Preflight cannot guarantee disk space or access throughout a
+long run, so retain stdout capture for paid runs. This does not add per-fixture
+journaling or resume support.
+
+Run `uv run pytest --no-cov tests/test_harness_output.py tests/test_run_accuracy.py`
+for synthetic sink-failure checks; they make no paid calls.
+
 A red result is a real problem: file it, do not wave it through.
