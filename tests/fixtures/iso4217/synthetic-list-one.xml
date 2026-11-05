@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic parser fixture, not a SIX download. Pblshd is test data. -->
+<ISO_4217 Pblshd="2026-09-17">
+  <CcyTbl>
+    <CcyNtry><CtryNm>SYNTHETIC AED</CtryNm><CcyNm>Synthetic AED</CcyNm><Ccy>AED</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC AFN</CtryNm><CcyNm>Synthetic AFN</CcyNm><Ccy>AFN</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC ALL</CtryNm><CcyNm>Synthetic ALL</CcyNm><Ccy>ALL</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC AMD</CtryNm><CcyNm>Synthetic AMD</CcyNm><Ccy>AMD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC AOA</CtryNm><CcyNm>Synthetic AOA</CcyNm><Ccy>AOA</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC ARS</CtryNm><CcyNm>Synthetic ARS</CcyNm><Ccy>ARS</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC AUD</CtryNm><CcyNm>Synthetic AUD</CcyNm><Ccy>AUD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC AWG</CtryNm><CcyNm>Synthetic AWG</CcyNm><Ccy>AWG</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC AZN</CtryNm><CcyNm>Synthetic AZN</CcyNm><Ccy>AZN</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BAM</CtryNm><CcyNm>Synthetic BAM</CcyNm><Ccy>BAM</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BBD</CtryNm><CcyNm>Synthetic BBD</CcyNm><Ccy>BBD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BDT</CtryNm><CcyNm>Synthetic BDT</CcyNm><Ccy>BDT</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BHD</CtryNm><CcyNm>Synthetic BHD</CcyNm><Ccy>BHD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BIF</CtryNm><CcyNm>Synthetic BIF</CcyNm><Ccy>BIF</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BMD</CtryNm><CcyNm>Synthetic BMD</CcyNm><Ccy>BMD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BND</CtryNm><CcyNm>Synthetic BND</CcyNm><Ccy>BND</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BOB</CtryNm><CcyNm>Synthetic BOB</CcyNm><Ccy>BOB</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BOV</CtryNm><CcyNm IsFund="true">Synthetic BOV</CcyNm><Ccy>BOV</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BRL</CtryNm><CcyNm>Synthetic BRL</CcyNm><Ccy>BRL</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BSD</CtryNm><CcyNm>Synthetic BSD</CcyNm><Ccy>BSD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BTN</CtryNm><CcyNm>Synthetic BTN</CcyNm><Ccy>BTN</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BWP</CtryNm><CcyNm>Synthetic BWP</CcyNm><Ccy>BWP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BYN</CtryNm><CcyNm>Synthetic BYN</CcyNm><Ccy>BYN</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC BZD</CtryNm><CcyNm>Synthetic BZD</CcyNm><Ccy>BZD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC CAD</CtryNm><CcyNm>Synthetic CAD</CcyNm><Ccy>CAD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC CDF</CtryNm><CcyNm>Synthetic CDF</CcyNm><Ccy>CDF</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC CHE</CtryNm><CcyNm IsFund="true">Synthetic CHE</CcyNm><Ccy>CHE</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC CHF</CtryNm><CcyNm>Synthetic CHF</CcyNm><Ccy>CHF</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC CHW</CtryNm><CcyNm IsFund="true">Synthetic CHW</CcyNm><Ccy>CHW</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC CLF</CtryNm><CcyNm IsFund="true">Synthetic CLF</CcyNm><Ccy>CLF</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC CLP</CtryNm><CcyNm>Synthetic CLP</CcyNm><Ccy>CLP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC CNY</CtryNm><CcyNm>Synthetic CNY</CcyNm><Ccy>CNY</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC COP</CtryNm><CcyNm>Synthetic COP</CcyNm><Ccy>COP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC COU</CtryNm><CcyNm IsFund="true">Synthetic COU</CcyNm><Ccy>COU</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC CRC</CtryNm><CcyNm>Synthetic CRC</CcyNm><Ccy>CRC</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC CUP</CtryNm><CcyNm>Synthetic CUP</CcyNm><Ccy>CUP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC CVE</CtryNm><CcyNm>Synthetic CVE</CcyNm><Ccy>CVE</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC CZK</CtryNm><CcyNm>Synthetic CZK</CcyNm><Ccy>CZK</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC DJF</CtryNm><CcyNm>Synthetic DJF</CcyNm><Ccy>DJF</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC DKK</CtryNm><CcyNm>Synthetic DKK</CcyNm><Ccy>DKK</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC DOP</CtryNm><CcyNm>Synthetic DOP</CcyNm><Ccy>DOP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC DZD</CtryNm><CcyNm>Synthetic DZD</CcyNm><Ccy>DZD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC EGP</CtryNm><CcyNm>Synthetic EGP</CcyNm><Ccy>EGP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC ERN</CtryNm><CcyNm>Synthetic ERN</CcyNm><Ccy>ERN</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC ETB</CtryNm><CcyNm>Synthetic ETB</CcyNm><Ccy>ETB</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC EUR</CtryNm><CcyNm>Synthetic EUR</CcyNm><Ccy>EUR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC FJD</CtryNm><CcyNm>Synthetic FJD</CcyNm><Ccy>FJD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC FKP</CtryNm><CcyNm>Synthetic FKP</CcyNm><Ccy>FKP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC GBP</CtryNm><CcyNm>Synthetic GBP</CcyNm><Ccy>GBP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC GEL</CtryNm><CcyNm>Synthetic GEL</CcyNm><Ccy>GEL</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC GHS</CtryNm><CcyNm>Synthetic GHS</CcyNm><Ccy>GHS</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC GIP</CtryNm><CcyNm>Synthetic GIP</CcyNm><Ccy>GIP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC GMD</CtryNm><CcyNm>Synthetic GMD</CcyNm><Ccy>GMD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC GNF</CtryNm><CcyNm>Synthetic GNF</CcyNm><Ccy>GNF</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC GTQ</CtryNm><CcyNm>Synthetic GTQ</CcyNm><Ccy>GTQ</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC GYD</CtryNm><CcyNm>Synthetic GYD</CcyNm><Ccy>GYD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC HKD</CtryNm><CcyNm>Synthetic HKD</CcyNm><Ccy>HKD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC HNL</CtryNm><CcyNm>Synthetic HNL</CcyNm><Ccy>HNL</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC HTG</CtryNm><CcyNm>Synthetic HTG</CcyNm><Ccy>HTG</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC HUF</CtryNm><CcyNm>Synthetic HUF</CcyNm><Ccy>HUF</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC IDR</CtryNm><CcyNm>Synthetic IDR</CcyNm><Ccy>IDR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC ILS</CtryNm><CcyNm>Synthetic ILS</CcyNm><Ccy>ILS</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC INR</CtryNm><CcyNm>Synthetic INR</CcyNm><Ccy>INR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC IQD</CtryNm><CcyNm>Synthetic IQD</CcyNm><Ccy>IQD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC IRR</CtryNm><CcyNm>Synthetic IRR</CcyNm><Ccy>IRR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC ISK</CtryNm><CcyNm>Synthetic ISK</CcyNm><Ccy>ISK</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC JMD</CtryNm><CcyNm>Synthetic JMD</CcyNm><Ccy>JMD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC JOD</CtryNm><CcyNm>Synthetic JOD</CcyNm><Ccy>JOD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC JPY</CtryNm><CcyNm>Synthetic JPY</CcyNm><Ccy>JPY</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC KES</CtryNm><CcyNm>Synthetic KES</CcyNm><Ccy>KES</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC KGS</CtryNm><CcyNm>Synthetic KGS</CcyNm><Ccy>KGS</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC KHR</CtryNm><CcyNm>Synthetic KHR</CcyNm><Ccy>KHR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC KMF</CtryNm><CcyNm>Synthetic KMF</CcyNm><Ccy>KMF</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC KPW</CtryNm><CcyNm>Synthetic KPW</CcyNm><Ccy>KPW</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC KRW</CtryNm><CcyNm>Synthetic KRW</CcyNm><Ccy>KRW</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC KWD</CtryNm><CcyNm>Synthetic KWD</CcyNm><Ccy>KWD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC KYD</CtryNm><CcyNm>Synthetic KYD</CcyNm><Ccy>KYD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC KZT</CtryNm><CcyNm>Synthetic KZT</CcyNm><Ccy>KZT</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC LAK</CtryNm><CcyNm>Synthetic LAK</CcyNm><Ccy>LAK</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC LBP</CtryNm><CcyNm>Synthetic LBP</CcyNm><Ccy>LBP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC LKR</CtryNm><CcyNm>Synthetic LKR</CcyNm><Ccy>LKR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC LRD</CtryNm><CcyNm>Synthetic LRD</CcyNm><Ccy>LRD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC LSL</CtryNm><CcyNm>Synthetic LSL</CcyNm><Ccy>LSL</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC LYD</CtryNm><CcyNm>Synthetic LYD</CcyNm><Ccy>LYD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MAD</CtryNm><CcyNm>Synthetic MAD</CcyNm><Ccy>MAD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MDL</CtryNm><CcyNm>Synthetic MDL</CcyNm><Ccy>MDL</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MGA</CtryNm><CcyNm>Synthetic MGA</CcyNm><Ccy>MGA</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MKD</CtryNm><CcyNm>Synthetic MKD</CcyNm><Ccy>MKD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MMK</CtryNm><CcyNm>Synthetic MMK</CcyNm><Ccy>MMK</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MNT</CtryNm><CcyNm>Synthetic MNT</CcyNm><Ccy>MNT</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MOP</CtryNm><CcyNm>Synthetic MOP</CcyNm><Ccy>MOP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MRU</CtryNm><CcyNm>Synthetic MRU</CcyNm><Ccy>MRU</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MUR</CtryNm><CcyNm>Synthetic MUR</CcyNm><Ccy>MUR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MVR</CtryNm><CcyNm>Synthetic MVR</CcyNm><Ccy>MVR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MWK</CtryNm><CcyNm>Synthetic MWK</CcyNm><Ccy>MWK</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MXN</CtryNm><CcyNm>Synthetic MXN</CcyNm><Ccy>MXN</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MXV</CtryNm><CcyNm IsFund="true">Synthetic MXV</CcyNm><Ccy>MXV</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MYR</CtryNm><CcyNm>Synthetic MYR</CcyNm><Ccy>MYR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC MZN</CtryNm><CcyNm>Synthetic MZN</CcyNm><Ccy>MZN</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC NAD</CtryNm><CcyNm>Synthetic NAD</CcyNm><Ccy>NAD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC NGN</CtryNm><CcyNm>Synthetic NGN</CcyNm><Ccy>NGN</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC NIO</CtryNm><CcyNm>Synthetic NIO</CcyNm><Ccy>NIO</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC NOK</CtryNm><CcyNm>Synthetic NOK</CcyNm><Ccy>NOK</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC NPR</CtryNm><CcyNm>Synthetic NPR</CcyNm><Ccy>NPR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC NZD</CtryNm><CcyNm>Synthetic NZD</CcyNm><Ccy>NZD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC OMR</CtryNm><CcyNm>Synthetic OMR</CcyNm><Ccy>OMR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC PAB</CtryNm><CcyNm>Synthetic PAB</CcyNm><Ccy>PAB</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC PEN</CtryNm><CcyNm>Synthetic PEN</CcyNm><Ccy>PEN</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC PGK</CtryNm><CcyNm>Synthetic PGK</CcyNm><Ccy>PGK</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC PHP</CtryNm><CcyNm>Synthetic PHP</CcyNm><Ccy>PHP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC PKR</CtryNm><CcyNm>Synthetic PKR</CcyNm><Ccy>PKR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC PLN</CtryNm><CcyNm>Synthetic PLN</CcyNm><Ccy>PLN</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC PYG</CtryNm><CcyNm>Synthetic PYG</CcyNm><Ccy>PYG</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC QAR</CtryNm><CcyNm>Synthetic QAR</CcyNm><Ccy>QAR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC RON</CtryNm><CcyNm>Synthetic RON</CcyNm><Ccy>RON</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC RSD</CtryNm><CcyNm>Synthetic RSD</CcyNm><Ccy>RSD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC RUB</CtryNm><CcyNm>Synthetic RUB</CcyNm><Ccy>RUB</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC RWF</CtryNm><CcyNm>Synthetic RWF</CcyNm><Ccy>RWF</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SAR</CtryNm><CcyNm>Synthetic SAR</CcyNm><Ccy>SAR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SBD</CtryNm><CcyNm>Synthetic SBD</CcyNm><Ccy>SBD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SCR</CtryNm><CcyNm>Synthetic SCR</CcyNm><Ccy>SCR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SDG</CtryNm><CcyNm>Synthetic SDG</CcyNm><Ccy>SDG</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SEK</CtryNm><CcyNm>Synthetic SEK</CcyNm><Ccy>SEK</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SGD</CtryNm><CcyNm>Synthetic SGD</CcyNm><Ccy>SGD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SHP</CtryNm><CcyNm>Synthetic SHP</CcyNm><Ccy>SHP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SLE</CtryNm><CcyNm>Synthetic SLE</CcyNm><Ccy>SLE</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SOS</CtryNm><CcyNm>Synthetic SOS</CcyNm><Ccy>SOS</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SRD</CtryNm><CcyNm>Synthetic SRD</CcyNm><Ccy>SRD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SSP</CtryNm><CcyNm>Synthetic SSP</CcyNm><Ccy>SSP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC STN</CtryNm><CcyNm>Synthetic STN</CcyNm><Ccy>STN</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SVC</CtryNm><CcyNm>Synthetic SVC</CcyNm><Ccy>SVC</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SYP</CtryNm><CcyNm>Synthetic SYP</CcyNm><Ccy>SYP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SZL</CtryNm><CcyNm>Synthetic SZL</CcyNm><Ccy>SZL</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC THB</CtryNm><CcyNm>Synthetic THB</CcyNm><Ccy>THB</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC TJS</CtryNm><CcyNm>Synthetic TJS</CcyNm><Ccy>TJS</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC TMT</CtryNm><CcyNm>Synthetic TMT</CcyNm><Ccy>TMT</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC TND</CtryNm><CcyNm>Synthetic TND</CcyNm><Ccy>TND</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC TOP</CtryNm><CcyNm>Synthetic TOP</CcyNm><Ccy>TOP</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC TRY</CtryNm><CcyNm>Synthetic TRY</CcyNm><Ccy>TRY</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC TTD</CtryNm><CcyNm>Synthetic TTD</CcyNm><Ccy>TTD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC TWD</CtryNm><CcyNm>Synthetic TWD</CcyNm><Ccy>TWD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC TZS</CtryNm><CcyNm>Synthetic TZS</CcyNm><Ccy>TZS</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC UAH</CtryNm><CcyNm>Synthetic UAH</CcyNm><Ccy>UAH</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC UGX</CtryNm><CcyNm>Synthetic UGX</CcyNm><Ccy>UGX</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC USD</CtryNm><CcyNm>Synthetic USD</CcyNm><Ccy>USD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC USN</CtryNm><CcyNm IsFund="true">Synthetic USN</CcyNm><Ccy>USN</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC UYI</CtryNm><CcyNm IsFund="true">Synthetic UYI</CcyNm><Ccy>UYI</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC UYU</CtryNm><CcyNm>Synthetic UYU</CcyNm><Ccy>UYU</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC UYW</CtryNm><CcyNm IsFund="true">Synthetic UYW</CcyNm><Ccy>UYW</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC UZS</CtryNm><CcyNm>Synthetic UZS</CcyNm><Ccy>UZS</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC VED</CtryNm><CcyNm>Synthetic VED</CcyNm><Ccy>VED</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC VES</CtryNm><CcyNm>Synthetic VES</CcyNm><Ccy>VES</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC VND</CtryNm><CcyNm>Synthetic VND</CcyNm><Ccy>VND</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC VUV</CtryNm><CcyNm>Synthetic VUV</CcyNm><Ccy>VUV</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC WST</CtryNm><CcyNm>Synthetic WST</CcyNm><Ccy>WST</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XAD</CtryNm><CcyNm IsFund="true">Synthetic XAD</CcyNm><Ccy>XAD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XAF</CtryNm><CcyNm>Synthetic XAF</CcyNm><Ccy>XAF</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XAG</CtryNm><CcyNm>Synthetic XAG</CcyNm><Ccy>XAG</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XAU</CtryNm><CcyNm>Synthetic XAU</CcyNm><Ccy>XAU</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XBA</CtryNm><CcyNm>Synthetic XBA</CcyNm><Ccy>XBA</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XBB</CtryNm><CcyNm>Synthetic XBB</CcyNm><Ccy>XBB</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XBC</CtryNm><CcyNm>Synthetic XBC</CcyNm><Ccy>XBC</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XBD</CtryNm><CcyNm>Synthetic XBD</CcyNm><Ccy>XBD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XCD</CtryNm><CcyNm>Synthetic XCD</CcyNm><Ccy>XCD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XCG</CtryNm><CcyNm>Synthetic XCG</CcyNm><Ccy>XCG</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XDR</CtryNm><CcyNm>Synthetic XDR</CcyNm><Ccy>XDR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XOF</CtryNm><CcyNm>Synthetic XOF</CcyNm><Ccy>XOF</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XPD</CtryNm><CcyNm>Synthetic XPD</CcyNm><Ccy>XPD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XPF</CtryNm><CcyNm>Synthetic XPF</CcyNm><Ccy>XPF</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XPT</CtryNm><CcyNm>Synthetic XPT</CcyNm><Ccy>XPT</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XSU</CtryNm><CcyNm>Synthetic XSU</CcyNm><Ccy>XSU</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XTS</CtryNm><CcyNm>Synthetic XTS</CcyNm><Ccy>XTS</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XUA</CtryNm><CcyNm>Synthetic XUA</CcyNm><Ccy>XUA</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC XXX</CtryNm><CcyNm>Synthetic XXX</CcyNm><Ccy>XXX</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC YER</CtryNm><CcyNm>Synthetic YER</CcyNm><Ccy>YER</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC ZAR</CtryNm><CcyNm>Synthetic ZAR</CcyNm><Ccy>ZAR</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC ZMW</CtryNm><CcyNm>Synthetic ZMW</CcyNm><Ccy>ZMW</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC ZWG</CtryNm><CcyNm>Synthetic ZWG</CcyNm><Ccy>ZWG</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC SECOND USD ENTITY</CtryNm><CcyNm>Synthetic USD</CcyNm><Ccy>USD</Ccy></CcyNtry>
+    <CcyNtry><CtryNm>SYNTHETIC NO-CURRENCY ENTITY</CtryNm><CcyNm>No universal currency</CcyNm></CcyNtry>
+  </CcyTbl>
+</ISO_4217>

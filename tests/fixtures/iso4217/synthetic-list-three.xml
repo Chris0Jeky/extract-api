@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic subset, not a SIX download. Pblshd and withdrawal dates are test data. -->
+<ISO_4217 Pblshd="2026-01-01">
+  <HstrcCcyTbl>
+    <HstrcCcyNtry><CtryNm>SYNTHETIC ANG</CtryNm><CcyNm>Synthetic ANG</CcyNm><Ccy>ANG</Ccy><WthdrwlDt>2026-01</WthdrwlDt></HstrcCcyNtry>
+    <HstrcCcyNtry><CtryNm>SYNTHETIC BGN</CtryNm><CcyNm>Synthetic BGN</CcyNm><Ccy>BGN</Ccy><WthdrwlDt>2026-01</WthdrwlDt></HstrcCcyNtry>
+    <HstrcCcyNtry><CtryNm>SYNTHETIC HRK</CtryNm><CcyNm>Synthetic HRK</CcyNm><Ccy>HRK</Ccy><WthdrwlDt>2026-01</WthdrwlDt></HstrcCcyNtry>
+    <HstrcCcyNtry><CtryNm>SYNTHETIC VEF</CtryNm><CcyNm>Synthetic VEF</CcyNm><Ccy>VEF</Ccy><WthdrwlDt>2026-01</WthdrwlDt></HstrcCcyNtry>
+  </HstrcCcyTbl>
+</ISO_4217>
