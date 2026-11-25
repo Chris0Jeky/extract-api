@@ -69,7 +69,8 @@ Body: {
 keys, in `EXTRACT_API_KEY_SHA256S` (comma-separated hex digests; two or more may be valid at once, so
 a key rotates without downtime). A service started with no hash refuses every extraction with a
 500 `internal_error` instead of serving unauthenticated. Only `/healthz` and `/readyz` need no key: every other path, unknown ones included, answers 401 without one (guard by default, so no spelling of the path can skip the check).
-Making a key and its hash, setting the secret and rotating: `docs/ops/RUNBOOK.md` sections 1.5 and 6.1.
+See the [operations runbook](docs/ops/RUNBOOK.md) for creating a key and its hash (section 1.5)
+and rotating keys (section 6.1).
 The `--live` accuracy harness, the load test and the Docker smoke read the caller key from the
 `EXTRACT_API_KEY` environment variable.
 
@@ -143,10 +144,24 @@ Deployment verification requires `/readyz` to report startup-captured
 401. The probe uses an invalid `{}` body to prevent provider work on an auth
 regression. See `docs/ops/RUNBOOK.md` for the operational steps.
 
+## First run (offline)
+
+From the repository root, with uv and make installed:
+
+```sh
+uv sync --locked --extra dev
+uv run make smoke
+```
+
+The smoke starts the API in-process with a temporary SQLite store, fixture
+responses and a throwaway caller key. No `.env`, running server or provider
+credentials are needed. It checks liveness, caller authentication, extraction,
+strict validation and idempotent replay. See the
+[manual verification guide](docs/testing/MANUAL_VERIFICATION.md) for further checks.
+
 ## Development
 
 ```
-uv sync --locked --extra dev
 uv run make help        # list targets
 uv run make dev         # run the API locally (uvicorn)
 uv run make test        # pytest with coverage
@@ -161,10 +176,23 @@ records the runtime probes as evidence alongside the existing vulnerability scan
 
 ## Deploy (Docker)
 
+```sh
+cp .env.example .env      # first setup only; never commit .env
 ```
-cp .env.example .env      # fill in provider keys + per-model prices (never commit .env)
+
+Before starting Compose, generate a caller key as shown in section 1.5 of the
+[operations runbook](docs/ops/RUNBOOK.md) and set `EXTRACT_API_KEY_SHA256S` in
+`.env` to its hash. Keep the plain key out of `.env`; send it as
+`Authorization: Bearer <key>` when calling the API. Set the provider credentials
+and per-model prices only if you intend to make live provider calls, or configure
+fixture mode as described below.
+
+```sh
 docker compose up -d      # builds the image, serves on :8200, healthcheck hits /healthz
 ```
+
+Check that `GET /readyz` reports `caller_auth_configured: true` before testing
+extractions. A green liveness check alone does not verify caller-key setup.
 
 The image is `python:3.13-slim` with runtime dependencies installed by uv 0.13.9 from the
 committed `uv.lock` (`--locked`, without development dependencies). A stale lock fails the image

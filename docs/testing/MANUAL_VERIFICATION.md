@@ -16,8 +16,17 @@ Test plan or the linked issue.
 
 ## Checks
 
-Boot the service (`make dev`, then `http://127.0.0.1:8200/docs`) or drive it with
-the offline smoke (`make smoke`).
+Start with the [offline smoke](../../README.md#first-run-offline):
+`uv sync --locked --extra dev`, then `uv run make smoke`. This boots the API
+in-process and needs no caller or provider credentials from you.
+
+For a separate local server, configure fixture mode unless you intend to make
+paid calls. Set `EXTRACT_API_KEY_SHA256S` in the server process environment before
+running `uv run make dev`. See [runbook section 1.5](../ops/RUNBOOK.md#1-one-time-setup-owner)
+for key creation. Only `/healthz` and `/readyz` are public. Use an HTTP client
+that sends `Authorization: Bearer <key>` for `/v1/extract`, `/docs` and
+`/openapi.json`; opening `/docs` in a plain browser tab returns 401. Do not save
+the key or its hash in the run logs or PR artifacts.
 
 1. **Liveness:** `GET /healthz` returns 200 `{"status":"ok"}`.
 2. **Taxonomy spot-checks** (one row per error once the pipeline lands in M1/M2):
